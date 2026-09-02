@@ -80,7 +80,7 @@
   CMD ["node", "dist/server.js"]
 
   LABEL org.opencontainers.image.source="https://github.com/aprilborn/retriever"
-  LABEL org.opencontainers.image.version="1.1.0"
+  LABEL org.opencontainers.image.version="1.1.1"
   LABEL org.opencontainers.image.title="Retriever"
   LABEL org.opencontainers.image.description="yt-dlp Web UI"
   LABEL org.opencontainers.image.documentation="https://github.com/aprilborn/retriever/blob/main/README.md"
