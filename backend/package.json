@@ -1,10 +1,14 @@
 {
   "name": "retriever-backend",
 <<<<<<< HEAD
+<<<<<<< HEAD
   "version": "1.0.0",
 =======
   "version": "1.1.1",
 >>>>>>> 52239b5 (Update icons)
+=======
+  "version": "1.1.2",
+>>>>>>> d9913c5 (Fix req)
   "description": "",
   "main": "src/server.ts",
   "private": true,

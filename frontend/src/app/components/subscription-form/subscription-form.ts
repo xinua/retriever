@@ -173,17 +173,18 @@ export class SubscriptionForm implements OnInit {
     this._trackType();
   }
 
-  save(channel: Partial<SubscriptionModel>) {
-    const isEdditing = !!channel?.id;
+  save(subscription: Partial<SubscriptionModel>) {
+    const isEdditing = !!subscription?.id;
     this.isSaving.set(true);
+    const request = (isEdditing ? this._httpService.updateSubscription : this._httpService.addSubscription).bind(this._httpService);
 
-    this._httpService[isEdditing ? 'updateChannel' : 'addChannel'](this.form.value as SubscriptionModel).subscribe({
+    request(this.form.value as SubscriptionModel).subscribe({
       next: (channel: SubscriptionModel) => {
         this._updateChannels(channel);
         this.resetForm();
         this._storage.showForm.set(false);
         if (!channel.startFromLast) {
-          this._notifier.notify('success', 'Channel saved successfully');
+          this._notifier.notify('success', 'Subscription saved successfully');
         }
       },
       error: () => {
@@ -235,7 +236,6 @@ export class SubscriptionForm implements OnInit {
     combineLatest([this.form.controls.notifyHA.valueChanges, this.globalWebhookURL$])
       .pipe(
         takeUntilDestroyed(this._destroyRef),
-        tap(([a, b]) => console.log(a, b)),
         map(([_, globalWebhook]): boolean[] => [_, !globalWebhook?.length]),
       )
       .subscribe(([shouldNotify, shouldValidate]) => {
