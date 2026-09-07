@@ -33,10 +33,20 @@ Perfect if you:
 
 ## Screenshots
 
-![Step 1](demo/1.webp)![Step 2](demo/2.webp)![Step 3](demo/3.webp)
+![Demo 1](demo/1.webp)
+![Demo 2](demo/2.webp)
+![Demo 3](demo/3.webp)
 
-📸 Expand more screenshots  
-![Step 1](demo/theme/static.gif)![Step 2](demo/theme/animations/fire.gif)![Step 3](demo/theme/animations/rain.gif)![Step 4](demo/theme/animations/snow.gif)![Step 5](demo/theme/animations/stars.gif)![Step 6](demo/theme/animations/matrix.gif)
+<details>
+  <summary>📸 Expand more screenshots</summary>
+  <br>
+  <img src="demo/theme/static.gif" alt="Step 1" width="100%">
+  <img src="demo/theme/animations/fire.gif" alt="Step 2" width="100%">
+  <img src="demo/theme/animations/rain.gif" alt="Step 3" width="100%">
+  <img src="demo/theme/animations/snow.gif" alt="Step 4" width="100%">
+  <img src="demo/theme/animations/stars.gif" alt="Step 5" width="100%">
+  <img src="demo/theme/animations/matrix.gif" alt="Step 6" width="100%">
+</details>
 
 ## ✨ Features
 
@@ -74,7 +84,7 @@ Perfect if you:
 - ⏹ **Retry, cancel, stop-all, delete, clear finished** — all one click
 - 🔍 **Search and filter** by status across your whole history
 - 💾 **Save any finished file** straight to the browser
-- 🖼 **Posters everywhere** — and when a download arrives with no artwork, a frame is pulled out of the file itself
+- 🖼 **Posters everywhere** — when a download arrives with no artwork, a frame is pulled out of the file itself
 - ▶️ **Play downloaded** — watch downloaded video by click on poster
 - 🛡 **Atomic writes** — in-progress files live in a hidden temp folder and only move into place when complete, so your media scanner never sees a half-downloaded episode
 
