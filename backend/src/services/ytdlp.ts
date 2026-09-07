@@ -94,15 +94,55 @@ export function resolveBin(): string {
   return resolvedBin;
 }
 
+/**
+ * The version, remembered per binary. yt-dlp is a one-file PyInstaller
+ * bundle, so `--version` unpacks a Python runtime and boots an interpreter
+ * every time — a noticeable chunk of CPU on a NAS — for an answer that only
+ * changes when the file on disk does. The cache is keyed on the binary's path
+ * and mtime, so a `-U` (which rewrites the file) or a newer image (which
+ * restages it) is picked up without anyone having to clear it. Failures are
+ * not cached, so a binary that turns up later is noticed on the next call.
+ */
+let versionCache: { bin: string; mtimeMs: number; version: string } | null =
+  null;
+
 export async function getVersion(): Promise<string | null> {
+  const bin = resolveBin();
+  const mtimeMs = binaryMtime(bin);
+
+  if (
+    versionCache &&
+    versionCache.bin === bin &&
+    versionCache.mtimeMs === mtimeMs
+  ) {
+    return versionCache.version;
+  }
+
   try {
-    const { stdout } = await execFileAsync(resolveBin(), ["--version"], {
+    const { stdout } = await execFileAsync(bin, ["--version"], {
       timeout: 15000
     });
 
-    return stdout.trim() || null;
+    const version = stdout.trim() || null;
+
+    versionCache = version ? { bin, mtimeMs, version } : null;
+
+    return version;
   } catch {
+    versionCache = null;
     return null;
+  }
+}
+
+/**
+ * A bare "yt-dlp" resolved from PATH cannot be stat'ed by name; -1 stands in
+ * so it still caches, and update() drops the cache by hand in that case.
+ */
+function binaryMtime(bin: string): number {
+  try {
+    return fs.statSync(bin).mtimeMs;
+  } catch {
+    return -1;
   }
 }
 
@@ -120,6 +160,7 @@ export async function update(): Promise<{
     });
 
     resolvedBin = null;
+    versionCache = null;
     const to = await getVersion();
 
     return { ok: true, from, to, output: `${stdout}${stderr}`.trim() };
@@ -315,6 +356,15 @@ export type JobOptions = {
    * this file explicitly, so "already downloaded" must not silently no-op.
    */
   useArchive: boolean;
+  /**
+   * Audio jobs only: keep the file the audio was extracted from instead of
+   * letting yt-dlp delete it. Set for a download with no artwork anywhere, so
+   * a poster can be taken out of the video the way a video download's is —
+   * see needsPosterSource() in download-queue.ts. Costs the video's disk space
+   * until the capture is done, and nothing at all when the source was
+   * audio-only to begin with.
+   */
+  keepVideo?: boolean;
 };
 
 export function optionsFromChannel(ch: Channel): JobOptions {
@@ -509,14 +559,14 @@ export function buildHomeDir(opts: JobOptions, settings: Settings): string {
  *
  * The directory is read to decide the next free number, and a download takes
  * minutes to produce the file that would make the answer different. Two jobs
- * fetching the same video into the same folder at once would therefore both
+ * writing the same name into the same folder at once would therefore both
  * read a directory without it and both pick the same name. Keyed by job id so
  * the queue can drop the claim from `release`, alongside the rest of a job's
  * in-memory state.
  */
 const claimedNames = new Map<
   number,
-  { dir: string; videoId: string; index: number }
+  { dir: string; stem: string; index: number }
 >();
 
 /** Drops a running job's claim on its filename. */
@@ -525,23 +575,75 @@ export function releaseFilename(jobId: number): void {
 }
 
 /**
- * The next free copy number for this video in this folder: 0 when nothing of
+ * yt-dlp's own filename sanitiser, as it runs on Linux with default options:
+ * every `%(field)s` value goes through it before it reaches the path, while
+ * literal text in the template does not.
+ *
+ * The point is to know the name on disk before the download writes it, so a
+ * copy already sitting in the folder can be spotted and numbered around. It
+ * is a port rather than a guess — `sanitize_filename(s, restricted=False)`
+ * with the id exemption unset, which is the only path taken unless the extra
+ * arguments ask for `--restrict-filenames` or `--windows-filenames`.
+ *
+ * Only these characters move: the ones a Windows path cannot hold become
+ * their full-width look-alikes, and control characters are dropped. Colons
+ * inside timestamps ("12:34:56") turn into underscores first, before the
+ * full-width rule would have claimed them.
+ */
+export function sanitizeTitle(title: string): string {
+  if (!title) return "";
+
+  const FULL_WIDTH: Record<string, string> = { "/": "\u29F8", "\\": "\u29F9" };
+
+  const replaced = title
+    .replace(/[0-9]+(?::[0-9]+)+/g, (stamp) => stamp.replace(/:/g, "_"))
+    .replace(/[\s\S]/g, (char) => {
+      // A newline is substituted rather than dropped, so the collapsing below
+      // can tell it apart from a space that was always there. \0 marks it.
+      if (char === "\n") return "\0 ";
+
+      if ('"*:<>?|/\\'.includes(char)) {
+        return (
+          FULL_WIDTH[char] ?? String.fromCharCode(char.charCodeAt(0) + 0xfee0)
+        );
+      }
+
+      const code = char.charCodeAt(0);
+
+      return code < 32 || code === 127 ? "" : char;
+    });
+
+  const collapsed = replaced
+    .replace(/(\0[\s\S])(?:\1)+/g, "$1")
+    .replace(/^\0[\s\S](?:\0[\s\S]|[ _-])*|(?:\0[\s\S]|[ _-])*\0[\s\S]$/g, "");
+
+  return collapsed.replace(/\0/g, "") || "_";
+}
+
+/** `name` without its extension, which is what a copy number sits before. */
+function stemOf(name: string): string {
+  return name.slice(0, name.length - path.extname(name).length);
+}
+
+/**
+ * The next free copy number for this name in this folder: 0 when nothing of
  * it is there, 1 when the plain name is taken, and so on.
  *
- * Only the id is matched, never the title. What yt-dlp writes has been through
- * its own sanitiser — character replacement, trailing-dot trimming, length
- * truncation — so the title we hold is not reliably the title on disk, while
- * the id passes through untouched.
+ * Sidecars count as much as the media does — a thumbnail job writes only a
+ * `.jpg`, and a second one asking for the same picture should still land next
+ * to the first rather than on top of it. Split chapters and format fragments
+ * carry their own suffix inside the stem, so they never match and never
+ * consume a number of their own.
  */
 async function nextCopyIndex(
   dir: string,
-  videoId: string,
+  stem: string,
   jobId: number
 ): Promise<number> {
   const used = new Set<number>();
 
   for (const [id, claim] of claimedNames) {
-    if (id !== jobId && claim.dir === dir && claim.videoId === videoId) {
+    if (id !== jobId && claim.dir === dir && claim.stem === stem) {
       used.add(claim.index);
     }
   }
@@ -554,20 +656,19 @@ async function nextCopyIndex(
     // Not created until the first download lands in it, so nothing is taken.
   }
 
-  const marker = `[${videoId}]`;
-
   for (const name of names) {
-    const at = name.indexOf(marker);
+    const base = stemOf(name);
 
-    if (at === -1) continue;
+    if (base === stem) {
+      used.add(0);
+      continue;
+    }
 
-    // " (2)" if this is already a numbered copy, and the marker sits at the
-    // end of the stem otherwise — split chapters and thumbnails append their
-    // own suffixes after it, which is why this reads a prefix rather than
-    // anchoring to the extension.
-    const numbered = /^ \((\d+)\)/.exec(name.slice(at + marker.length));
+    if (!base.startsWith(stem)) continue;
 
-    used.add(numbered ? Number(numbered[1]) : 0);
+    const numbered = /^ \((\d+)\)$/.exec(base.slice(stem.length));
+
+    if (numbered) used.add(Number(numbered[1]));
   }
 
   let index = 0;
@@ -580,21 +681,20 @@ async function nextCopyIndex(
 /**
  * Filename only — the directory comes from `-P home:`.
  *
- * The id is part of the name because titles are not unique. Instagram in
- * particular auto-generates "Video by <author>" for any post without a
- * caption, so every silent post by one author lands on the same path. The id
- * is unique on every platform, so appending it keeps two different videos
- * apart. It is also yt-dlp's own convention for exactly this reason.
+ * The name is the video's title, and nothing else: no id, no uploader, no
+ * date. Titles are not unique, though — Instagram auto-generates "Video by
+ * <author>" for any post without a caption, so every silent post by one
+ * author asks for the same path — and neither of yt-dlp's own answers to a
+ * name already on disk keeps both files. It skips the download and reports
+ * the file that was already there, so the new row points at the old file and
+ * whatever was asked for the second time (a different quality, a clip, a
+ * chapter split) never happens; with `--force-overwrites` it writes over the
+ * earlier copy instead. Numbering the new one keeps both, the way a browser's
+ * download folder does.
  *
- * That leaves one way to land on a name already on disk: fetching the same
- * video into the same folder twice. Manual downloads allow this on purpose —
- * they skip the archive, so asking again for something you already have is a
- * request rather than a mistake — and both of yt-dlp's own answers lose
- * something. It skips the download and reports the file that was already
- * there, so the new row points at the old file and whatever was asked for the
- * second time (a different quality, a clip, a chapter split) never happens;
- * with `--force-overwrites` it writes over the earlier copy instead. Numbering
- * the new one keeps both, the way a browser's download folder does.
+ * Deciding that needs the name before yt-dlp writes it, which is why the
+ * title is sanitised here as well: `sanitizeTitle` is yt-dlp's own rule, so
+ * the stem this compares against the folder is the stem it will produce.
  *
  * A custom `-o` in the extra arguments overrides this template wholesale, and
  * with it the numbering — yt-dlp's own behaviour applies from there.
@@ -602,22 +702,40 @@ async function nextCopyIndex(
 export async function buildFilenameTemplate(
   opts: JobOptions,
   settings: Settings,
-  videoId: string | null,
+  title: string | null,
   jobId: number
 ): Promise<string> {
   const prefix = sanitizeSegment(opts.prefix, { keepTrailingSpace: true });
-  const stem = `${prefix}%(title)s [%(id)s]`;
+  const template = `${prefix}%(title)s`;
 
-  // Nothing to search a directory for. Rare — every extractor worth the name
-  // reports an id — and the worst case is only what this did before.
-  if (!videoId) return `${stem}.%(ext)s`;
+  // Nothing to search a directory for: the title yt-dlp will use is not known
+  // here, so let it write whatever it writes. Rare, and the worst case is
+  // only what this did before numbering existed.
+  if (!title?.trim()) return `${template}.%(ext)s`;
 
   const dir = buildHomeDir(opts, settings);
-  const index = await nextCopyIndex(dir, videoId, jobId);
+  const stem = `${prefix}${sanitizeTitle(title)}`;
+  const index = await nextCopyIndex(dir, stem, jobId);
 
-  claimedNames.set(jobId, { dir, videoId, index });
+  claimedNames.set(jobId, { dir, stem, index });
 
-  return index ? `${stem} (${index}).%(ext)s` : `${stem}.%(ext)s`;
+  return index ? `${template} (${index}).%(ext)s` : `${template}.%(ext)s`;
+}
+
+/**
+ * The names already in a job's destination folder, for telling what the job
+ * itself wrote from what was there before it started. Empty when the folder
+ * does not exist yet, which says the same thing.
+ */
+export async function listHome(
+  opts: JobOptions,
+  settings: Settings
+): Promise<Set<string>> {
+  try {
+    return new Set(await fsp.readdir(buildHomeDir(opts, settings)));
+  } catch {
+    return new Set();
+  }
 }
 
 /**
@@ -782,10 +900,11 @@ export async function buildArgs(
   videoUrl: string,
   jobId: number,
   /**
-   * The video this job is for, used to spot copies of it already in the
-   * destination folder. Null only when the resolve could not name one.
+   * The video's title, used to work out the name it will be saved under and
+   * so to spot copies of it already in the destination folder. Null when the
+   * resolve could not name one.
    */
-  videoId: string | null,
+  title: string | null,
   /**
    * A cached info dict from the resolve step. When present the page is not
    * extracted again — yt-dlp works straight from these formats, which is both
@@ -810,7 +929,7 @@ export async function buildArgs(
     "--no-simulate",
     "-P", `home:${buildHomeDir(opts, settings)}`,
     "-P", `temp:${buildTempDir(settings, jobId)}`,
-    "-o", await buildFilenameTemplate(opts, settings, videoId, jobId),
+    "-o", await buildFilenameTemplate(opts, settings, title, jobId),
     ...buildFormatArgs(opts)
   ];
 
@@ -824,6 +943,25 @@ export async function buildArgs(
 
   if (opts.useArchive) {
     args.push("--download-archive", ARCHIVE_FILE);
+  }
+
+  // Only meaningful next to -x, which is the only thing that would have
+  // removed it.
+  if (opts.keepVideo && opts.type === "audio") {
+    args.push("--keep-video");
+  }
+
+  // Tag the file the way a player expects: title, artist (the uploader),
+  // date (the upload year), comment (the source URL), description and genre,
+  // all taken from the info dict yt-dlp already has. Without this a download
+  // carries nothing but an encoder string, so a library shows it under its
+  // filename with no artist at all. Chapters come along for free. The info
+  // json is left out: yt-dlp would attach the whole dict to an mkv, formats
+  // list and all, which nothing here reads back. Runs before the cover-art
+  // step in download-queue.ts, whose remux copies these tags over. Thumbnail
+  // jobs have no media to tag.
+  if (opts.type !== "thumbnail") {
+    args.push("--embed-metadata", "--no-embed-info-json");
   }
 
   // --skip-download never moves a file, so after_move cannot report the

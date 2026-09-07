@@ -31,6 +31,27 @@ export class ImagesService {
     }
   }
 
+  /**
+   * Duplicates an image already in the store, so a second consumer can own a
+   * copy it is free to delete. False when there was nothing to copy.
+   */
+  static copy(from: string, to: string): boolean {
+    try {
+      ImagesService.ensureDir();
+
+      const source = path.join(IMAGE_DIR, from);
+
+      if (!fs.existsSync(source)) return false;
+
+      fs.copyFileSync(source, path.join(IMAGE_DIR, to));
+
+      return true;
+    } catch (e) {
+      console.error("Image copy error:", e);
+      return false;
+    }
+  }
+
   static async download(url: string, filename: string): Promise<string | null> {
     try {
       ImagesService.ensureDir();

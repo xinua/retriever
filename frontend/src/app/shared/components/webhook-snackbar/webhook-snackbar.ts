@@ -4,6 +4,7 @@ import { MAT_SNACK_BAR_DATA, MatSnackBarRef } from '@angular/material/snack-bar'
 import { SnackbarType } from '@shared/services';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
+import { WEBHOOK_SNACKBAR_DATA } from './webhook-snackbar.constants';
 
 @Component({
   selector: 'rt-snackbar-dialog',
@@ -19,14 +20,11 @@ import { MatTooltip } from '@angular/material/tooltip';
       />
 
       <code>
-        <pre>{{ '{' }}
-  <span class="text-orange-500">"channelId"</span>: "ABC123",
-  <span class="text-orange-500">"channel"</span>: "Channel Name",
-  <span class="text-orange-500">"videoId"</span>: "4f35jL3Wd",
-  <span class="text-orange-500">"title"</span>: "Video Title",
-  <span class="text-orange-500">"type"</span>: "video",
-  <span class="text-orange-500">"date"</span>: "2026-03-24T12:00:00.000Z"
-{{ '}' }}</pre>
+        <pre>{{ '{' }}</pre>
+        @for (item of payload; track $index) {
+          <pre><span class="text-orange-500">  "{{ item[0] }}"</span>: {{ item[1] }}@if (!$last) {,}</pre>
+        }
+        <pre>{{ '}' }}</pre>
       </code>
     </div>
     <div class="flex justify-end">
@@ -37,18 +35,14 @@ import { MatTooltip } from '@angular/material/tooltip';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class WebhookSnackbar {
+  payload = Object.entries(WEBHOOK_SNACKBAR_DATA).map(([key, value]) => [key, JSON.stringify(value)]);
+
   constructor(
     @Inject(MAT_SNACK_BAR_DATA) protected readonly data: { type: SnackbarType; duration: number },
     protected readonly snackBar: MatSnackBarRef<WebhookSnackbar>,
   ) {}
 
   copyToClipboard() {
-    navigator.clipboard.writeText(`{
-  "channelId": "ABC123",
-  "channel": "Channel Name",
-  "videoId": "4f35jL3Wd",
-  "title": "Video Title",
-  "format": "mp4"
-}`);
+    navigator.clipboard.writeText(JSON.stringify(WEBHOOK_SNACKBAR_DATA, null, 2));
   }
 }

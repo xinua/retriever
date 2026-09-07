@@ -41,7 +41,9 @@
           <ng-container matColumnDef="name">
             <th mat-header-cell *matHeaderCellDef>Channel</th>
             <td mat-cell *matCellDef="let ch">
-              <div class="font-medium">{{ ch.name }}</div>
+              <div class="font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-20" [matTooltip]="ch.name">
+                {{ ch.name }}
+              </div>
             </td>
           </ng-container>
 
@@ -100,7 +102,7 @@
           <!-- Actions -->
           <ng-container matColumnDef="actions">
             <th mat-header-cell *matHeaderCellDef class="text-center!">Actions</th>
-            <td mat-cell *matCellDef="let ch">
+            <td mat-cell *matCellDef="let ch" aria-label="Subscription actions">
               <div class="flex items-center justify-center gap-2">
                 <button mat-icon-button (click)="editSubscription(ch); $event.stopPropagation()" matTooltip="Edit">
                   <mat-icon>edit</mat-icon>

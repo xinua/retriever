@@ -1,6 +1,6 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { RtCard } from '../card/card';
-import { DownloadModel, DownloadStatus, Platform } from '../../models/download.model';
+import { DownloadModel, DownloadStatus } from '../../models/download.model';
 import { HttpService } from '../../services/http.service';
 
 @Component({
@@ -12,7 +12,6 @@ import { HttpService } from '../../services/http.service';
 export class Poster {
   private readonly _httpService = inject(HttpService);
   readonly downloadStatus = DownloadStatus;
-  readonly platform = Platform;
   download = input<DownloadModel>();
   activeVideo = signal<number | null>(null);
   videoUrl = computed(() => this._httpService.streamFileUrl(this.download()?.id));

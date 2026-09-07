@@ -1,6 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
-
 import { db } from "../db/index.js";
 import { channel, settings } from "../db/schema.js";
 import { eq, sql } from "drizzle-orm";
@@ -17,38 +14,69 @@ import { broadcast } from "../routes/ws/websockets.js";
 import { getLastCheck } from "../utils/last-check.helper.js";
 
 let workerTimer: NodeJS.Timeout | null = null;
-const DATA_DIR = process.env.DATA_DIR ?? "./data";
-const IMAGES_DIR = path.join(DATA_DIR, "images");
 
-async function downloadThumbnailOnce(
+/**
+ * The channel card's own copy of the latest video's artwork.
+ *
+ * `video-<id>.jpg` is the shared cache every download row reads (see
+ * manual-download.ts), so it belongs to the download and has to outlive the
+ * channel's interest in it. The card, on the other hand, only ever shows the
+ * newest video and wants the previous picture gone — so it gets a copy it is
+ * free to delete. Rotating the card no longer strips the poster off the
+ * download record for the video that just scrolled out of view.
+ */
+export function subPosterName(videoId: string): string {
+  return `video-${videoId}-sub.jpg`;
+}
+
+/**
+ * Whether a stored `lastVideoThumbnailPath` is the channel's own copy rather
+ * than the shared cache. Rows written before the split still point straight
+ * at `video-<id>.jpg`, which must never be deleted on the channel's behalf.
+ */
+export function isSubPoster(imagePath: string): boolean {
+  return imagePath.endsWith("-sub.jpg");
+}
+
+/**
+ * Fills the shared artwork cache for `videoId` and returns the channel's own
+ * copy of it, dropping the copy made for `prevVideoId`. Returns null when the
+ * feed carried no thumbnail, or when fetching it failed — artwork is
+ * cosmetic, and the scan has more important work to finish.
+ */
+async function cacheThumbnails(
   videoId: string,
   thumbnailUrl?: string | null,
   prevVideoId?: string | null
 ) {
+  const posterPath = thumbnailUrl
+    ? await subPoster(videoId, thumbnailUrl)
+    : null;
 
-  if (!thumbnailUrl) return null;
-
-  const filename = `video-${videoId}.jpg`;
-
-  const filePath = path.join(
-    process.env.IMAGES_DIR ?? IMAGES_DIR,
-    filename
-  );
-
-  if (fs.existsSync(filePath)) {
-    return `/images/${filename}`;
+  // Late enough that a failed fetch leaves the card showing the old picture
+  // for one more scan, rather than nothing at all.
+  if (prevVideoId && prevVideoId !== videoId) {
+    await ImagesService.remove(subPosterName(prevVideoId));
   }
 
-  const prevFilePath = path.join(
-    process.env.IMAGES_DIR ?? IMAGES_DIR,
-    `video-${prevVideoId}.jpg`
-  );
+  return posterPath;
+}
 
-  if (fs.existsSync(prevFilePath)) {
-    ImagesService.remove(prevFilePath);
+async function subPoster(videoId: string, thumbnailUrl: string) {
+  const shared = `video-${videoId}.jpg`;
+  const sub = subPosterName(videoId);
+
+  if (ImagesService.exists(sub)) return `/images/${sub}`;
+
+  if (!ImagesService.exists(shared)) {
+    await ImagesService.download(thumbnailUrl, shared);
   }
 
-  return await ImagesService.download(thumbnailUrl, filename);
+  // One fetch, two files. Only a shared cache that never landed sends the
+  // copy back to the network.
+  if (ImagesService.copy(shared, sub)) return `/images/${sub}`;
+
+  return await ImagesService.download(thumbnailUrl, sub);
 }
 
 export async function processChannel(
@@ -81,7 +109,7 @@ export async function processChannel(
 
   if (isFirstScan) {
 
-    const thumbnailPath = await downloadThumbnailOnce(
+    const thumbnailPath = await cacheThumbnails(
       latest.videoId,
       latest.thumbnail,
       ch.lastVideoId
@@ -137,7 +165,7 @@ export async function processChannel(
     return;
   }
 
-  const thumbnailPath = await downloadThumbnailOnce(
+  const thumbnailPath = await cacheThumbnails(
     latest.videoId!,
     latest.thumbnail,
     ch.lastVideoId
@@ -150,7 +178,9 @@ export async function processChannel(
 
   if (ch.notifyHA && webhookUrl) {
     await sendWebhook(webhookUrl, {
-      channelId: ch.id,
+      // The watcher's own id (the one the widget URL takes), not the
+      // channel's YouTube id.
+      watcherId: ch.id,
       channel: ch.name,
       videoId: latest.videoId,
       title: latest.title,

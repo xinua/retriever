@@ -1,24 +1,68 @@
 @if (!!channel()) {
   <div class="flex justify-cetner flex-col items-center">
     <div class="max-w-screen max-h-screen flex flex-col gap-2 py-2 relative">
-      <img
-        [src]="channel()?.lastVideoThumbnailPath"
-        [alt]="channel()?.lastVideoTitle"
-        class="aspect-video object-cover"
-      />
+      @if (isPlaying()) {
+        @if (download()?.type === 'video') {
+          <video
+            #previewVideo
+            [src]="videoUrl()"
+            (click)="openVideo($event)"
+            controls
+            autoplay
+            preload="metadata"
+            type="video/mp4"
+            class="aspect-video object-cover cursor-pointer"
+          ></video>
+        } @else {
+          <div
+            class="w-full h-full p-22 aspect-video object-cover hover:bg-white/30 transition-all duration-300 cursor-pointer"
+            (click)="openVideo($event)"
+          >
+            <audio
+              #previewAudio
+              [src]="videoUrl()"
+              controls
+              autoplay
+              preload="metadata"
+              type="audio/mpeg"
+              class="cursor-pointer"
+            ></audio>
+          </div>
+        }
+      } @else {
+        @if (isAbleToOpen()) {
+          <div
+            class="absolute top-0 left-0 right-0 bottom-0 bg-black/50 flex items-center justify-center opacity-1 hover:opacity-100 transition-opacity duration-300"
+          >
+            <div
+              class="rounded-full bg-red-500 w-18 h-18 cursor-pointer leading-none! flex items-center justify-center"
+              (click)="openVideo($event)"
+            >
+              <mat-icon class="text-4xl! w-9! h-9! leading-none!">play_arrow</mat-icon>
+            </div>
+          </div>
+        }
+        <img
+          [src]="channel()?.lastVideoThumbnailPath"
+          [alt]="channel()?.lastVideoTitle"
+          class="aspect-video object-cover"
+          [class.cursor-pointer]="isAbleToOpen()"
+          (click)="openVideo($event)"
+        />
 
-      <div class="flex items-center gap-2 absolute top-4 left-4 bg-black/90 rounded-md px-2 py-1">
-        <div
-          class="rounded-full bg-green-500 w-4 h-4"
-          [class.bg-red-500]="!channel()?.enabled"
-          [matTooltip]="channel()?.enabled ? 'Enabled' : 'Disabled'"
-        ></div>
-        <span class="text-base font-semibold">{{ channel()?.name }}</span>
-      </div>
+        <div class="flex items-center gap-2 absolute top-4 left-4 bg-black/90 rounded-md px-2 py-1 z-1">
+          <div
+            class="rounded-full bg-green-500 w-4 h-4"
+            [class.bg-red-500]="!channel()?.enabled"
+            [matTooltip]="channel()?.enabled ? 'Enabled' : 'Disabled'"
+          ></div>
+          <span class="text-base font-semibold">{{ channel()?.name }}</span>
+        </div>
 
-      <div class="max-w-full px-4 bg-black/70 absolute bottom-0 left-0 right-0 py-2">
-        <p class="text-lg truncate" [matTooltip]="channel()?.lastVideoTitle">{{ channel()?.lastVideoTitle }}</p>
-      </div>
+        <div class="max-w-full px-4 bg-black/70 absolute bottom-0 left-0 right-0 py-2 z-1">
+          <p class="text-lg truncate" [matTooltip]="channel()?.lastVideoTitle">{{ channel()?.lastVideoTitle }}</p>
+        </div>
+      }
     </div>
   </div>
 } @else {

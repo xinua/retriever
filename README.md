@@ -33,25 +33,10 @@ Perfect if you:
 
 ## Screenshots
 
-<details>
-  <summary>📸 Expand Screenshots</summary>
-  <br>
-  <img src="demo/1.webp" alt="Step 1" width="100%">
-  <img src="demo/2.webp" alt="Step 2" width="100%">
-  <img src="demo/3.webp" alt="Step 3" width="100%">
-</details>
+![Step 1](demo/1.webp)![Step 2](demo/2.webp)![Step 3](demo/3.webp)
 
-
-<details>
-  <summary>📸 Expand more screenshots</summary>
-  <br>
-  <img src="demo/theme/static.gif" alt="Step 1" width="100%">
-  <img src="demo/theme/animations/fire.gif" alt="Step 2" width="100%">
-  <img src="demo/theme/animations/rain.gif" alt="Step 3" width="100%">
-  <img src="demo/theme/animations/snow.gif" alt="Step 4" width="100%">
-  <img src="demo/theme/animations/stars.gif" alt="Step 5" width="100%">
-  <img src="demo/theme/animations/matrix.gif" alt="Step 6" width="100%">
-</details>
+📸 Expand more screenshots  
+![Step 1](demo/theme/static.gif)![Step 2](demo/theme/animations/fire.gif)![Step 3](demo/theme/animations/rain.gif)![Step 4](demo/theme/animations/snow.gif)![Step 5](demo/theme/animations/stars.gif)![Step 6](demo/theme/animations/matrix.gif)
 
 ## ✨ Features
 
@@ -98,11 +83,12 @@ Perfect if you:
 ### Integrations & interface
 
 - 🔔 **Webhooks** — global or per-channel, with a test-send button that shows you the exact payload
-- 🖼️ **Widget page** for Home Assistant iframe cards
-- 🎨 **Seven theme colors**, ten section backgrounds, optional animations
+- 🖼️ **Widget page** — for Home Assistant iframe cards, with the latest video playable in place
+- 📄 **Copy-ready Home Assistant YAML** — card and automation snippets, per subscription, one click each
+- 🎨 **Seven theme colors** — ten section backgrounds, optional animations
 - 📋 **Auto-paste** — the URL field grabs the link from your clipboard
-- 🧲 **Drag to reorder** the whole page layout
-- 📱 **Responsive + PWA**
+- 🧲 **Drag to reorder** — the whole page layout
+- 📱 **Responsive + PWA** — install like mobile app
 
 ---
 
@@ -252,8 +238,8 @@ Already-downloaded videos from watched channels are recorded in `/data/ytdlp-arc
 Download the same video into the same folder again and the new copy is numbered rather than overwriting the old one:
 
 ```
-Never Gonna Give You Up [dQw4w9WgXcQ].mp4
-Never Gonna Give You Up [dQw4w9WgXcQ] (1).mp4
+Never Gonna Give You Up.mp4
+Never Gonna Give You Up (1).mp4
 ```
 
 In-progress downloads live in `/downloads/.retriever-tmp/<id>/` and only move into place once complete. The directory is removed when the download settles, and abandoned ones are swept at boot.
@@ -286,7 +272,20 @@ That's it. New uploads arrive on their own.
 
 ## 🏠 Home Assistant
 
-**Webhooks.** Set a webhook URL in Settings (or override it per channel), then press the webhook icon to send a test — the payload appears in the second notification, ready to copy into your automation.
+**Webhooks.** Set a webhook URL in Settings (or override it per channel), then press the webhook icon to send a test. The test posts the same shape a real notification does, and the payload also appears in the second notification, ready to copy into your automation:
+
+```json
+{
+  "watcherId": 1,
+  "channel": "Channel Name",
+  "videoId": "4f35jL3Wd",
+  "title": "Video Title",
+  "type": "video",
+  "date": "2026-09-05T12:00:00.000Z"
+}
+```
+
+`watcherId` is the watcher's own id — the same one the widget URL below takes — not the channel's YouTube id.
 
 **Widget cards.** Each watcher has a compact page showing its latest video:
 
@@ -294,7 +293,23 @@ That's it. New uploads arrive on their own.
 http://localhost:31080/widget/<watcherId>
 ```
 
-Drop that into an iframe card. To find a **watcher id**, expand the subscripton and hover over the channel name.
+![Widget example](demo/widget.webp)
+
+Drop that into an iframe card. The card plays the file in place — press the poster and the video (or audio) starts right there, no jump to another tab.
+
+```yaml
+type: iframe
+url: http://localhost:31080/widget/1
+aspect_ratio: 50%
+```
+
+**Don't type any of this.** Expand a subscription and open its **⋯** menu:
+
+- **Open widget** — the page on its own, to check it
+- **HA Card** — Copy the YAML above, with this watcher's id filled in
+- **HA Automation** — Copy the automation YAML, with the id and your webhook already in place
+
+To find a **watcher id** by hand, expand the subscription and hover over the channel name.
 
 ---
 

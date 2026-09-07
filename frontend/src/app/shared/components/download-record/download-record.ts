@@ -5,7 +5,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatTableModule } from '@angular/material/table';
 import { DownloadStatusLabels } from '../../constants';
 import { AppearDirective } from '../../directives';
-import { DownloadModel, DownloadStatus, PaginatorModel, Platform } from '../../models';
+import { DownloadModel, DownloadSource, DownloadStatus, PaginatorModel } from '../../models';
 import { SizePipe } from '../../pipes';
 import { Badge } from '../badge/badge';
 import { DownloadControls } from '../download-controls/download-controls';
@@ -14,6 +14,7 @@ import { Poster } from '../poster/poster';
 import { ProgressInfo } from '../progress-info/progress-info';
 import { StatusIndicator } from '../status-indicator/status-indicator';
 import { RtCard } from '../card/card';
+import { MatTooltip } from '@angular/material/tooltip';
 
 @Component({
   selector: 'rt-download-record',
@@ -32,6 +33,7 @@ import { RtCard } from '../card/card';
     DownloadInfo,
     DownloadControls,
     Poster,
+    MatTooltip,
   ],
   templateUrl: './download-record.html',
   styleUrl: './download-record.css',
@@ -45,7 +47,7 @@ export class DownloadRecord {
   retry = output<DownloadModel>();
   remove = output<{ download: DownloadModel; elementRef: HTMLElement }>();
 
-  readonly platform = Platform;
   readonly downloadStatus = DownloadStatus;
+  readonly downloadSource = DownloadSource;
   readonly statusLabels = DownloadStatusLabels;
 }

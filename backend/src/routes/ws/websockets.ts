@@ -1,9 +1,6 @@
 import type { Server as HttpServer } from "node:http";
 import { Server as SocketIOServer } from "socket.io";
-import {
-  startDownloaderStatusPolling,
-  stopDownloaderStatusPolling
-} from "./downloader-status.js";
+import { checkDownloaderStatus } from "./downloader-status.js";
 
 export interface WsMessage<T = unknown> {
   type: string;
@@ -11,7 +8,6 @@ export interface WsMessage<T = unknown> {
 }
 
 let io: SocketIOServer | null = null;
-let connectedClients = 0;
 
 export function broadcast(type: string, data: unknown) {
   if (!io) return;
@@ -28,19 +24,18 @@ export function initWebsockets(server: HttpServer) {
   });
 
   io.on("connection", (socket) => {
-    connectedClients += 1;
-
-    if (connectedClients === 1) {
-      startDownloaderStatusPolling();
-    }
-
-    socket.on("disconnect", () => {
-      connectedClients = Math.max(connectedClients - 1, 0);
-
-      if (connectedClients === 0) {
-        stopDownloaderStatusPolling();
-      }
-    });
+    // A fresh tab gets the status once, straight to itself; every later
+    // change is broadcast by the route that caused it.
+    void checkDownloaderStatus()
+      .then((status) => {
+        if (socket.connected) {
+          socket.emit("message", {
+            type: "downloader-status",
+            data: status
+          } satisfies WsMessage);
+        }
+      })
+      .catch((e) => console.warn("downloader-status: initial check failed:", e));
   });
 
   return io;

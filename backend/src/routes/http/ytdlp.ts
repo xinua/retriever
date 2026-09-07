@@ -1,8 +1,7 @@
 import { FastifyInstance } from "fastify";
 import * as ytdlp from "../../services/ytdlp.js";
 import * as Ffmpeg from "../../services/ffmpeg.js";
-import { checkDownloaderStatus } from "../ws/downloader-status.js";
-import { broadcast } from "../ws/websockets.js";
+import { publishDownloaderStatus } from "../ws/downloader-status.js";
 
 export async function ytdlpRoutes(app: FastifyInstance) {
   app.get("/api/ytdlp/version", async () => {
@@ -20,7 +19,7 @@ export async function ytdlpRoutes(app: FastifyInstance) {
     // is also the someone who just replaced a broken ffmpeg.
     await Ffmpeg.refresh();
 
-    broadcast("downloader-status", await checkDownloaderStatus());
+    await publishDownloaderStatus();
 
     return result;
   });

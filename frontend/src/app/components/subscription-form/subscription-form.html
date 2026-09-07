@@ -139,7 +139,7 @@
       <!-- Shorts -->
       <div
         class="md:col-span-4 flex items-center justify-between gap-3 rounded-lg border border-gray-800 px-4 py-3 cursor-pointer"
-        (click)="form.controls.downloadShorts.setValue(!form.controls.downloadShorts.value)"
+        (click)="downloadShortsToggle.toggle()"
       >
         <div>
           <div class="text-sm font-medium">Shorts</div>
@@ -149,13 +149,17 @@
             <div class="text-xs">Ignore</div>
           }
         </div>
-        <mat-slide-toggle formControlName="downloadShorts" />
+        <mat-slide-toggle
+          formControlName="downloadShorts"
+          #downloadShortsToggle
+          (click)="$event.stopPropagation()"
+        ></mat-slide-toggle>
       </div>
 
       <!-- Notify HA -->
       <div
         class="md:col-span-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-800 px-4 py-3 cursor-pointer"
-        (click)="form.controls.notifyHA.setValue(!form.controls.notifyHA.value)"
+        (click)="notifyHAToggle.toggle()"
       >
         <div>
           @let localWebhook = form.controls.webhookOverride;
@@ -169,7 +173,11 @@
             <div class="text-xs">Do not send</div>
           }
         </div>
-        <mat-slide-toggle formControlName="notifyHA"></mat-slide-toggle>
+        <mat-slide-toggle
+          formControlName="notifyHA"
+          #notifyHAToggle
+          (click)="$event.stopPropagation()"
+        ></mat-slide-toggle>
 
         @if (notifyControl.value && !localWebhook.valid && !globalWebhookURL()?.length) {
           <div class="text-xs text-red-500 col-span-12 w-full">Please set a custom or global webhook URL</div>
@@ -180,7 +188,7 @@
       @if (!isEditing()) {
         <div
           class="md:col-span-4 flex items-center justify-between gap-3 rounded-lg border border-gray-800 px-4 py-3 cursor-pointer"
-          (click)="form.controls.startFromLast.setValue(!form.controls.startFromLast.value)"
+          (click)="startFromLastToggle.toggle()"
           matTooltip="Turn on to download last video now"
         >
           <div>
@@ -191,7 +199,11 @@
               <div class="text-xs">Next video</div>
             }
           </div>
-          <mat-slide-toggle formControlName="startFromLast" />
+          <mat-slide-toggle
+            formControlName="startFromLast"
+            #startFromLastToggle
+            (click)="$event.stopPropagation()"
+          ></mat-slide-toggle>
         </div>
       }
 

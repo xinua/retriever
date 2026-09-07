@@ -71,6 +71,18 @@ export function known(): FfmpegStatus | null {
   return last;
 }
 
+/**
+ * The ffmpeg to spawn directly, for the work the app does itself rather than
+ * through yt-dlp — the same binary `--ffmpeg-location` would hand it. Falls
+ * back to PATH when the probe found nothing better, and lets the spawn be the
+ * thing that fails if even that is missing.
+ */
+export async function binary(): Promise<string> {
+  const status_ = known() ?? (await status());
+
+  return status_.location ? path.join(status_.location, "ffmpeg") : "ffmpeg";
+}
+
 async function run(): Promise<FfmpegStatus> {
   const dirs = candidateDirs();
 

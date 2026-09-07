@@ -3,10 +3,18 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 import * as Ffmpeg from "./ffmpeg.js";
+import { avatarFor } from "./avatar.js";
+import { authorUrlFor } from "./author.js";
 import { ImagesService } from "./images.service.js";
 
+import type { Download } from "../db/types.js";
+
 /**
- * A poster for downloads that arrive without one.
+ * Which picture a download row shows, and how one is made for a row that
+ * arrived without any.
+ *
+ * posterFor() below answers the first question for every row the server hands
+ * a client. The rest of the file answers the second:
  *
  * Most sites hand yt-dlp a thumbnail URL and the artwork cache fetches it —
  * see manual-download.ts. A bare manifest (`.../master.m3u8`) has no such
@@ -20,6 +28,99 @@ import { ImagesService } from "./images.service.js";
  * that already landed never touches the resolver, so the capture waits for
  * the download to finish and reads from disk.
  */
+
+/**
+ * A URL that points straight at a stream or a media file, rather than at a
+ * page describing one. yt-dlp's generic extractor has no metadata to work
+ * with here, so it names the video after the last path segment — which makes
+ * `master.m3u8` and `index.m3u8` collide across completely unrelated
+ * downloads. Artwork keyed on that id cannot be trusted to belong to this
+ * row, so these always capture their own poster.
+ */
+const DIRECT_MEDIA_URL = /\.(m3u8|mpd|mp4|m4v|mov|mkv|webm|ts)(\?|#|$)/i;
+
+/**
+ * The picture a download row should show, as a path the browser can load, or
+ * null when the row has none.
+ *
+ * Decided here rather than in the client: which file a row ends up with
+ * depends on what actually landed in the images directory, which only the
+ * server can see. The client used to guess `/images/video-<id>.jpg` for every
+ * row and let the 404 fall through to a placeholder, so a row with no artwork
+ * flickered through a broken image on the way there.
+ *
+ * Only real pictures of the video are ever returned — a platform thumbnail
+ * or a frame grabbed out of the file, never a stand-in for one. A download
+ * that has nothing yet usually has something coming: an audio download's
+ * poster is cut from its video once the bytes land (see finishArtwork() in
+ * download-queue.ts), so null here means "not yet", and the client holds a
+ * preloader rather than settling on a picture that is about to be replaced.
+ */
+export function posterFor(row: Download): string | null {
+  if (row.thumbnailPath) return row.thumbnailPath;
+
+  if (hasCachedArtwork(row)) return `/images/video-${row.videoId}.jpg`;
+
+  return null;
+}
+
+/** A row as a client sees it: stored columns plus the resolved extras. */
+export type Decorated<T extends Download> = T & {
+  avatarPath: string | null;
+  authorUrl: string | null;
+};
+
+/**
+ * A copy of `row` carrying the resolved extras, for handing to a client — its
+ * poster, the uploader avatar from services/avatar.ts and the link to the
+ * uploader from services/author.ts. The thumbnailPath column itself keeps its
+ * narrower meaning — the row's own captured frame — so nothing on the server
+ * mistakes a placeholder for a real file. avatarPath and authorUrl have no
+ * columns at all: both are derived from what the row already carries, so
+ * there is nothing to keep in step.
+ *
+ * Every path and link a client renders is resolved in this one place, which
+ * is what lets the client render them directly instead of assembling URLs out
+ * of per-site knowledge it would have to hold a second copy of.
+ */
+export function decorate<T extends Download>(row: T): Decorated<T> {
+  return {
+    ...row,
+    thumbnailPath: posterFor(row),
+    avatarPath: avatarFor(row),
+    authorUrl: authorUrlFor(row)
+  };
+}
+
+export function decorateAll<T extends Download>(rows: T[]): Decorated<T>[] {
+  return rows.map(decorate);
+}
+
+/**
+ * The image file behind a row's poster, when it is a real picture of the
+ * video rather than a placeholder standing in for one. That distinction is
+ * what separates this from posterFor(): a placeholder is fine to show in a
+ * list and quite wrong to write into someone's audio file as its cover.
+ */
+export function fileFor(row: Download): string | null {
+  const name = row.thumbnailPath
+    ? path.basename(row.thumbnailPath)
+    : hasCachedArtwork(row)
+      ? `video-${row.videoId}.jpg`
+      : null;
+
+  if (!name || !ImagesService.exists(name)) return null;
+
+  return ImagesService.pathFor(name);
+}
+
+/** Whether the shared artwork cache already holds a picture for this row. */
+export function hasCachedArtwork(row: Download): boolean {
+  if (!row.videoId) return false;
+  if (DIRECT_MEDIA_URL.test(row.url)) return false;
+
+  return ImagesService.exists(`video-${row.videoId}.jpg`);
+}
 
 /** Poster width; height follows the source aspect (`-2` keeps it even). */
 const WIDTH = 640;
@@ -67,9 +168,7 @@ export async function capture(req: CaptureRequest): Promise<string | null> {
   try {
     if (!isReadableFile(req.filePath)) return null;
 
-    const bin = await binary();
-
-    if (!bin) return null;
+    const bin = await Ffmpeg.binary();
 
     const filename = posterName(req.id);
     const target = ImagesService.pathFor(filename);
@@ -107,17 +206,6 @@ function seekFor(duration: number | null): number {
   }
 
   return Math.min(duration * SEEK_FRACTION, SEEK_CAP_S);
-}
-
-/**
- * The probed ffmpeg rather than whatever PATH offers first, matching how
- * ytdlp.ts passes --ffmpeg-location. A null location means the probe found
- * nothing better, so fall back to PATH and let the spawn fail if it must.
- */
-async function binary(): Promise<string | null> {
-  const status = Ffmpeg.known() ?? (await Ffmpeg.status());
-
-  return status.location ? path.join(status.location, "ffmpeg") : "ffmpeg";
 }
 
 /**

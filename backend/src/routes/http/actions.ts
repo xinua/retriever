@@ -8,7 +8,12 @@ import { sendWebhook } from "../../services/webhook.js";
 export async function actionsRoutes(app: FastifyInstance) {
   // Send webhook
   app.post("/api/actions/send-webhook", async (req) => {
-    const { url, body } = req.body as { url: string; body?: string };
+    // The UI posts the example payload so the receiver sees the real shape;
+    // an empty object is still accepted for bare connectivity checks.
+    const { url, body } = req.body as {
+      url: string;
+      body?: Record<string, unknown>;
+    };
 
     try {
       await sendWebhook(url, body ?? {});

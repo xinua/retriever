@@ -1,4 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import fsp from "node:fs/promises";
+import path from "node:path";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "../db/index.js";
@@ -12,7 +14,7 @@ import { platformFromUrl } from "./platform.js";
 import * as InfoCache from "./info-cache.js";
 import * as Ffmpeg from "./ffmpeg.js";
 import * as Poster from "./poster.js";
-import { ImagesService } from "./images.service.js";
+import * as CoverArt from "./cover-art.js";
 import { isFfmpegFailure, isPermanent } from "./retry-policy.js";
 
 const PROGRESS_BROADCAST_MS = 1000;
@@ -70,7 +72,7 @@ async function getRow(id: number): Promise<Download | undefined> {
 
 async function emit(id: number) {
   const row = await getRow(id);
-  if (row) broadcast("download-updated", row);
+  if (row) broadcast("download-updated", Poster.decorate(row));
 }
 
 async function getSettings(): Promise<Settings | undefined> {
@@ -106,7 +108,7 @@ export async function enqueue(req: DownloadRequest): Promise<Download | null> {
     })
     .returning();
 
-  broadcast("download-updated", row);
+  broadcast("download-updated", Poster.decorate(row));
 
   void pump();
 
@@ -183,11 +185,11 @@ export async function enqueueManual(
 
   // One message for the whole batch: a channel expansion can be hundreds of
   // rows, and that many individual events would hammer every open tab.
-  broadcast("downloads-batch", rows);
+  broadcast("downloads-batch", Poster.decorateAll(rows));
 
   void pump();
 
-  return rows;
+  return Poster.decorateAll(rows);
 }
 
 /**
@@ -313,6 +315,19 @@ async function start(id: number) {
 
   const bin = ytdlp.resolveBin();
 
+  // An audio download with no artwork anywhere has only one possible picture:
+  // a frame of the video it is extracted from, which yt-dlp deletes as soon
+  // as the extraction is done. Keep it for the capture, and take the listing
+  // of the destination first so the cleanup afterwards can tell the file this
+  // job added from anything that was already sitting there.
+  const keepVideo = opts.type === "audio" && needsPosterSource(row);
+
+  if (keepVideo) opts.keepVideo = true;
+
+  const homeBefore = keepVideo
+    ? await ytdlp.listHome(opts, appSettings)
+    : new Set<string>();
+
   // Probed once and cached, so only the first download of a run waits on it.
   // buildArgs reads the result synchronously.
   await Ffmpeg.status();
@@ -327,7 +342,7 @@ async function start(id: number) {
     appSettings,
     row.url,
     id,
-    row.videoId,
+    row.title,
     infoJsonPath
   );
 
@@ -389,7 +404,7 @@ async function start(id: number) {
       await onSuccess(ch, current);
 
       // Cosmetic and slower than the notification deserves to wait for.
-      void capturePoster(current, output);
+      void finishArtwork(current, output, homeBefore);
     } else {
       const error = extractError(stderrTail) || `yt-dlp exited with code ${code}`;
 
@@ -492,7 +507,9 @@ async function failFfmpeg(
 
   // The rescued file skipped its postprocessing but still plays, so the card
   // showing it can still have a picture.
-  if (rescued) void capturePoster(row, rescued);
+  // An audio job's rescued file is the video it never got to extract, which
+  // is a frame source rather than something to embed a cover into.
+  if (rescued && row) void capturePoster(row, rescued);
 }
 
 /**
@@ -545,31 +562,50 @@ async function onSuccess(ch: Channel | undefined, row: Download | undefined) {
 }
 
 /**
- * A URL that points straight at a stream or a media file, rather than at a
- * page describing one. yt-dlp's generic extractor has no metadata to work
- * with here, so it names the video after the last path segment — which makes
- * `master.m3u8` and `index.m3u8` collide across completely unrelated
- * downloads. Artwork keyed on that id cannot be trusted to belong to this
- * row, so these always capture their own poster.
+ * Whether a finished download still needs a poster taken out of its video.
+ * True only for the rows that have no artwork anywhere — chiefly bare
+ * `.m3u8` links, which arrive with no thumbnail metadata at all.
  */
-const DIRECT_MEDIA_URL = /\.(m3u8|mpd|mp4|m4v|mov|mkv|webm|ts)(\?|#|$)/i;
+function needsPosterSource(row: Download): boolean {
+  if (row.type !== "video" && row.type !== "audio") return false;
+
+  return !row.thumbnailPath && !Poster.hasCachedArtwork(row);
+}
 
 /**
- * Gives a finished download a poster taken out of the video, for the rows
- * that have no artwork of their own — chiefly bare `.m3u8` links, which
- * arrive with no thumbnail metadata at all.
+ * Everything picture-related that happens once the bytes have landed: a
+ * poster for a row that has none, and the poster written into the file for a
+ * download that can carry one.
  *
  * Best effort throughout: the download has already succeeded, and every path
  * out of here that fails simply leaves the card as it is today.
  */
-async function capturePoster(row: Download | undefined, filePath: string | null) {
+async function finishArtwork(
+  row: Download | undefined,
+  filePath: string | null,
+  /** Names that were in the destination folder before this job ran. */
+  before: Set<string>
+) {
   if (!row || !filePath) return;
 
-  // An audio file has no frames, and a thumbnail job already produced the jpg.
-  if (row.type !== "video") return;
+  // A thumbnail job's own download is the picture.
+  if (row.type === "thumbnail") return;
 
+  // Audio has no frames of its own; the video it was extracted from was kept
+  // for exactly this, and is ours to remove once the frame is out of it.
+  const source =
+    row.type === "audio" ? await keptSource(filePath, before) : filePath;
+
+  if (source) await capturePoster(row, source);
+
+  if (source !== filePath) await discardKept(source);
+
+  await embedCover(row, filePath);
+}
+
+async function capturePoster(row: Download, filePath: string) {
   // Whatever is already there was a better source than a frame grab.
-  if (row.thumbnailPath || hasCachedArtwork(row)) return;
+  if (!needsPosterSource(row)) return;
 
   const poster = await Poster.capture({
     id: row.id,
@@ -583,7 +619,7 @@ async function capturePoster(row: Download | undefined, filePath: string | null)
   // so a real thumbnail can land while ffmpeg is still decoding. It is the
   // better picture, and the UI prefers whatever is in this column — so having
   // lost the race, throw the frame away rather than override it.
-  if (hasCachedArtwork(row)) {
+  if (Poster.hasCachedArtwork(row)) {
     Poster.remove(row.id);
     return;
   }
@@ -596,12 +632,77 @@ async function capturePoster(row: Download | undefined, filePath: string | null)
   await emit(row.id);
 }
 
-/** Whether the shared artwork cache already holds a picture for this row. */
-function hasCachedArtwork(row: Download): boolean {
-  if (!row.videoId) return false;
-  if (DIRECT_MEDIA_URL.test(row.url)) return false;
+/**
+ * Writes the row's poster into the finished audio file as its cover art, so
+ * a music player shows what the Downloads list shows. Read back from the
+ * database rather than taken from `row`, because the frame grab above may
+ * have just given this download its first picture.
+ */
+async function embedCover(row: Download, filePath: string) {
+  if (row.type !== "audio" || !CoverArt.supports(filePath)) return;
 
-  return ImagesService.exists(`video-${row.videoId}.jpg`);
+  const current = await getRow(row.id);
+
+  if (!current) return;
+
+  const image = Poster.fileFor(current);
+
+  if (image) await CoverArt.embed(filePath, image);
+}
+
+/**
+ * Sidecars an audio job's own files can be named after: yt-dlp's thumbnail
+ * and subtitle writers share the media's stem, and neither is something to
+ * grab a frame from or delete.
+ */
+const SIDECAR_FILE = /\.(jpe?g|png|webp|gif|srt|vtt|ass|lrc|json|nfo|description|url)$/i;
+
+/**
+ * The video an audio job was told to keep, found next to the audio file it
+ * became. yt-dlp names it after the same stem, so the pair differ only in
+ * extension.
+ *
+ * A name that was already in the folder is never a candidate: the point of
+ * the listing taken before the job is that this function decides what to
+ * delete, and a file this download did not write is not ours to remove.
+ */
+async function keptSource(
+  audioPath: string,
+  before: Set<string>
+): Promise<string | null> {
+  const dir = path.dirname(audioPath);
+  const audio = path.basename(audioPath);
+  const stem = audio.slice(0, audio.length - path.extname(audio).length);
+
+  let names: string[];
+
+  try {
+    names = await fsp.readdir(dir);
+  } catch {
+    return null;
+  }
+
+  const kept = names.find((name) => {
+    if (name === audio || before.has(name)) return false;
+    if (SIDECAR_FILE.test(name)) return false;
+
+    return name.slice(0, name.length - path.extname(name).length) === stem;
+  });
+
+  return kept ? path.join(dir, kept) : null;
+}
+
+async function discardKept(target: string | null) {
+  if (!target) return;
+
+  try {
+    // Never recursive: whatever this is meant to be, a directory is not it.
+    if (!(await fsp.stat(target)).isFile()) return;
+
+    await fsp.rm(target, { force: true });
+  } catch (e) {
+    console.warn("Could not remove kept video:", e);
+  }
 }
 
 /**
@@ -854,7 +955,7 @@ export async function cancelAll(): Promise<Download[]> {
     child.kill("SIGTERM");
   }
 
-  if (rows.length) broadcast("downloads-batch", rows);
+  if (rows.length) broadcast("downloads-batch", Poster.decorateAll(rows));
 
   return rows;
 }
@@ -921,7 +1022,7 @@ export async function retry(id: number): Promise<Download | null> {
 
   void pump();
 
-  return getRow(id).then((r) => r ?? null);
+  return getRow(id).then((r) => (r ? Poster.decorate(r) : null));
 }
 
 /** Called on boot so downloads requeued after a crash actually start. */

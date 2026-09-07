@@ -1,4 +1,5 @@
 import { Component, effect, ElementRef, input, OnInit, output, signal, viewChild } from '@angular/core';
+import { Nullable } from '../../models/common.model';
 
 @Component({
   selector: 'rt-card',
@@ -23,13 +24,15 @@ import { Component, effect, ElementRef, input, OnInit, output, signal, viewChild
             [style.height]="imgSize().split('x')[1] + 'px'"
           ></div>
         }
-        <img
-          [src]="imageUrl()"
-          alt="Source image"
-          [class]="!isLoaded() ? 'hidden!' : 'h-[inherit]! ' + imageClass()"
-          (error)="handleImageError()"
-          (load)="handleImageLoad()"
-        />
+        @if (imageUrl()) {
+          <img
+            [src]="imageUrl()"
+            alt="Source image"
+            [class]="!isLoaded() ? 'hidden!' : 'h-[inherit]! ' + imageClass()"
+            (error)="handleImageError()"
+            (load)="handleImageLoad()"
+          />
+        }
 
         <div class="shine-line" [style.left.px]="shineX" [style.top.px]="shineY" [class.visible]="isShineVisible"></div>
       </div>
@@ -40,8 +43,17 @@ import { Component, effect, ElementRef, input, OnInit, output, signal, viewChild
 export class RtCard implements OnInit {
   private _retried = false;
 
-  imageSourceUrl = input.required<string>();
-  url = input<string>(null);
+  /** Null when there is no picture for this card — see show(). */
+  imageSourceUrl = input.required<Nullable<string>>();
+  /**
+   * Whether a missing picture is one that has not arrived yet, rather than
+   * one there will never be. Holds the preloader instead of falling back to
+   * the placeholder — a download still running gets its poster when it
+   * finishes, and a card that settles on "not found" first only flickers.
+   */
+  pending = input<boolean>(false);
+  /** Where the card links to, or null when it has nothing to open. */
+  url = input<Nullable<string>>(null);
   imgSize = input<string>('250x250');
   mockMessage = input<string>('Image%20not%20found');
   customClass = input<string>('rounded-md overflow-hidden h-[inherit]');
@@ -62,15 +74,17 @@ export class RtCard implements OnInit {
 
   constructor() {
     effect(() => {
-      if (this.imageSourceUrl().length) {
-        this.imageUrl.set(null);
-        this.imageUrl.set(this.imageSourceUrl());
-      }
+      const source = this.imageSourceUrl();
+
+      // Through null first, so an <img> already pointed at this URL reloads
+      // rather than keeping the frame it failed on.
+      this.imageUrl.set(null);
+      this.show(source);
     });
   }
 
   ngOnInit(): void {
-    this.imageUrl.set(this.imageSourceUrl());
+    this.show(this.imageSourceUrl());
   }
 
   handleImageLoad() {
@@ -78,15 +92,37 @@ export class RtCard implements OnInit {
   }
 
   handleImageError() {
-    // const message = this.imageUrl().includes('channel') ? 'Channel%20Avatar' : 'Video%20Thumbnail';
-
-    if (!this._retried && this.retry()) {
+    // Nothing to ask for twice when there was no source to begin with.
+    if (!this._retried && this.retry() && this.imageSourceUrl()?.length) {
       this._retried = true;
       setTimeout(() => this.imageUrl.set(`${this.imageSourceUrl()}?r=1`), 2000);
       return;
     }
 
-    this.imageUrl.set(`https://mockimage.tw/photo/${this.imgSize()}/1f1f1f/ff8800/${this.mockMessage()}`);
+    this.imageUrl.set(this.mock());
+  }
+
+  /**
+   * Shows `source`, or the placeholder when there is nothing to show — the
+   * server returns no path for a download whose artwork never arrived, and an
+   * empty src would otherwise re-request the page itself.
+   */
+  private show(source: Nullable<string>) {
+    this._retried = false;
+
+    if (source?.length) {
+      this.imageUrl.set(source);
+      return;
+    }
+
+    // No <img> at all while pending: an empty src would re-request the page
+    // itself, and the preloader is the whole point of showing nothing.
+    this.isLoaded.set(false);
+    this.imageUrl.set(this.pending() ? null : this.mock());
+  }
+
+  private mock(): string {
+    return `https://mockimage.tw/photo/${this.imgSize()}/1f1f1f/ff8800/${this.mockMessage()}`;
   }
 
   move({ clientX, clientY }: MouseEvent) {

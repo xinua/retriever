@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { catchError, Observable, tap } from 'rxjs';
+import { webhookExamplePayload } from '../components/webhook-snackbar/webhook-snackbar.constants';
 import { DefaultSettings, DefaultUiConfig } from '../constants';
 import {
   FoldersModel,
@@ -143,6 +144,17 @@ export class HttpService {
     );
   }
 
+  /**
+   * The newest download a watcher produced, optionally narrowed to some
+   * statuses. 404 when the watcher has none, so callers should expect an error.
+   */
+  getDownloadByWatcher(watcherId: number, statuses: DownloadStatus[] = []): Observable<DownloadModel> {
+    const wanted = statuses.filter(Boolean).join(',');
+    const filter = wanted ? `?statuses=${encodeURIComponent(wanted)}` : '';
+
+    return this._http.get<DownloadModel>(`/api/downloads/by-watcher/${watcherId}${filter}`);
+  }
+
   getDownloadsInfo(): Observable<DownloadInfoModel> {
     return this._http.get<DownloadInfoModel>(`/api/downloads/info`);
   }
@@ -202,7 +214,7 @@ export class HttpService {
     return this._http.post<{ ok: boolean }>(`/api/downloads/clear-finished`, {});
   }
 
-  sendWebhook(url: string, body: string = null): Observable<{ ok: boolean }> {
+  sendWebhook(url: string, body: object = webhookExamplePayload()): Observable<{ ok: boolean }> {
     return this._http.post<{ ok: boolean }>(`/api/actions/send-webhook`, { url, body });
   }
 

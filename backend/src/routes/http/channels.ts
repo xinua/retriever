@@ -5,7 +5,7 @@ import { eq, asc, sql } from "drizzle-orm";
 import {getFeedInfo} from "../../services/rss.js";
 import {YoutubeService} from "../../services/youtube.service.js";
 import {ImagesService} from "../../services/images.service.js";
-import {runChannelOnce} from "../../services/worker.js";
+import {isSubPoster, runChannelOnce} from "../../services/worker.js";
 import { calculateNextCheck } from "../../utils/schedule.helper.js";
 import { broadcast } from "../ws/websockets.js";
 import { getLastCheck } from "../../utils/last-check.helper.js";
@@ -227,9 +227,12 @@ export function channelsRoutes(app: FastifyInstance) {
         WHERE "sortOrder" > ${row.sortOrder}
       `);
 
-    if (row?.channelAvatarPath) {
-      if (row.channelAvatarPath) await ImagesService.remove(row.channelAvatarPath);
-      if (row.lastVideoThumbnailPath) await ImagesService.remove(row.lastVideoThumbnailPath);
+    if (row?.channelAvatarPath) await ImagesService.remove(row.channelAvatarPath);
+
+    // Only the channel's own copy — a path left over from before the split
+    // points at the shared cache, which the download rows still read.
+    if (row?.lastVideoThumbnailPath && isSubPoster(row.lastVideoThumbnailPath)) {
+      await ImagesService.remove(row.lastVideoThumbnailPath);
     }
 
     broadcast('next-check', await getLastCheck());

@@ -171,7 +171,7 @@ async function listDownloads(query: {
   // Echoed back so a client can tell which filter produced this page — the
   // list arrives asynchronously, and a stale response must be recognisable.
   return {
-    items,
+    items: Poster.decorateAll(items),
     total,
     page: current,
     pages,
@@ -323,6 +323,43 @@ export async function downloadsRoutes(app: FastifyInstance) {
     }
 
     return info;
+  });
+
+  /**
+   * The newest download a watcher produced — what the widget shows for a
+   * channel. Newest rather than a list because the widget has room for one
+   * card, and asking for it by watcher saves paging through the whole history
+   * to find the row.
+   *
+   * `statuses` narrows it the same way the listing does, so the widget can
+   * ask for the latest finished file rather than whatever was queued last.
+   */
+  app.get("/api/downloads/by-watcher/:watcherId", async (req, reply) => {
+    const { watcherId } = req.params as { watcherId: string };
+    const { statuses } = req.query as { statuses?: string };
+
+    const id = Number(watcherId);
+
+    if (!Number.isInteger(id)) {
+      return reply.code(400).send({ error: "watcherId must be a number" });
+    }
+
+    const wanted = parseStatuses(statuses);
+
+    const where = wanted.length
+      ? and(eq(download.watcherId, id), inArray(download.status, wanted))
+      : eq(download.watcherId, id);
+
+    const [row] = await db
+      .select()
+      .from(download)
+      .where(where)
+      .orderBy(desc(download.createdAt), desc(download.id))
+      .limit(1);
+
+    if (!row) return reply.code(404).send({ error: "Not found" });
+
+    return Poster.decorate(row);
   });
 
   /**

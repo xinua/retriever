@@ -176,7 +176,9 @@ export class SubscriptionForm implements OnInit {
   save(subscription: Partial<SubscriptionModel>) {
     const isEdditing = !!subscription?.id;
     this.isSaving.set(true);
-    const request = (isEdditing ? this._httpService.updateSubscription : this._httpService.addSubscription).bind(this._httpService);
+    const request = (isEdditing ? this._httpService.updateSubscription : this._httpService.addSubscription).bind(
+      this._httpService,
+    );
 
     request(this.form.value as SubscriptionModel).subscribe({
       next: (channel: SubscriptionModel) => {

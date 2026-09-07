@@ -3,6 +3,7 @@ import { db } from "../../db/index.js";
 import { settings } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
 import * as ytdlp from "../../services/ytdlp.js";
+import { publishDownloaderStatus } from "../ws/downloader-status.js";
 
 export async function settingsRoutes(app: FastifyInstance) {
   app.post("/api/settings/validate-ytdlp", async (req) => {
@@ -72,6 +73,12 @@ export async function settingsRoutes(app: FastifyInstance) {
       .select()
       .from(settings)
       .where(eq(settings.id, 1));
+
+    // The downloads dir and cookies path feed the health check, so a save is
+    // one of the few moments the status can actually change.
+    void publishDownloaderStatus().catch((e) =>
+      console.warn("downloader-status: check after settings save failed:", e)
+    );
 
     return updated;
   });

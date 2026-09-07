@@ -10,51 +10,15 @@ export type DownloaderStatus = {
   detail: string | null;
 };
 
-const POLL_INTERVAL_MS = 3000;
-
-let pollTimer: NodeJS.Timeout | null = null;
-let lastStatus: DownloaderStatus | null = null;
-let pollingEnabled = false;
-
-export function startDownloaderStatusPolling() {
-  if (pollingEnabled) return;
-
-  pollingEnabled = true;
-  void pollDownloaderStatus();
-}
-
-export function stopDownloaderStatusPolling() {
-  pollingEnabled = false;
-
-  if (pollTimer) {
-    clearTimeout(pollTimer);
-    pollTimer = null;
-  }
-
-  lastStatus = null;
-}
-
-async function pollDownloaderStatus() {
-  if (!pollingEnabled) return;
-
-  const next = await checkDownloaderStatus();
-
-  if (!isSame(lastStatus, next)) {
-    lastStatus = next;
-    broadcast("downloader-status", next);
-  }
-
-  if (!pollingEnabled) return;
-
-  pollTimer = setTimeout(() => void pollDownloaderStatus(), POLL_INTERVAL_MS);
-}
-
-function isSame(a: DownloaderStatus | null, b: DownloaderStatus): boolean {
-  return (
-    a?.downloader === b.downloader &&
-    a?.status === b.status &&
-    a?.detail === b.detail
-  );
+/**
+ * Pushes the current status to every open tab. Event-driven on purpose: the
+ * status only moves when the binary, ffmpeg, or the settings change, and
+ * every one of those happens through a route that can call this. A timer
+ * here used to spawn `yt-dlp --version` every few seconds for as long as a
+ * tab was open, which on a NAS showed up as constant CPU load.
+ */
+export async function publishDownloaderStatus() {
+  broadcast("downloader-status", await checkDownloaderStatus());
 }
 
 export async function checkDownloaderStatus(): Promise<DownloaderStatus> {

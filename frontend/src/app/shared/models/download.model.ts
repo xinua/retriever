@@ -31,12 +31,7 @@ export enum DownloadSource {
 
 export interface DownloadModel {
   id: number;
-  /** Watcher row id (channel.id) — internal reference. */
   watcherId: Nullable<number>;
-  /**
-   * The uploader's id on `platform` — "UC…" on YouTube, an opaque string on
-   * TikTok, a numeric id on Instagram. Matches the avatar image name.
-   */
   channelId: Nullable<string>;
   channelName: Nullable<string>;
   videoId: Nullable<string>;
@@ -70,13 +65,9 @@ export interface DownloadModel {
   eta: Nullable<string>;
   totalBytes: Nullable<number>;
   filePath: Nullable<string>;
-  /**
-   * The row's own poster, as a `/images/...` path. Set for downloads that
-   * arrived without artwork — a bare .m3u8 link, chiefly — by grabbing a
-   * frame out of the finished file. Null means fall back to the shared
-   * `/images/video-<videoId>.jpg` cache.
-   */
+  avatarPath: Nullable<string>;
   thumbnailPath: Nullable<string>;
+  authorUrl: Nullable<string>;
   error: Nullable<string>;
   createdAt: string;
   startedAt: Nullable<string>;

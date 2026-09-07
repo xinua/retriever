@@ -162,7 +162,36 @@
             />
 
             <figcaption class="flex flex-col gap-2 max-w-full whitespace-break-spaces wrap-break-word">
-              <strong class="text-center">{{ sub().lastVideoTitle ?? 'No video found' }}</strong>
+              <div class="flex items-center justify-between gap-2 relative">
+                <strong class="">{{ sub().lastVideoTitle ?? 'No video found' }}</strong>
+
+                <button matIconButton [matMenuTriggerFor]="actionsMenu" aria-label="Subscription additional actions">
+                  <mat-icon>more_horiz</mat-icon>
+                </button>
+
+                <mat-menu #actionsMenu>
+                  <button mat-menu-item (click)="openWidgetInNewTab(sub().id)">
+                    <mat-icon>widgets</mat-icon>
+                    <span>Open widget</span>
+                  </button>
+
+                  <!-- <button mat-menu-item disabled (click)="downloadAgain(sub().id)">
+                    <mat-icon>download</mat-icon>
+                    <span>Download again</span>
+                  </button> -->
+
+                  <button mat-menu-item (click)="copyHaCardCode(sub().id)">
+                    <mat-icon>content_copy</mat-icon>
+                    <span>HA Card</span>
+                  </button>
+
+                  <button mat-menu-item (click)="copyHaCardAutomationCode(sub().id)">
+                    <mat-icon>content_copy</mat-icon>
+                    <span>HA Automation</span>
+                  </button>
+                </mat-menu>
+              </div>
+
               <span class="text-sm text-gray-500 max-h-80 overflow-y-auto"
                 >{{ sub()?.lastVideoDescription?.trim() ?? 'No description found' }}
               </span>

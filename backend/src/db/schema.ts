@@ -197,10 +197,11 @@ export const download = sqliteTable("download", {
 
   filePath: text("filePath"),
 
-  // The row's own poster, as a public /images/... path. Set by whoever
-  // obtained it: a frame grabbed out of the finished file for downloads that
-  // arrive with no artwork of their own — see services/poster.ts. Null means
-  // fall back to the shared /images/video-<videoId>.jpg cache.
+  // The row's own poster, as a public /images/... path: a frame grabbed out
+  // of the finished file for downloads that arrive with no artwork of their
+  // own. Null here means the row has nothing of its own, not that it has no
+  // picture — what a client is served is resolved from this column, the
+  // shared artwork cache and a placeholder, by services/poster.ts.
   thumbnailPath: text("thumbnailPath"),
 
   error: text("error"),

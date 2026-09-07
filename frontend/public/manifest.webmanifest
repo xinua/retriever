@@ -2,6 +2,8 @@
   "name": "Retriever",
   "short_name": "Retriever",
   "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#000000",
   "scope": "./",
   "start_url": "./",
   "icons": [
