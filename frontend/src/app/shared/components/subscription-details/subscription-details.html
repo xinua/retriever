@@ -17,15 +17,15 @@
       <div class="flex flex-col col-span-4 z-1">
         <div class="flex flex-col gap-5 px-4">
           <figure class="flex flex-col items-start gap-5">
-            <rt-card
-              [imageSourceUrl]="sub().channelAvatarPath"
-              [url]="'https://www.youtube.com/channel/' + sub().channelId"
-              customClass="w-[200px] rounded-full overflow-hidden"
-              mockMessage="Channel%20Avatar"
-            />
+            <rt-avatar [sourceImg]="sub().channelAvatarPath" imgSize="200x200" customClass="w-50 h-50" />
 
             <figcaption class="flex flex-col gap-2 max-w-full whitespace-break-spaces wrap-break-word">
-              <span class="text-4xl font-bold" matTooltip="Watcher ID: {{ sub().id }}">{{ sub().name }}</span>
+              <a
+                class="text-4xl font-bold"
+                [href]="'https://www.youtube.com/channel/' + sub().channelId"
+                target="_blank"
+                >{{ sub().name }}</a
+              >
               <span class="text-sm text-gray-500 max-h-80 overflow-y-auto">{{ sub().channelDescription ?? '—' }}</span>
             </figcaption>
           </figure>
@@ -146,7 +146,7 @@
 
         <div class="grid grid-cols-2 gap-10 py-4">
           <span>Created:</span>
-          <span>{{ sub().createdAt ? (sub().createdAt | date: 'MMMM dd') : '—' }}</span>
+          <span>{{ sub().createdAt ? (sub().createdAt | date: 'MMMM d') : '—' }}</span>
         </div>
       </div>
 
@@ -154,16 +154,21 @@
       <div class="flex flex-col col-span-4 z-1">
         <div class="flex flex-col gap-5 px-4">
           <figure class="flex flex-col gap-5 items-center">
-            <rt-card
-              [imageSourceUrl]="sub().lastVideoThumbnailPath"
-              [url]="'https://youtu.be/' + sub().lastVideoId"
-              imgSize="310x235"
-              mockMessage="Video%20Thumbnail"
-            />
+            <rt-player [subscriptionId]="sub().id" posterClass="aspect-video!">
+              <rt-steam-card
+                [imageSourceUrl]="sub().lastVideoThumbnailPath"
+                [url]=""
+                imageClass="aspect-video"
+                imgSize="310x235"
+                mockMessage="Video%20Thumbnail"
+              />
+            </rt-player>
 
             <figcaption class="flex flex-col gap-2 max-w-full whitespace-break-spaces wrap-break-word">
               <div class="flex items-center justify-between gap-2 relative">
-                <strong class="">{{ sub().lastVideoTitle ?? 'No video found' }}</strong>
+                <a [href]="sub().lastVideoId ? 'https://youtu.be/' + sub().lastVideoId : '#'" target="_blank">
+                  <strong class="">{{ sub().lastVideoTitle ?? 'No video found' }}</strong>
+                </a>
 
                 <button matIconButton [matMenuTriggerFor]="actionsMenu" aria-label="Subscription additional actions">
                   <mat-icon>more_horiz</mat-icon>
@@ -171,7 +176,7 @@
 
                 <mat-menu #actionsMenu>
                   <button mat-menu-item (click)="openWidgetInNewTab(sub().id)">
-                    <mat-icon>widgets</mat-icon>
+                    <mat-icon class="text-white!">widgets</mat-icon>
                     <span>Open widget</span>
                   </button>
 
@@ -181,12 +186,12 @@
                   </button> -->
 
                   <button mat-menu-item (click)="copyHaCardCode(sub().id)">
-                    <mat-icon>content_copy</mat-icon>
+                    <mat-icon class="text-white!">content_copy</mat-icon>
                     <span>HA Card</span>
                   </button>
 
                   <button mat-menu-item (click)="copyHaCardAutomationCode(sub().id)">
-                    <mat-icon>content_copy</mat-icon>
+                    <mat-icon class="text-white!">content_copy</mat-icon>
                     <span>HA Automation</span>
                   </button>
                 </mat-menu>

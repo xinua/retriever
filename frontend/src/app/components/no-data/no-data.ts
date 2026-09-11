@@ -6,7 +6,7 @@ import { MatIcon } from '@angular/material/icon';
   selector: 'rt-no-data',
   imports: [MatIcon, MatButton],
   template: `
-    <div class="flex flex-col items-center justify-center h-40 mt-10 gap-2">
+    <div class="flex flex-col items-center justify-center h-40 gap-2">
       <mat-icon class="h-15! w-15! text-6xl!">{{ icon() }}</mat-icon>
       <h1 class="text-lg font-medium">{{ message() }}</h1>
       <ng-content></ng-content>

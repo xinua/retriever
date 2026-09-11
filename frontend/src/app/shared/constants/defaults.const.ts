@@ -4,14 +4,14 @@ import {
   DownloadStatus,
   ManualDownloadModel,
   PaginatorModel,
-  VideoQuality,
   SettingsModel,
   ThemeColors,
   Types,
   UiConfig,
   VideoFormats,
+  VideoQuality,
 } from '@shared/models';
-import { SubscriptionModel, PollType } from '../models';
+import { PollType, SubscriptionModel } from '../models';
 
 export const DefaultSubscription: SubscriptionModel = {
   id: null,

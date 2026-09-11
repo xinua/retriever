@@ -11,6 +11,6 @@ import { SizePipe } from '../../pipes/size.pipe';
   styleUrl: './progress-info.css',
 })
 export class ProgressInfo {
-  download = input<DownloadModel>();
+  download = input.required<DownloadModel>();
   cancel = output<DownloadModel>();
 }

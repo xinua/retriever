@@ -1,0 +1,80 @@
+<audio
+  #nativePlayer
+  class="hidden"
+  [src]="audioUrl()"
+  [muted]="isMuted()"
+  (play)="isPlaying.set(true)"
+  (pause)="isPlaying.set(false)"
+  (timeupdate)="onTimeUpdate()"
+  (durationchange)="onDurationChange()"
+  (emptied)="onEmptied()"
+  (error)="gotError.emit($event)"
+  autoplay
+></audio>
+
+<div class="audio-player flex w-full items-center gap-2 bg-black/70 px-2 py-1" [class.py-2]="playerSize() === 'lg'">
+  <button
+    matMiniFab
+    class="rounded-full! bg-(--rt-accent)!"
+    [style.width.px]="size().btnSize"
+    [style.height.px]="size().btnSize"
+    [attr.aria-label]="isPlaying() ? 'Pause' : 'Play'"
+    (click)="togglePlayPause()"
+  >
+    <mat-icon
+      class="text-black!"
+      [fontIcon]="isPlaying() ? 'pause' : 'play_arrow'"
+      [style.font-size.px]="size().iconSize"
+      [style.width.px]="size().iconSize"
+      [style.height.px]="size().iconSize"
+    />
+  </button>
+
+  <div class="progress-container w-full">
+    <small class="w-full whitespace-nowrap d-block"
+      >{{ currentTimeValue() | time: timeFormat.SHORT }} / {{ durationValue() | time: timeFormat.SHORT }}</small
+    >
+
+    <div class="relative">
+      <input
+        type="range"
+        min="0"
+        step="1"
+        [max]="totalDuration() || 1"
+        [value]="currentTime()"
+        aria-label="Seek"
+        [attr.aria-valuetext]="currentTimeValue() | time: timeFormat.SHORT"
+        (input)="onSeekInput($event)"
+        (change)="onSeekCommit($event)"
+        (pointerup)="onSeekCommit($event)"
+        class="absolute left-0 bottom-0 w-full opacity-0 z-1 cursor-pointer"
+      />
+
+      <rt-progress-bar
+        [value]="progress()"
+        label="Audio progress"
+        [waveLength]="size().waveLength"
+        [speed]="isPlaying() ? 1 : 0"
+        [amplitude]="size().amplitude"
+        class="w-full mr-8"
+      />
+    </div>
+  </div>
+
+  <button
+    matMiniFab
+    class="rounded-full! bg-transparent!"
+    [style.width.px]="size().btnSize"
+    [style.height.px]="size().btnSize"
+    [attr.aria-label]="isMuted() ? 'Unmute' : 'Mute'"
+    (click)="toggleMute()"
+  >
+    <mat-icon
+      class="text-white!"
+      [style.font-size.px]="size().iconSize"
+      [style.width.px]="size().iconSize"
+      [style.height.px]="size().iconSize"
+      [fontIcon]="isMuted() ? 'volume_off' : 'volume_up'"
+    ></mat-icon>
+  </button>
+</div>

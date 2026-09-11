@@ -1,20 +1,63 @@
 @let isActive = download().status === downloadStatus.RUNNING || download().status === downloadStatus.QUEUED;
 @let isPathAvailable = !!download().filePath;
 
-<div class="flex items-center justify-end gap-3 shrink-0 absolute top-5 right-5 lg:static">
+<div class="flex items-center justify-end gap-3 shrink-0">
   @if (!isActive) {
-    @if (isPathAvailable) {
-      <button mat-icon-button matTooltip="Save to my device" (click)="saveAs(download())">
-        <mat-icon>save_alt</mat-icon>
-      </button>
-    }
-
-    <button mat-icon-button matTooltip="Retry" (click)="retry.emit()">
-      <mat-icon>refresh</mat-icon>
-    </button>
-
     <button mat-icon-button matTooltip="Remove from list" (click)="remove.emit()">
       <mat-icon class="text-red-500!">delete</mat-icon>
     </button>
+
+    <button mat-icon-button [matMenuTriggerFor]="actionsMenu">
+      <mat-icon class="text-white!">more_horiz</mat-icon>
+    </button>
   }
 </div>
+
+<mat-menu #actionsMenu>
+  @if (isPathAvailable) {
+    <button mat-menu-item (click)="saveAs.emit(download())">
+      <mat-icon class="text-white!">save_alt</mat-icon>
+      <span>Save to my device</span>
+    </button>
+  }
+
+  <button mat-menu-item (click)="retry.emit()">
+    <mat-icon class="text-white!">refresh</mat-icon>
+    <span>Download again</span>
+  </button>
+
+  @if (isPathAvailable) {
+    <button mat-menu-item (click)="copyFilePath.emit(download())">
+      <mat-icon class="text-white!">content_copy</mat-icon>
+      <span>Copy file path</span>
+    </button>
+  }
+
+  <button mat-menu-item [matMenuTriggerFor]="pathMenu">
+    <mat-icon class="text-white!">signpost</mat-icon>
+    <span>Set file path</span>
+  </button>
+</mat-menu>
+
+<mat-menu #pathMenu class="pt-0!">
+  <div class="flex flex-col items-end file-name" (click)="$event.stopPropagation()">
+    <mat-form-field appearance="fill">
+      <small matPrefix class="pl-2">{{ downloadsFolder() }}/</small>
+
+      <input
+        matInput
+        [(ngModel)]="filePath"
+        class="text-sm! file-name-input"
+        placeholder="<dir?>/<fileName>.<ext>"
+        (keydown)="$event.stopPropagation()"
+        (keydown.escape)="closeActionsMenu()"
+        (keydown.enter)="setFilePath(filePath, download())"
+      />
+    </mat-form-field>
+
+    <button mat-flat-button color="primary" class="mr-2 mt-2" (click)="setFilePath(filePath, download())">
+      <mat-icon>save</mat-icon>
+      <span>Save</span>
+    </button>
+  </div>
+</mat-menu>

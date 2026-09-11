@@ -159,3 +159,86 @@ export function parseRange(
 
   return { start, end: Math.min(end, size - 1) };
 }
+
+/**
+ * Resolves a path someone typed into the "set file path" field to the file it
+ * names, or explains why it cannot be used.
+ *
+ * Re-pointing does not move anything: it corrects the row to a file that is
+ * already on disk — after a library was reorganised outside the app, or a
+ * download was renamed by hand. So the target has to exist, and the checks
+ * are the same ones `resolveDownloadFile` applies when serving a file. A row
+ * pointed at something unreadable would fail at the download endpoint
+ * instead, long after the mistake was made.
+ *
+ * The value is taken relative to the downloads root — the shape `/api/folders`
+ * suggests and the form's `<dir>/<fileName>.<ext>` placeholder asks for — but
+ * an absolute path is accepted too, so the string that "copy file path" put on
+ * the clipboard can be pasted back and edited.
+ *
+ * Nothing here sanitizes: the target must match a real name on disk, and
+ * yt-dlp's own names carry spaces, full-width look-alikes and non-latin
+ * scripts that any rewriting would break. Containment is enforced by
+ * comparing realpaths instead, so neither `..` nor a planted symlink can
+ * point the row outside the downloads folder.
+ */
+export async function resolveNewFilePath(
+  value: string,
+  settings: Settings
+): Promise<ResolvedFile> {
+  const wanted = value.trim();
+
+  if (!wanted) {
+    return { ok: false, status: 400, error: "A file path is required" };
+  }
+
+  // A NUL byte truncates the path at the syscall boundary, so what is checked
+  // here would not be what is opened later.
+  if (wanted.includes("\0")) {
+    return { ok: false, status: 400, error: "File path contains invalid characters" };
+  }
+
+  let realRoot: string;
+
+  try {
+    realRoot = await fsp.realpath(ytdlp.downloadsRoot(settings));
+  } catch {
+    return { ok: false, status: 500, error: "Downloads folder is not available" };
+  }
+
+  const candidate = path.isAbsolute(wanted)
+    ? path.resolve(wanted)
+    : path.resolve(realRoot, wanted);
+
+  let realFile: string;
+
+  try {
+    realFile = await fsp.realpath(candidate);
+  } catch {
+    return { ok: false, status: 404, error: "No file at that path" };
+  }
+
+  const contained =
+    realFile === realRoot || realFile.startsWith(realRoot + path.sep);
+
+  if (!contained) {
+    return {
+      ok: false,
+      status: 403,
+      error: "File is outside the downloads folder"
+    };
+  }
+
+  const stats = await fsp.stat(realFile);
+
+  if (!stats.isFile()) {
+    return { ok: false, status: 409, error: "Not a regular file" };
+  }
+
+  return {
+    ok: true,
+    path: realFile,
+    size: stats.size,
+    filename: path.basename(realFile)
+  };
+}

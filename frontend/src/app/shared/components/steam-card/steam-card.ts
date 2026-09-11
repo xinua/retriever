@@ -2,7 +2,7 @@ import { Component, effect, ElementRef, input, OnInit, output, signal, viewChild
 import { Nullable } from '../../models/common.model';
 
 @Component({
-  selector: 'rt-card',
+  selector: 'rt-steam-card',
   imports: [],
   template: `
     <div
@@ -38,21 +38,13 @@ import { Nullable } from '../../models/common.model';
       </div>
     </div>
   `,
-  styleUrl: './card.css',
+  styleUrl: './steam-card.css',
 })
-export class RtCard implements OnInit {
+export class RtSteamCard implements OnInit {
   private _retried = false;
 
-  /** Null when there is no picture for this card — see show(). */
   imageSourceUrl = input.required<Nullable<string>>();
-  /**
-   * Whether a missing picture is one that has not arrived yet, rather than
-   * one there will never be. Holds the preloader instead of falling back to
-   * the placeholder — a download still running gets its poster when it
-   * finishes, and a card that settles on "not found" first only flickers.
-   */
   pending = input<boolean>(false);
-  /** Where the card links to, or null when it has nothing to open. */
   url = input<Nullable<string>>(null);
   imgSize = input<string>('250x250');
   mockMessage = input<string>('Image%20not%20found');

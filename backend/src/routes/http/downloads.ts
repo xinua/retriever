@@ -1,4 +1,4 @@
-import { FastifyInstance } from "fastify";
+import { FastifyInstance, FastifyReply } from "fastify";
 import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import fs from "node:fs";
 
@@ -11,7 +11,8 @@ import {
   contentDisposition,
   contentTypeFor,
   parseRange,
-  resolveDownloadFile
+  resolveDownloadFile,
+  resolveNewFilePath
 } from "../../services/download-file.js";
 import { broadcast } from "../ws/websockets.js";
 import {
@@ -19,6 +20,7 @@ import {
   isDownloadStatus,
   type DownloadStatus
 } from "../../models/download.model.js";
+import type { Download } from "../../db/types.js";
 
 const TYPES = new Set(["video", "audio", "thumbnail"]);
 const VIDEO_FORMATS = new Set(["auto", "mp4", "ios"]);
@@ -179,6 +181,69 @@ async function listDownloads(query: {
     statuses,
     name: typeof query.name === "string" ? query.name.trim() : ""
   };
+}
+
+/**
+ * The newest download a watcher produced, optionally narrowed to some
+ * statuses. Shared by the widget's lookup and the existence probe below so
+ * the two can never disagree about which row "the last video" is — a probe
+ * answering for a different row than the one that is then fetched would be
+ * worse than no probe at all.
+ */
+async function newestForWatcher(
+  watcherId: number,
+  statuses: DownloadStatus[]
+): Promise<Download | undefined> {
+  const where = statuses.length
+    ? and(eq(download.watcherId, watcherId), inArray(download.status, statuses))
+    : eq(download.watcherId, watcherId);
+
+  const [row] = await db
+    .select()
+    .from(download)
+    .where(where)
+    .orderBy(desc(download.createdAt), desc(download.id))
+    .limit(1);
+
+  return row;
+}
+
+/**
+ * Answers an existence probe for one row.
+ *
+ * A HEAD response carries no body, so the status code is the answer: 200 when
+ * the file behind the row is readable inside the downloads folder, and
+ * whatever `resolveDownloadFile` decided otherwise — 409 for a job that has
+ * not produced a file yet, 410 for one deleted or moved since, 403 for a path
+ * that points outside the downloads folder. The same checks the file endpoint
+ * applies before streaming anything, so a 200 here means that endpoint will
+ * serve the bytes rather than fail a moment later in a <video> element.
+ *
+ * The headers are what a body would otherwise have said: which row answered,
+ * how large the file is and what it holds. `content-length` is deliberately
+ * not used for the size — Fastify recomputes it for the empty payload — so
+ * the value travels in `x-file-size` where it survives.
+ */
+async function replyFileExists(reply: FastifyReply, row: Download | undefined) {
+  if (!row) return reply.code(404).send();
+
+  const [appSettings] = await db
+    .select()
+    .from(settings)
+    .where(eq(settings.id, 1));
+
+  if (!appSettings) return reply.code(500).send();
+
+  const file = await resolveDownloadFile(row, appSettings);
+
+  if (!file.ok) return reply.code(file.status).send();
+
+  return reply
+    .header("x-download-id", String(row.id))
+    .header("x-file-size", String(file.size))
+    .header("content-type", contentTypeFor(file.filename))
+    .code(200)
+    .send();
 }
 
 function normalize(value: unknown): string | null {
@@ -344,22 +409,54 @@ export async function downloadsRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "watcherId must be a number" });
     }
 
-    const wanted = parseStatuses(statuses);
-
-    const where = wanted.length
-      ? and(eq(download.watcherId, id), inArray(download.status, wanted))
-      : eq(download.watcherId, id);
-
-    const [row] = await db
-      .select()
-      .from(download)
-      .where(where)
-      .orderBy(desc(download.createdAt), desc(download.id))
-      .limit(1);
+    const row = await newestForWatcher(id, parseStatuses(statuses));
 
     if (!row) return reply.code(404).send({ error: "Not found" });
 
     return Poster.decorate(row);
+  });
+
+  /**
+   * Does the last video of a subscription still have a playable file?
+   *
+   * HEAD rather than GET because the answer is the status code and nothing
+   * else: the player asks this before it offers a play button, and pulling a
+   * whole row over the wire to look at one field would be the expensive way
+   * to learn a yes or no.
+   *
+   * `statuses` narrows which row counts as "the last video", exactly as it
+   * does for the lookup above — callers should pass the same filter to both,
+   * so the row that answers here is the row that is then played.
+   */
+  app.head("/api/downloads/subscription/:id/exists", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { statuses } = req.query as { statuses?: string };
+
+    const watcherId = Number(id);
+
+    if (!Number.isInteger(watcherId)) return reply.code(400).send();
+
+    return replyFileExists(reply, await newestForWatcher(watcherId, parseStatuses(statuses)));
+  });
+
+  /**
+   * The same probe for one download row named directly, for a caller that
+   * already has the id — telling a row whose file is still on disk from one
+   * deleted outside the app, without asking for the bytes to find out.
+   */
+  app.head("/api/downloads/download/:id/exists", async (req, reply) => {
+    const { id } = req.params as { id: string };
+
+    const rowId = Number(id);
+
+    if (!Number.isInteger(rowId)) return reply.code(400).send();
+
+    const [row] = await db
+      .select()
+      .from(download)
+      .where(eq(download.id, rowId));
+
+    return replyFileExists(reply, row);
   });
 
   /**
@@ -463,6 +560,74 @@ export async function downloadsRoutes(app: FastifyInstance) {
     return reply
       .header("content-length", file.size)
       .send(fs.createReadStream(file.path));
+  });
+
+  /**
+   * Re-points a row at a different file on disk.
+   *
+   * Nothing is moved or renamed: this corrects the record when the file was
+   * reorganised outside the app, so the row's Save, play and poster actions
+   * find it again. The target therefore has to exist inside the downloads
+   * folder — see `resolveNewFilePath`, which applies the same checks the file
+   * endpoint applies before serving anything.
+   *
+   * Refused while the job is queued or running, because the worker writes
+   * `filePath` itself when it finishes and would overwrite the new value a
+   * moment later.
+   */
+  app.patch("/api/downloads/:id/path", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const rowId = Number(id);
+
+    if (!Number.isInteger(rowId)) {
+      return reply.code(400).send({ error: "id must be a number" });
+    }
+
+    const { path: wanted } = (req.body ?? {}) as { path?: unknown };
+
+    if (typeof wanted !== "string") {
+      return reply.code(400).send({ error: "path is required" });
+    }
+
+    const [row] = await db
+      .select()
+      .from(download)
+      .where(eq(download.id, rowId));
+
+    if (!row) return reply.code(404).send({ error: "Not found" });
+
+    if (row.status === "running" || row.status === "queued") {
+      return reply.code(409).send({ error: "Download is still active" });
+    }
+
+    const [appSettings] = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.id, 1));
+
+    if (!appSettings) {
+      return reply.code(500).send({ error: "Settings unavailable" });
+    }
+
+    const file = await resolveNewFilePath(wanted, appSettings);
+
+    if (!file.ok) {
+      return reply.code(file.status).send({ error: file.error });
+    }
+
+    // The resolved realpath rather than what was typed, so the column keeps
+    // holding an absolute path that the file endpoint can use directly.
+    const [updated] = await db
+      .update(download)
+      .set({ filePath: file.path })
+      .where(eq(download.id, rowId))
+      .returning();
+
+    const decorated = Poster.decorate(updated);
+
+    broadcast("download-updated", decorated);
+
+    return decorated;
   });
 
   app.post("/api/downloads/:id/retry", async (req, reply) => {

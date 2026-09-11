@@ -129,11 +129,11 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
 
     effect(() => {
       if (this.urlInput()?.nativeElement?.focus) this.pasteUrl();
+      if (this._storage.uiConfig().autoPaste) this.urlInput()?.nativeElement?.focus();
     });
   }
 
   ngOnInit(): void {
-    this.urlInput()?.nativeElement?.focus();
     this.form.patchValue(this._storage.manualDownloadForm());
   }
 

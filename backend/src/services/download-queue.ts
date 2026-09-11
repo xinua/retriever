@@ -46,6 +46,15 @@ const AUTO_RETRY_DELAY_MS = 4000;
  * requeues the row anyway, and a fresh process deserves a fresh budget.
  */
 const autoRetries = new Map<number, number>();
+
+/**
+ * Downloads the user asked to retry by hand. A watcher job records what it
+ * fetched in its own archive, so a second attempt at a video that once
+ * succeeded is skipped outright and the retry means nothing — the same reason
+ * manual downloads ignore the archive. In memory alongside the retry budget:
+ * the flag only has to survive until the job spawns.
+ */
+const archiveBypass = new Set<number>();
 const lastBroadcastAt = new Map<number, number>();
 const rates = new Map<number, RateSample[]>();
 
@@ -73,6 +82,29 @@ async function getRow(id: number): Promise<Download | undefined> {
 async function emit(id: number) {
   const row = await getRow(id);
   if (row) broadcast("download-updated", Poster.decorate(row));
+}
+
+/**
+ * Re-announces rows whose *derived* fields have moved without the row itself
+ * changing — the artwork cache landing a thumbnail or an uploader avatar
+ * after the download was already reported. posterFor() and avatarFor() read
+ * the images directory at broadcast time, so a picture that arrives after the
+ * last message leaves every open tab holding the row as it looked without it,
+ * with nothing further scheduled to correct that.
+ *
+ * Read back from the database rather than decorating the caller's copies: the
+ * artwork fetch outlives the download it belongs to, so those copies are
+ * usually a "queued" snapshot of a row that has since finished, and sending
+ * them would take the card backwards.
+ */
+export async function republish(ids: number[]): Promise<void> {
+  if (!ids.length) return;
+
+  const rows = await db.select().from(download).where(inArray(download.id, ids));
+
+  // One message for however many rows share the picture that just landed —
+  // an avatar is per channel, so a playlist expansion is a single event.
+  if (rows.length) broadcast("downloads-batch", Poster.decorateAll(rows));
 }
 
 async function getSettings(): Promise<Settings | undefined> {
@@ -212,7 +244,7 @@ function optionsFromRow(row: Download): ytdlp.JobOptions {
     splitChapters: !!row.splitChapters,
     // The user asked for this file by name; "already in the archive" must not
     // silently turn that into a no-op.
-    useArchive: false
+    archiveWatcherId: null
   };
 }
 
@@ -260,6 +292,7 @@ async function pump(): Promise<void> {
 /** Frees a concurrency slot and lets the next queued job start. */
 function release(id: number) {
   active.delete(id);
+  archiveBypass.delete(id);
   running.delete(id);
   lastBroadcastAt.delete(id);
   rates.delete(id);
@@ -299,12 +332,14 @@ async function start(id: number) {
 
   if (!opts) {
     await finish(id, "failed", {
-      error: "Channel no longer exists, cannot resolve download options"
+      error: "Subscription no longer exists, cannot resolve download options"
     });
     release(id);
     void pump();
     return;
   }
+
+  if (archiveBypass.has(id)) opts.archiveWatcherId = null;
 
   // Cancel can land in the window between claiming the slot and spawning.
   if (row.status === "canceled") {
@@ -399,6 +434,27 @@ async function start(id: number) {
       autoRetries.delete(id);
 
       const output = resolveOutputPath(opts, filePath);
+
+      // yt-dlp exits 0 without transferring anything when it decides the video
+      // needs no work — an archive hit is the way that happens here. Nothing
+      // was moved, so after_move never printed a path, and reporting that as
+      // "done" leaves a finished download pointing at no file at all. Whatever
+      // the reason, a job with no output did not succeed.
+      if (!output) {
+        const error =
+          "yt-dlp finished without producing a file (already in this subscription's download archive?)";
+
+        await finish(id, "failed", { error });
+        broadcast("notification", {
+          type: "error",
+          title: "Download failed",
+          subtitle: subtitleFor(current, ch),
+          message: error
+        });
+
+        void pump();
+        return;
+      }
 
       await finish(id, "done", { filePath: output, progress: 100 });
       await onSuccess(ch, current);
@@ -1017,6 +1073,8 @@ export async function retry(id: number): Promise<Download | null> {
       createdAt: new Date().toISOString()
     })
     .where(eq(download.id, id));
+
+  archiveBypass.add(id);
 
   await emit(id);
 

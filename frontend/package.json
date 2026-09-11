@@ -1,15 +1,16 @@
 {
   "name": "retriever",
   "description": "yt-dlp Web UI",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "type": "module",
   "engines": {
     "node": ">=22.19.0"
   },
   "scripts": {
     "dev": "ng serve --host 0.0.0.0 --port 4200",
-    "build": "pnpm run format && ng build --configuration production && gzipper compress ./dist --brotli && gzipper compress ./dist --gzip",
+    "build": "pnpm run format && pnpm test && ng build --configuration production && gzipper compress ./dist --brotli && gzipper compress ./dist --gzip",
     "prettier": "prettier --write .",
+    "test": "ng test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "pnpm run prettier && pnpm run lint"

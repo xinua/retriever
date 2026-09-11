@@ -1,0 +1,53 @@
+@let isFailed = download().status === downloadStatus.FAILED;
+@let hasError = isFailed && download().error;
+@let isPending = download().status === downloadStatus.QUEUED || download().status === downloadStatus.RUNNING;
+
+@if (activeVideo() !== download().id) {
+  @let isAbleToOpen = download().type !== 'thumbnail' && !!download().filePath;
+
+  <rt-steam-card
+    [imageSourceUrl]="download().thumbnailPath"
+    [retry]="!!download().thumbnailPath"
+    [pending]="isPending"
+    (cardClick)="togglePlay(download(), isAbleToOpen)"
+    imgSize="204x116"
+    alt="Video poster"
+    mockMessage="Poster%20not%20found"
+    [imageClass]="isAbleToOpen ? 'cursor-pointer aspect-video' : 'aspect-video'"
+    [customClass]="'w-full h-auto rounded-md overflow-hidden no-shadow ' + (hasError ? 'hidden lg:block' : '')"
+  />
+} @else {
+  <div
+    class="relative rounded-md overflow-hidden no-shadow flex items-end justify-center lg:w-[90%] lg:mx-auto h-auto w-full"
+  >
+    @if (download()?.type === 'video') {
+      <video
+        #previewVideo
+        [src]="mediaUrl()"
+        (click)="togglePlay(download(), true, $event)"
+        controls
+        autoplay
+        preload="metadata"
+        type="video/mp4"
+        class="w-full h-auto no-shadow aspect-video object-cover relative z-1"
+      ></video>
+    } @else if (download()?.type === 'audio') {
+      @if (!!download()?.thumbnailPath) {
+        <img
+          [src]="download()?.thumbnailPath"
+          (click)="togglePlay(download(), true, $event)"
+          alt="Poster"
+          class="w-full h-full aspect-video object-cover cursor-pointer"
+        />
+      }
+      <div class="w-full absolute bottom-0 left-0 z-1">
+        <rt-audio-player
+          playerSize="xs"
+          [audioUrl]="mediaUrl()"
+          [duration]="download().duration"
+          (click)="$event.stopPropagation()"
+        ></rt-audio-player>
+      </div>
+    }
+  </div>
+}

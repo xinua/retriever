@@ -1,0 +1,40 @@
+@if (isPlaying()) {
+  <div
+    [style.width]="containerSize()?.split('x')[0] + 'px'"
+    [style.height]="containerSize()?.split('x')[1] + 'px'"
+    class="rounded-lg overflow-hidden"
+  >
+    @if (download()?.type === 'video') {
+      <video
+        [src]="mediaUrl()"
+        (click)="openVideo($event)"
+        controls
+        autoplay
+        preload="metadata"
+        type="video/mp4"
+        class="aspect-video object-cover cursor-pointer w-full h-full"
+        (error)="handleError()"
+      ></video>
+    } @else {
+      <div class="relative w-full h-full flex items-end justify-center cursor-pointer" (click)="openVideo($event)">
+        @if (!!download()?.thumbnailPath) {
+          <img [src]="download()?.thumbnailPath" alt="Poster" [class]="'w-full object-cover ' + posterClass()" />
+        }
+
+        <div class="w-full absolute bottom-0 left-0 z-1">
+          <rt-audio-player
+            playerSize="md"
+            [audioUrl]="mediaUrl()"
+            [duration]="download()?.duration"
+            (gotError)="handleError()"
+            (click)="$event.stopPropagation()"
+          />
+        </div>
+      </div>
+    }
+  </div>
+} @else {
+  <div [class.cursor-pointer]="!fileNotFound()" (click)="openVideo($event)">
+    <ng-content />
+  </div>
+}

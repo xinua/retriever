@@ -9,13 +9,27 @@ import { AudioFormatLabels, CodecLabels, VideoFormatLabels } from '../../constan
 import { DayPipe } from '../../pipes/day.pipe';
 import { TimeFormat, TimePipe } from '../../pipes/time.pipe';
 import { StorageService } from '../../services/storage.service';
-import { RtCard } from '../card/card';
+import { RtSteamCard } from '../steam-card/steam-card';
 import { HA_AUTOMATION_CODE, WIDGET_CODE } from '../../../components/widget-page/widget.constants';
 import { NotifierService } from 'angular-notifier';
+import { RtAvatar } from '../avatar/avatar';
+import { RtPlayer } from '../player/player';
 
 @Component({
   selector: 'rt-subscription-details',
-  imports: [RtCard, TitleCasePipe, TimePipe, MatTooltip, MatIcon, DatePipe, DayPipe, MatIconButton, MatMenuModule],
+  imports: [
+    RtSteamCard,
+    TitleCasePipe,
+    TimePipe,
+    MatTooltip,
+    MatIcon,
+    DatePipe,
+    DayPipe,
+    MatIconButton,
+    MatMenuModule,
+    RtAvatar,
+    RtPlayer,
+  ],
   templateUrl: './subscription-details.html',
   styleUrl: './subscription-details.css',
 })
@@ -23,7 +37,7 @@ export class SubscriptionDetails {
   private readonly _storage = inject(StorageService);
   private readonly _notifier = inject(NotifierService);
 
-  sub = input<SubscriptionModel>();
+  sub = input.required<SubscriptionModel>();
   isExpanded = input<boolean>(false);
 
   readonly types = Types;
@@ -35,14 +49,6 @@ export class SubscriptionDetails {
   readonly TimeFormat = TimeFormat;
 
   readonly settings = this._storage.settings;
-
-  downloadAgain(id: SubscriptionModel['id']) {
-    console.log('downloadAgain', id);
-    // this._httpService.downloadLastVideo(id).pipe(
-    //   filterDefined(),
-    //   switchMap(() => this._httpService.getSubscriptions()),
-    // ).subscribe();
-  }
 
   copyHaCardCode(id: SubscriptionModel['id']) {
     navigator.clipboard.writeText(WIDGET_CODE(window.location.origin, id));

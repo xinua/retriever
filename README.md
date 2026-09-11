@@ -116,7 +116,7 @@ docker run -d \
   -p 31080:8000 \
   -v /your-directory/data:/data \
   -v /your-media/youtube:/downloads \
-  ghcr.io/aprilborn/retriever:latest
+  ghcr.io/xinua/retriever:latest
 ```
 
 Open **[http://localhost:31080](http://localhost:31080)** and paste a URL.
@@ -141,7 +141,7 @@ docker run -d \
   -e POT_BASE_URL=http://pot:4416 \
   -v /your-directory/data:/data \
   -v /your-media/youtube:/downloads \
-  ghcr.io/aprilborn/retriever:latest
+  ghcr.io/xinua/retriever:latest
 ```
 
 The network is the part people miss: containers only resolve each other by name
@@ -154,13 +154,12 @@ under the yt-dlp version means the two found each other.
 
 ### Docker Compose
 
-Save as `docker-compose.yml` and run `docker compose up -d`, or paste it
-straight into a TrueNAS **Custom App** — it's the same file either way:
+Save as `docker-compose.yml` and run `docker compose up -d`:
 
 ```yaml
 services:
   retriever:
-    image: ghcr.io/aprilborn/retriever:latest
+    image: ghcr.io/xinua/retriever:latest
     container_name: retriever
     ports:
       - "31080:8000"
@@ -177,7 +176,7 @@ services:
 ```yaml
 services:
   retriever:
-    image: ghcr.io/aprilborn/retriever:latest
+    image: ghcr.io/xinua/retriever:latest
     container_name: retriever
     ports:
       - "31080:8000"
@@ -303,7 +302,7 @@ That's it. New uploads arrive on their own.
 http://localhost:31080/widget/<watcherId>
 ```
 
-![Widget example](demo/widget.webp)
+![Widget example](demo/widget.gif)
 
 Drop that into an iframe card. The card plays the file in place — press the poster and the video (or audio) starts right there, no jump to another tab.
 
@@ -339,6 +338,6 @@ You'll want `yt-dlp` and `ffmpeg` on your `PATH` locally — the app falls back 
 
 ---
 
-**Looking for a feature or found a bug? [Open an issue or a PR!](https://github.com/aprilborn/retriever/issues)**
+**Looking for a feature or found a bug? [Open an issue or a PR!](https://github.com/xinua/retriever/issues)**
 
 Licensed under the terms in [LICENSE.txt](LICENSE.txt).

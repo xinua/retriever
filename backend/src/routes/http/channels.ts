@@ -6,6 +6,7 @@ import {getFeedInfo} from "../../services/rss.js";
 import {YoutubeService} from "../../services/youtube.service.js";
 import {ImagesService} from "../../services/images.service.js";
 import {isSubPoster, runChannelOnce} from "../../services/worker.js";
+import { removeArchive } from "../../services/ytdlp.js";
 import { calculateNextCheck } from "../../utils/schedule.helper.js";
 import { broadcast } from "../ws/websockets.js";
 import { getLastCheck } from "../../utils/last-check.helper.js";
@@ -226,6 +227,11 @@ export function channelsRoutes(app: FastifyInstance) {
         SET "sortOrder" = "sortOrder" - 1
         WHERE "sortOrder" > ${row.sortOrder}
       `);
+
+    // The watcher's download archive goes with it, so adding the same feed
+    // back is a fresh subscription rather than one that thinks it has already
+    // seen everything.
+    await removeArchive(Number(id));
 
     if (row?.channelAvatarPath) await ImagesService.remove(row.channelAvatarPath);
 

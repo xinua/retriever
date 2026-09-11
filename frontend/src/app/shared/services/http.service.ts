@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { catchError, Observable, tap } from 'rxjs';
+import { catchError, map, Observable, of, tap } from 'rxjs';
 import { webhookExamplePayload } from '../components/webhook-snackbar/webhook-snackbar.constants';
 import { DefaultSettings, DefaultUiConfig } from '../constants';
 import {
@@ -18,6 +18,7 @@ import {
   YtdlpStatusModel,
   YtdlpUpdateModel,
 } from '../models';
+import { silent } from '../interceptors/error.interceptor';
 import { StorageService } from './storage.service';
 import { SettingsModel } from '../../shared';
 
@@ -145,6 +146,46 @@ export class HttpService {
   }
 
   /**
+   * Checks whether the last video of a subscription still has a file on disk.
+   *
+   * A HEAD: the answer is the status code, so nothing is transferred but
+   * headers. Any failure — 404 for a subscription that has downloaded nothing,
+   * 410 for a file deleted outside the app — is the "no" half of the answer,
+   * which is why it is mapped to `false` rather than left to error, and why
+   * the request is marked silent so the interceptor does not announce it.
+   *
+   * `statuses` has to match what the caller will then fetch, or the row this
+   * answers for is not the row that gets played.
+   *
+   * @param id - The id of the subscription.
+   * @param statuses - Which downloads count as the last video.
+   * @returns An observable that emits a boolean indicating if the file exists.
+   */
+  checkSubscriptionFile(id: number, statuses: DownloadStatus[] = []): Observable<boolean> {
+    const wanted = statuses.filter(Boolean).join(',');
+    const filter = wanted ? `?statuses=${encodeURIComponent(wanted)}` : '';
+
+    return this._exists(`/api/downloads/subscription/${id}/exists${filter}`);
+  }
+
+  /**
+   * Checks if a file exists.
+   * @param id - The id of the download.
+   * @returns An observable that emits a boolean indicating if the file exists.
+   */
+  checkDownloadFile(id: number): Observable<boolean> {
+    return this._exists(`/api/downloads/download/${id}/exists`);
+  }
+
+  /** Shared shape of the two probes above: 2xx is yes, any error is no. */
+  private _exists(url: string): Observable<boolean> {
+    return this._http.head(url, { context: silent(), observe: 'response' }).pipe(
+      map(() => true),
+      catchError(() => of(false)),
+    );
+  }
+
+  /**
    * The newest download a watcher produced, optionally narrowed to some
    * statuses. 404 when the watcher has none, so callers should expect an error.
    */
@@ -232,5 +273,9 @@ export class HttpService {
       tap(({ folders }) => this._storage.folders.set(folders)),
       catchError(async () => ({ root: '', folders: [] })),
     );
+  }
+
+  setDownloadPath(id: number, path: string): Observable<DownloadModel> {
+    return this._http.patch<DownloadModel>(`/api/downloads/${id}/path`, { path });
   }
 }

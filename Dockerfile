@@ -79,8 +79,8 @@
   
   CMD ["node", "dist/server.js"]
 
-  LABEL org.opencontainers.image.source="https://github.com/aprilborn/retriever"
-  LABEL org.opencontainers.image.version="1.1.3"
+  LABEL org.opencontainers.image.source="https://github.com/xinua/retriever"
+  LABEL org.opencontainers.image.version="1.1.4"
   LABEL org.opencontainers.image.title="Retriever"
   LABEL org.opencontainers.image.description="yt-dlp Web UI"
-  LABEL org.opencontainers.image.documentation="https://github.com/aprilborn/retriever/blob/main/README.md"
+  LABEL org.opencontainers.image.documentation="https://github.com/xinua/retriever/blob/main/README.md"

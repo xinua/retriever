@@ -53,7 +53,7 @@ export async function startManualDownload(
 
   // Artwork must not hold up the response — the rows are already queued and
   // yt-dlp is already working on the first of them.
-  void cacheArtwork(target.entries).catch((e) =>
+  void cacheArtwork(target.entries, downloads).catch((e) =>
     console.warn("Manual download artwork failed:", e)
   );
 
@@ -81,15 +81,41 @@ function hasImage(filename: string): boolean {
  * `/images/channel-<id>.jpg`, which the RSS worker only ever writes for
  * watched channels. Fill in the same files for manual downloads so their
  * cards look like every other one.
+ *
+ * `rows` are the downloads these entries were queued as, so each picture that
+ * lands can be announced to the tabs already showing them. Nothing else will:
+ * a row's own broadcasts stop when its download finishes, which for a short
+ * video is well before artwork fetched over here arrives.
+ *
+ * The two fetches run alongside each other rather than one after the other.
+ * A channel expansion is hundreds of thumbnails and a single avatar, and
+ * queueing the avatar behind all of them is what left finished cards showing
+ * the "not found" stand-in for minutes.
  */
-async function cacheArtwork(entries: ResolvedEntry[]): Promise<void> {
+async function cacheArtwork(
+  entries: ResolvedEntry[],
+  rows: Download[]
+): Promise<void> {
+  await Promise.all([cacheThumbnails(entries, rows), cacheAvatars(entries, rows)]);
+}
+
+async function cacheThumbnails(
+  entries: ResolvedEntry[],
+  rows: Download[]
+): Promise<void> {
+  /** Video ids this run wrote a thumbnail for. */
+  const fetched = new Set<string>();
+
   const thumbnails = entries
     .filter((entry) => entry.videoId && entry.thumbnail)
     .filter((entry) => !hasImage(`video-${entry.videoId}.jpg`))
     .map((entry) => async () => {
       const filename = `video-${entry.videoId}.jpg`;
 
-      if (await ImagesService.download(entry.thumbnail!, filename)) return;
+      if (await ImagesService.download(entry.thumbnail!, filename)) {
+        fetched.add(entry.videoId!);
+        return;
+      }
 
       // yt-dlp lists maxresdefault for every video, but older or low-quality
       // uploads never had one and it 404s. hqdefault always exists — though
@@ -97,13 +123,27 @@ async function cacheArtwork(entries: ResolvedEntry[]): Promise<void> {
       // other site keeps whatever thumbnail the extractor gave us.
       if (entry.platform !== "youtube") return;
 
-      await ImagesService.download(
+      const landed = await ImagesService.download(
         `https://i.ytimg.com/vi/${entry.videoId}/hqdefault.jpg`,
         filename
       );
+
+      if (landed) fetched.add(entry.videoId!);
     });
 
   await runLimited(thumbnails, ARTWORK_CONCURRENCY);
+
+  await DownloadQueue.republish(
+    rows.filter((row) => row.videoId && fetched.has(row.videoId)).map((row) => row.id)
+  );
+}
+
+async function cacheAvatars(
+  entries: ResolvedEntry[],
+  rows: Download[]
+): Promise<void> {
+  /** Channel ids this run wrote an avatar for. */
+  const fetched = new Set<string>();
 
   // A playlist is usually one channel, so dedupe before hitting YouTube.
   // Only YouTube entries qualify: the lookup below builds a youtube.com
@@ -123,12 +163,18 @@ async function cacheArtwork(entries: ResolvedEntry[]): Promise<void> {
       `https://www.youtube.com/channel/${channelId}`
     );
 
-    if (info?.avatar) {
-      await ImagesService.download(info.avatar, `channel-${channelId}.jpg`);
+    if (!info?.avatar) return;
+
+    if (await ImagesService.download(info.avatar, `channel-${channelId}.jpg`)) {
+      fetched.add(channelId);
     }
   });
 
   await runLimited(avatars, ARTWORK_CONCURRENCY);
+
+  await DownloadQueue.republish(
+    rows.filter((row) => row.channelId && fetched.has(row.channelId)).map((row) => row.id)
+  );
 }
 
 /** Runs tasks with a fixed number in flight, ignoring individual failures. */

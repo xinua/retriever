@@ -12,7 +12,24 @@ const execFileAsync = promisify(execFile);
 const DATA_DIR = process.env.DATA_DIR ?? "./data";
 const BUNDLED_BIN = process.env.YTDLP_BIN ?? "/usr/local/bin/yt-dlp";
 const MANAGED_BIN = path.join(DATA_DIR, "bin", "yt-dlp");
-const ARCHIVE_FILE = path.join(DATA_DIR, "ytdlp-archive.txt");
+/**
+ * One archive per watcher, rather than one for the whole app. A shared file
+ * is keyed by video id alone, so a second subscription to a channel already
+ * being watched — the same feed grabbed as audio as well as video, say —
+ * found every video "already recorded" and yt-dlp skipped it silently, exit
+ * code 0 and no file. Per-watcher files keep each subscription's history to
+ * itself, and let removeArchive() forget a watcher along with its row.
+ */
+const ARCHIVE_DIR = path.join(DATA_DIR, "archive");
+
+export function archiveFile(watcherId: number): string {
+  return path.join(ARCHIVE_DIR, `watcher-${watcherId}.txt`);
+}
+
+/** Called when a watcher is deleted, so re-adding it starts from nothing. */
+export async function removeArchive(watcherId: number): Promise<void> {
+  await fsp.rm(archiveFile(watcherId), { force: true }).catch(() => {});
+}
 
 const TEMP_DIR_NAME = ".retriever-tmp";
 
@@ -351,11 +368,12 @@ export type JobOptions = {
   removeSponsor: boolean;
   splitChapters: boolean;
   /**
-   * Watcher downloads record what they fetched so a channel is never scraped
-   * twice. Manual downloads skip the archive entirely — the user asked for
-   * this file explicitly, so "already downloaded" must not silently no-op.
+   * The watcher whose archive this job records itself in, so a channel is
+   * never scraped twice. Null skips the archive entirely: manual downloads
+   * and manual retries were asked for by name, and "already downloaded" must
+   * not silently turn that into a no-op.
    */
-  useArchive: boolean;
+  archiveWatcherId: number | null;
   /**
    * Audio jobs only: keep the file the audio was extracted from instead of
    * letting yt-dlp delete it. Set for a download with no artwork anywhere, so
@@ -380,7 +398,7 @@ export function optionsFromChannel(ch: Channel): JobOptions {
     clipEnd: null,
     removeSponsor: false,
     splitChapters: false,
-    useArchive: true
+    archiveWatcherId: ch.id
   };
 }
 
@@ -941,8 +959,9 @@ export async function buildArgs(
     args.push("--ffmpeg-location", ffmpeg.location);
   }
 
-  if (opts.useArchive) {
-    args.push("--download-archive", ARCHIVE_FILE);
+  if (opts.archiveWatcherId != null) {
+    await fsp.mkdir(ARCHIVE_DIR, { recursive: true });
+    args.push("--download-archive", archiveFile(opts.archiveWatcherId));
   }
 
   // Only meaningful next to -x, which is the only thing that would have

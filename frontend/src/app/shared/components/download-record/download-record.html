@@ -4,7 +4,6 @@
 
 @let isActive = isRunning || isQueued;
 @let hasError = isFailed && download().error;
-@let isPathAvailable = !!download().filePath;
 
 <div
   class="p-5 rounded-xl bg-white/3 overflow-hidden transition-height duration-500"
@@ -19,14 +18,12 @@
 
     <div class="grid grid-cols-1 lg:grid-cols-[80%_20%] xl:grid-cols-[70%_20%] justify-between gap-2 w-full">
       <div class="flex gap-4 col-span-1">
-        <rt-card
-          [imageSourceUrl]="download().avatarPath"
+        <rt-avatar
+          [sourceImg]="download().avatarPath"
           [url]="download().authorUrl"
-          imgSize="80x80"
-          alt="Provider avatar"
-          mockMessage="Avatar%20not%20found"
-          customClass="w-10 lg:w-20 h-auto rounded-full overflow-hidden no-shadow "
-          imageClass="object-scale-down!"
+          [pending]="isActive"
+          [imgSize]="'80x80'"
+          [customClass]="'w-10 lg:w-20 h-auto'"
         />
 
         <div
@@ -35,11 +32,25 @@
           [animationName]="paginator().page === 0 ? 'rise' : 'none'"
           [animationDelay]="0.75"
         >
-          <div class="flex items-center gap-2 pl-1 overflow-visible">
-            <rt-status-indicator [download]="download()" />
-            <a class="text-lg truncate w-fit max-w-[calc(100%-200px)]" [href]="download().url" target="_blank">
-              {{ download().prefix }}{{ download().title || download().url }}
-            </a>
+          <div
+            class="grid grid-flow-col grid-rows-1 grid-cols-[70%_30%] sm:grid-cols-[80%_20%] justify-between items-center gap-2 pl-1 overflow-visible"
+          >
+            <div class="flex items-center col-span-1 gap-2">
+              <rt-status-indicator [download]="download()" />
+              <a class="text-lg truncate w-fit" [href]="download().url" target="_blank">
+                {{ download().prefix }}{{ download().title || download().url }}
+              </a>
+            </div>
+
+            <div class="col-span-1 pr-2 lg:hidden">
+              <rt-download-controls
+                [download]="download()"
+                (retry)="retry.emit(download())"
+                (remove)="remove.emit({ download: download(), elementRef: record })"
+                (saveAs)="saveAs.emit(download())"
+                (copyFilePath)="copyFilePath.emit(download())"
+              />
+            </div>
           </div>
 
           @if (download().channelName) {
@@ -49,7 +60,7 @@
               @if (download().source === downloadSource.WATCHER) {
                 <mat-icon
                   class="text-sm! h-4! w-4! align-middle"
-                  matTooltip="Downloaded by watcher"
+                  matTooltip="Downloaded by subscription"
                   fontIcon="subscriptions"
                 />
               }
@@ -70,16 +81,21 @@
         </div>
       </div>
 
-      <div class="flex flex-col gap-2 col-span-1" [class.justify-center]="download().status === downloadStatus.RUNNING">
-        <rt-download-controls
-          [download]="download()"
-          [isActive]="isActive"
-          [isPathAvailable]="isPathAvailable"
-          (retry)="retry.emit(download())"
-          (remove)="remove.emit({ download: download(), elementRef: record })"
-        />
+      <div
+        class="flex flex-col items-end gap-2 col-span-1"
+        [class.justify-center]="download().status === downloadStatus.RUNNING"
+      >
+        <div class="hidden lg:block">
+          <rt-download-controls
+            [download]="download()"
+            (retry)="retry.emit(download())"
+            (remove)="remove.emit({ download: download(), elementRef: record })"
+            (saveAs)="saveAs.emit(download())"
+            (copyFilePath)="copyFilePath.emit(download())"
+          />
+        </div>
 
-        <rt-poster [download]="download()" />
+        <rt-download-poster [download]="download()" />
 
         @if (hasError) {
           <div class="text-red-400 ml-3 border border-red-500 rounded-md px-3 py-2 lg:hidden">

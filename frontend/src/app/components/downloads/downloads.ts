@@ -21,19 +21,11 @@ import { MatFormField, MatInput, MatLabel } from '@angular/material/input';
 import { MatPaginator, PageEvent } from '@angular/material/paginator';
 import { MatTableModule } from '@angular/material/table';
 import { Badge, DownloadRecord } from '@shared/components';
-import { DefaultPaginator } from '@shared/constants';
 import { AppearDirective, BgDirective } from '@shared/directives';
-import {
-  DownloadInfoModel,
-  DownloadModel,
-  DownloadsPageModel,
-  DownloadStatus,
-  PaginatorModel,
-  Platform,
-} from '@shared/models';
+import { DownloadInfoModel, DownloadModel, DownloadsPageModel, DownloadStatus, Platform } from '@shared/models';
 import { AnimationService, HttpService, StorageService } from '@shared/services';
 import { NotifierService } from 'angular-notifier';
-import { debounceTime, distinctUntilChanged, finalize, iif, Observable, Subject, switchMap, tap } from 'rxjs';
+import { debounceTime, distinctUntilChanged, finalize, forkJoin, iif, Observable, Subject, switchMap, tap } from 'rxjs';
 import { WsService } from '../../shared/services/ws.service';
 import { NoData } from '../no-data/no-data';
 import { DOWNLOADS_STATUS_FILTERS } from './downloads.const';
@@ -79,30 +71,34 @@ export class Downloads implements OnInit {
 
   @HostListener('window:keydown', ['$event'])
   handleHotkeys(event: KeyboardEvent) {
+    // Open search by Ctrl/Cmd + K
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault();
       this.showSearch.set(true);
       this.searchField()?.nativeElement?.focus();
     }
 
+    // Ignore typing targets (focused inputs, textareas, selects)
     if (this._isTypingTarget(event)) {
       return;
     }
 
+    // Navigate through pages with ArrowLeft
     if (event.key.toLowerCase() === 'arrowleft') {
       event.preventDefault();
       this.onPageChange({
         pageIndex: Math.max(this.paginator().page - 1, 0),
-        pageSize: this.paginator().limit,
+        pageSize: this.paginatorSize(),
         length: this.paginator().total,
       });
     }
 
+    // Navigate through pages with ArrowRight
     if (event.key.toLowerCase() === 'arrowright') {
       event.preventDefault();
       this.onPageChange({
         pageIndex: Math.min(this.paginator().page + 1, Math.floor(this.paginator().total / this.paginator().limit)),
-        pageSize: this.paginator().limit,
+        pageSize: this.paginatorSize(),
         length: this.paginator().total,
       });
     }
@@ -116,15 +112,17 @@ export class Downloads implements OnInit {
   downloads = this._storage.downloads;
   progressValue = signal(0);
 
-  paginator = signal<PaginatorModel>(DefaultPaginator);
+  paginator = this._storage.paginator;
   filters = this._storage.filters;
   filters$ = toObservable(this.filters);
   searchControl = new FormControl<string>('');
   showSearch = signal<boolean>(false);
+  isAnimationInProgress = signal<boolean>(false);
 
   searchField = viewChild<ElementRef<HTMLInputElement>>('searchField');
 
   hasFinished = computed(() => this.downloads().some((d) => this._isFinished(d)));
+  paginatorSize = computed(() => this.paginator().limit);
 
   private readonly _refill$ = new Subject<void>();
 
@@ -141,8 +139,14 @@ export class Downloads implements OnInit {
   }
 
   ngOnInit() {
-    this._fetchDownloads().subscribe();
-    this._trackSearch().subscribe();
+    this._fetchDownloads()
+      .pipe(switchMap(() => this._checkDownloadFiles()))
+      .subscribe();
+
+    this._trackSearch()
+      .pipe(switchMap(() => this._checkDownloadFiles()))
+      .subscribe();
+
     this._trackRefill().subscribe((result) => this._syncPage(result));
 
     this._wsService
@@ -187,7 +191,9 @@ export class Downloads implements OnInit {
 
   onPageChange(event: PageEvent) {
     this.paginator.set({ total: event.length, page: event.pageIndex, limit: event.pageSize });
-    this._fetchDownloads().subscribe();
+    this._fetchDownloads()
+      .pipe(switchMap(() => this._checkDownloadFiles()))
+      .subscribe();
   }
 
   trackById(_index: number, download: DownloadModel) {
@@ -207,19 +213,42 @@ export class Downloads implements OnInit {
     });
   }
 
+  saveAs(download: DownloadModel) {
+    if (!download.filePath) return;
+
+    const link = document.createElement('a');
+
+    link.href = this._httpService.downloadFileUrl(download.id);
+    link.download = '';
+    link.rel = 'noopener';
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
+  copyFilePath(download: DownloadModel) {
+    navigator.clipboard.writeText(download.filePath);
+    this._notifier.notify('success', 'File path copied to clipboard.');
+  }
+
   async remove(download: DownloadModel, elementRef: HTMLElement, downloadsContainer: HTMLDivElement) {
     let animationDuration = 0;
 
     if (this._storage.downloads().length === this.paginator().limit) {
       await this._animationService.animateRemoveDownload(elementRef, downloadsContainer);
       animationDuration = AnimationService.REMOVE_DOWNLOAD_DURATION;
+      this.isAnimationInProgress.set(true);
     }
 
     this._httpService
       .deleteDownload(download.id)
       .pipe(
         finalize(() => {
-          setTimeout(() => (downloadsContainer.style.height = ''), animationDuration);
+          setTimeout(() => {
+            downloadsContainer.style.height = '';
+            this.isAnimationInProgress.set(false);
+          }, animationDuration);
         }),
       )
       .subscribe({
@@ -286,6 +315,22 @@ export class Downloads implements OnInit {
       switchMap((value) => this._httpService.searchDownloads(value, this.paginator().limit, 1)),
       tap((result: DownloadsPageModel) =>
         this.paginator.update((current) => ({ ...current, total: result.total, page: 0 })),
+      ),
+    );
+  }
+
+  private _checkDownloadFiles(): Observable<boolean[]> {
+    return forkJoin(
+      this.downloads().map((download) =>
+        this._httpService
+          .checkDownloadFile(download.id)
+          .pipe(
+            tap((result) =>
+              this.downloads.update((downloads) =>
+                downloads.map((d) => (d.id === download.id ? { ...d, filePath: result ? d.filePath : null } : d)),
+              ),
+            ),
+          ),
       ),
     );
   }

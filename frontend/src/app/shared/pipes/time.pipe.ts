@@ -19,7 +19,7 @@ export class TimePipe implements PipeTransform {
 
     // todo - add normal format later 'hh:mm:ss'
     if (format === TimeFormat.SHORT) {
-      return `${hours ? `${hours}:` : ''}${minutes ? `${minutes < 10 ? '0' : ''}${minutes}:` : ''}${seconds ? `${seconds < 10 ? '0' : ''}${seconds}` : '00'}`;
+      return `${hours ? `${hours}:` : ''}${minutes ? `${minutes < 10 ? '0' : ''}${minutes}:` : '00:'}${seconds ? `${seconds < 10 ? '0' : ''}${seconds}` : '00'}`;
     }
 
     if (format === TimeFormat.LONG) {

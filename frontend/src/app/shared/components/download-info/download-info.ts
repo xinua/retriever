@@ -11,7 +11,7 @@ import { DatePipe, TitleCasePipe } from '@angular/common';
   styleUrl: './download-info.css',
 })
 export class DownloadInfo {
-  download = input<DownloadModel>();
+  download = input.required<DownloadModel>();
   readonly downloadStatus = DownloadStatus;
   readonly timeFormat = TimeFormat;
 }

@@ -1,0 +1,7 @@
+::ng-deep .file-name .mat-mdc-form-field-subscript-wrapper.mat-mdc-form-field-bottom-align {
+  display: none !important;
+}
+
+.file-name-input::placeholder {
+  opacity: 0.5;
+}

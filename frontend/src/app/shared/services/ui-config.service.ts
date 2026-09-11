@@ -38,5 +38,6 @@ export class UiConfigService {
     this._root.setAttribute('data-theme', config.themeColor);
     this._root.setAttribute('data-animations', config.enableAnimations ? 'on' : 'off');
     this._root.querySelector('link[rel="icon"]')?.setAttribute('href', `favicon-${config.themeColor}.ico`);
+    this._root.querySelector('link[rel="shortcut icon"]')?.setAttribute('href', `favicon-${config.themeColor}.ico`);
   }
 }

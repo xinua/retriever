@@ -1,0 +1,19 @@
+<div
+  class="mx-auto rounded-full aspect-square overflow-hidden {{ customClass() }}"
+  [class.cursor-pointer]="!!url()?.length"
+  [class.animate-zoom]="!!imgPath()"
+  (click)="openUrl()"
+>
+  @if (!isLoaded()) {
+    <div class="preloader bg-[#1f1f1f] w-full h-full animate-pulse {{ customClass() }}"></div>
+  }
+  @if (imgPath()) {
+    <img
+      class="object-scale-down! w-full h-full"
+      [src]="imgPath()"
+      alt="Avatar"
+      (error)="handleImageError()"
+      (load)="handleImageLoad()"
+    />
+  }
+</div>
