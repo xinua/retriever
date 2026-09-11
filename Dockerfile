@@ -1,5 +1,7 @@
 # ---------- FRONTEND BUILD ----------
-  FROM node:22-slim AS frontend-build
+  # Pinned to the builder's own architecture: the output is plain JS/CSS, so
+  # there is nothing to gain from running this stage again under emulation.
+  FROM --platform=$BUILDPLATFORM node:22-slim AS frontend-build
 
   WORKDIR /frontend
   
@@ -11,7 +13,8 @@
   
   
   # ---------- BACKEND BUILD ----------
-  FROM node:22-bookworm-slim AS backend-build
+  # Same reasoning as above: tsc emits architecture-independent JS.
+  FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS backend-build
   
   WORKDIR /backend
   
@@ -54,8 +57,14 @@
       wget -q -O /app/pot-plugin/bgutil-ytdlp-pot-provider.zip \
         "https://github.com/Brainicism/bgutil-ytdlp-pot-provider/releases/download/${POT_PLUGIN_VERSION}/bgutil-ytdlp-pot-provider.zip"
 
+  # --omit=optional matters on arm64. bufferutil and utf-8-validate are optional
+  # accelerators for ws (under socket.io) and neither ships a linux-arm64
+  # prebuilt binary, so npm falls back to compiling them with node-gyp -- under
+  # QEMU that alone accounted for most of the build. ws uses its pure-JS
+  # masking path without them. better-sqlite3 is unaffected: it publishes
+  # linuxmusl-arm64 prebuilds and is a regular dependency.
   COPY backend/package*.json ./
-  RUN npm install --omit=dev
+  RUN npm install --omit=dev --omit=optional
   
   COPY --from=backend-build /backend/dist ./dist
   COPY --from=frontend-build /frontend/dist ./public
@@ -80,7 +89,7 @@
   CMD ["node", "dist/server.js"]
 
   LABEL org.opencontainers.image.source="https://github.com/xinua/retriever"
-  LABEL org.opencontainers.image.version="1.1.4"
+  LABEL org.opencontainers.image.version="1.1.5"
   LABEL org.opencontainers.image.title="Retriever"
   LABEL org.opencontainers.image.description="yt-dlp Web UI"
   LABEL org.opencontainers.image.documentation="https://github.com/xinua/retriever/blob/main/README.md"

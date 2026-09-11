@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing tag to build (e.g. v1.1.4)'
+        description: 'Existing tag to build (e.g. v1.1.5)'
         required: true
 
 env:
@@ -16,7 +16,43 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # Lint and unit tests used to run inside the image build, which meant they ran
+  # once per target platform with the arm64 pass under QEMU. They are a plain
+  # native job now, and publish waits on them.
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      # pnpm comes from pnpm's own action rather than corepack: setup-node's
+      # cache step runs `pnpm store path` and the corepack shim can pollute
+      # that output, which fails the job with "Path Validation Error".
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint and test
+        working-directory: frontend
+        run: pnpm run verify
+
   publish:
+    needs: test
     runs-on: ubuntu-latest
 
     permissions:
@@ -65,5 +101,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
