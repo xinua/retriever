@@ -2,7 +2,7 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { MatButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
-import { SettingsDialog } from '@shared/components';
+import { AppVersion, SettingsDialog } from '@shared/components';
 import { HttpService, StorageService } from '@shared/services';
 import { NotifierService } from 'angular-notifier';
 import { catchError, of } from 'rxjs';
@@ -10,7 +10,7 @@ import { ThemeDialog } from '../../shared/components/theme-dialog/theme-dialog';
 
 @Component({
   selector: 'rt-header',
-  imports: [MatIcon, MatButton],
+  imports: [MatIcon, MatButton, AppVersion],
   templateUrl: './header.html',
   styleUrl: './header.css',
 })

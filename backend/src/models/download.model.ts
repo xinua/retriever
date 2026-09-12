@@ -22,6 +22,25 @@ export function isDownloadStatus(value: unknown): value is DownloadStatus {
 }
 
 /**
+ * What a download produced: a video file, an audio file or just the poster
+ * image. The same three words the manual-download form validates a request
+ * against — see parseManualBody in routes/http/downloads.ts — and the values
+ * stored in `download.type`, so the `types` filter on GET /api/downloads
+ * compares against the column directly.
+ *
+ * Mirrors the Types enum on the frontend. The column is nullable: rows queued
+ * before the snapshot existed carry no type and match no `types` filter,
+ * which is the honest answer for a row whose type is unknown.
+ */
+export const DOWNLOAD_TYPES = ["video", "audio", "thumbnail"] as const;
+
+export type DownloadType = (typeof DOWNLOAD_TYPES)[number];
+
+export function isDownloadType(value: unknown): value is DownloadType {
+  return DOWNLOAD_TYPES.includes(value as DownloadType);
+}
+
+/**
  * Counts across the whole table, not just the page being shown. `total` is
  * every row, including any status not broken out above, so the numbers never
  * quietly stop adding up.

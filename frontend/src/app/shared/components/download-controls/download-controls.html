@@ -1,5 +1,4 @@
 @let isActive = download().status === downloadStatus.RUNNING || download().status === downloadStatus.QUEUED;
-@let isPathAvailable = !!download().filePath;
 
 <div class="flex items-center justify-end gap-3 shrink-0">
   @if (!isActive) {
@@ -14,7 +13,7 @@
 </div>
 
 <mat-menu #actionsMenu>
-  @if (isPathAvailable) {
+  @if (hasFile()) {
     <button mat-menu-item (click)="saveAs.emit(download())">
       <mat-icon class="text-white!">save_alt</mat-icon>
       <span>Save to my device</span>
@@ -26,7 +25,8 @@
     <span>Download again</span>
   </button>
 
-  @if (isPathAvailable) {
+  <!-- Offered for a missing file too: the old path is where fixing it starts. -->
+  @if (download().filePath) {
     <button mat-menu-item (click)="copyFilePath.emit(download())">
       <mat-icon class="text-white!">content_copy</mat-icon>
       <span>Copy file path</span>
@@ -39,9 +39,9 @@
   </button>
 </mat-menu>
 
-<mat-menu #pathMenu class="pt-0!">
+<mat-menu #pathMenu class="pt-0! overflow-visible!">
   <div class="flex flex-col items-end file-name" (click)="$event.stopPropagation()">
-    <mat-form-field appearance="fill">
+    <mat-form-field appearance="fill" class="m-w-full">
       <small matPrefix class="pl-2">{{ downloadsFolder() }}/</small>
 
       <input

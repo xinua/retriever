@@ -6,3 +6,4 @@ export * from './websocket.model';
 export * from './main-form.model';
 export * from './layout.model';
 export * from './ui-config.model';
+export * from './version.model';

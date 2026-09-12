@@ -1,0 +1,25 @@
+<div class="w-full! px-2" [formGroup]="range">
+  <div class="flex items-end gap-2">
+    <span class="text-[16px]">Interval range</span>
+
+    @if (count() > 0) {
+      <span
+        class="text-gray-500 text-xs"
+        matTooltip="Hardcoded polling at the beginning and end of the period."
+        matTooltipPosition="above"
+        >({{ count() }} times a day)</span
+      >
+    }
+  </div>
+
+  <mat-slider min="0" max="24" step="1" class="w-full! text-white!" [discrete]="true" [displayWith]="formatLabel">
+    <input matSliderStartThumb formControlName="start" (blur)="markTouched()" />
+    <input matSliderEndThumb formControlName="end" (blur)="markTouched()" />
+  </mat-slider>
+
+  @if (isSameHour()) {
+    <mat-error>Start and end cannot be the same time.</mat-error>
+  } @else {
+    <mat-hint class="text-gray-500">{{ hint() }}</mat-hint>
+  }
+</div>

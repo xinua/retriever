@@ -1,8 +1,22 @@
-import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
-import { filter, Observable } from 'rxjs';
+import {
+  ChangeDetectorRef,
+  Component,
+  computed,
+  DestroyRef,
+  effect,
+  ElementRef,
+  inject,
+  input,
+  OnInit,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NotifierService } from 'angular-notifier';
+import { fromEvent, take, takeWhile } from 'rxjs';
+import { hasFile } from '../../helpers/common.helpers';
 import { DownloadModel, DownloadStatus } from '../../models/download.model';
 import { HttpService } from '../../services/http.service';
-import { NotifierService } from 'angular-notifier';
 import { AudioPlayer } from '../audio-player/audio-player';
 
 @Component({
@@ -14,6 +28,8 @@ import { AudioPlayer } from '../audio-player/audio-player';
 export class RtPlayer implements OnInit {
   private readonly _http = inject(HttpService);
   private readonly _notifier = inject(NotifierService);
+  private readonly _cdr = inject(ChangeDetectorRef);
+  private readonly _destroyRef = inject(DestroyRef);
 
   subscriptionId = input.required<number>();
   containerSize = input<string>('');
@@ -22,52 +38,40 @@ export class RtPlayer implements OnInit {
   fileNotFound = signal<boolean>(false);
   isPlaying = signal<boolean>(false);
   download = signal<DownloadModel | null>(null);
+  canPlay = computed(() => hasFile(this.download()) && !this.fileNotFound());
   mediaUrl = computed(() => this._getVideoUrl());
 
-  /**
-   * Asks up front whether there is anything to play, so a card whose file was
-   * deleted outside the app reads as unplayable instead of offering a click
-   * that ends in a 404 toast. Narrowed to done downloads because that is what
-   * `_getDownload()` will ask for — probing a different row than the one that
-   * gets fetched would answer the wrong question.
-   */
-  ngOnInit(): void {
-    this._http
-      .checkSubscriptionFile(this.subscriptionId(), [DownloadStatus.DONE])
-      .subscribe((exists) => this.fileNotFound.set(!exists));
+  videoPlayer = viewChild<ElementRef<HTMLVideoElement>>('videoPlayer');
+  audioPlayer = viewChild<AudioPlayer>(AudioPlayer);
+
+  constructor() {
+    effect(() => {
+      if (this.isPlaying()) this._trackVideoFinished();
+    });
   }
 
-  openVideo(event?: MouseEvent) {
-    event?.preventDefault();
+  /**
+   * Fetches the row up front, so a card whose file was deleted outside the app
+   * reads as unplayable instead of offering a click that ends in an error.
+   * The server checks the file while answering, so this one request says both
+   * which download is the last video and whether it can be played.
+   */
+  ngOnInit(): void {
+    this._http.getDownloadByWatcher(this.subscriptionId(), { statuses: [DownloadStatus.DONE], types: [] }).subscribe({
+      next: (download) => this.download.set(download),
+      error: () => this.fileNotFound.set(true),
+    });
+  }
 
-    console.log('click');
-    if (this.fileNotFound()) return;
-    console.log('found file');
+  togglePlay(event?: MouseEvent) {
+    event?.preventDefault();
 
     if (this.isPlaying()) {
       this.isPlaying.set(false);
-      console.log('stop playing');
       return;
     }
 
-    if (this.download()) {
-      console.log('found download');
-      if (!!this.download()?.filePath) this.isPlaying.set(true);
-      return;
-    }
-
-    console.log('get download');
-    this._getDownload().subscribe({
-      next: (download) => {
-        console.log('got download');
-        this.download.set(download);
-        this.isPlaying.set(true);
-      },
-      error: () => {
-        this.download.set({} as DownloadModel);
-        this.fileNotFound.set(true);
-      },
-    });
+    if (this.canPlay()) this.isPlaying.set(true);
   }
 
   handleError() {
@@ -79,7 +83,18 @@ export class RtPlayer implements OnInit {
     return this._http.streamFileUrl(this.download()?.id);
   }
 
-  private _getDownload(): Observable<DownloadModel> {
-    return this._http.getDownloadByWatcher(this.subscriptionId(), [DownloadStatus.DONE]).pipe(filter(Boolean));
+  private _trackVideoFinished(): void {
+    this._cdr.detectChanges();
+    const player = this.videoPlayer()?.nativeElement || this.audioPlayer()?.nativePlayer()?.nativeElement;
+
+    if (!player) return;
+
+    fromEvent(player, 'ended')
+      .pipe(
+        takeUntilDestroyed(this._destroyRef),
+        takeWhile(() => this.isPlaying() !== null),
+        take(1),
+      )
+      .subscribe(() => this.isPlaying.set(false));
   }
 }

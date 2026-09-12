@@ -34,6 +34,25 @@ export function initSchema() {
   db.run(sql`INSERT OR IGNORE INTO ui_config (id) VALUES (1);`);
 
   db.run(sql`
+    CREATE TABLE IF NOT EXISTS version_check (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      latestVersion TEXT,
+      releaseDate TEXT,
+      payload TEXT,
+      checkedAt TEXT,
+      lastAttemptAt TEXT,
+      lastError TEXT,
+      nextCheckAt TEXT,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  // Same idempotent seed as ui_config: the check job only ever updates this
+  // row, so it has to exist before the first tick.
+  db.run(sql`INSERT OR IGNORE INTO version_check (id) VALUES (1);`);
+
+  db.run(sql`
       CREATE TABLE IF NOT EXISTS channel_group (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
@@ -64,9 +83,13 @@ export function initSchema() {
       startFromLast INTEGER NOT NULL DEFAULT 1,
       downloadShorts INTEGER NOT NULL DEFAULT 0,
       notifyHA INTEGER NOT NULL DEFAULT 0,
+      splitChapters INTEGER NOT NULL DEFAULT 0,
+      removeSponsors INTEGER NOT NULL DEFAULT 0,
       pollType TEXT NOT NULL DEFAULT 'interval',
       pollInterval INTEGER,
+      pollOnce INTEGER NOT NULL DEFAULT 0,
       pollTime TEXT,
+      intervalPeriod TEXT,
       prefix TEXT,
       tag TEXT,
       webhookOverride TEXT,
@@ -104,12 +127,13 @@ export function initSchema() {
       format TEXT,
       codec TEXT,
       quality TEXT,
+      mediaQuality TEXT,
       folder TEXT,
       prefix TEXT,
       ytdlpArgs TEXT,
       clipStart TEXT,
       clipEnd TEXT,
-      removeSponsor INTEGER NOT NULL DEFAULT 0,
+      removeSponsors INTEGER NOT NULL DEFAULT 0,
       splitChapters INTEGER NOT NULL DEFAULT 0,
       playlistId TEXT,
       playlistTitle TEXT,
@@ -176,9 +200,57 @@ function runColumnMigrations() {
 
   ensureColumn("channel", "ytdlpArgs", "TEXT");
 
+  migrateChannelPollColumns();
+
   migrateDownloadChannelColumns();
 
   dropMeTubeColumns();
+}
+
+/**
+ * Per-video options that used to be manual-download-only, and the poll window
+ * that goes with an interval. Both are read straight off the channel row by
+ * the watcher, so nothing has to be backfilled: the defaults describe how
+ * every existing subscription already behaves.
+ */
+function migrateChannelPollColumns() {
+  ensureColumn("channel", "splitChapters", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn("channel", "removeSponsors", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn("channel", "intervalPeriod", "TEXT");
+
+  // Off is how every existing subscription already polls, so the default
+  // describes them and nothing needs backfilling.
+  ensureColumn("channel", "pollOnce", "INTEGER NOT NULL DEFAULT 0");
+
+  migrateLegacyPollTime();
+}
+
+/**
+ * `pollTime` held one ISO instant; it now holds a JSON list of wall-clock
+ * hours, which is what the form offers. The column is read as JSON, so a row
+ * left in the old shape throws on the next select rather than merely reading
+ * oddly - convert in place.
+ *
+ * The hour is taken off the stored instant in local time, the clock the new
+ * field is read against, and truncated: the form only offers whole hours, so
+ * an old 09:45 becomes 09:00 and the subscription keeps polling in the same
+ * part of the day.
+ */
+function migrateLegacyPollTime() {
+  const rows = db.all(sql`
+    SELECT id, pollTime FROM channel
+    WHERE pollTime IS NOT NULL AND pollTime NOT LIKE '[%'
+  `) as { id: number; pollTime: string }[];
+
+  for (const row of rows) {
+    const parsed = new Date(row.pollTime);
+
+    const pollTime = Number.isNaN(parsed.getTime())
+      ? "[]"
+      : JSON.stringify([`${String(parsed.getHours()).padStart(2, "0")}:00`]);
+
+    db.run(sql`UPDATE channel SET pollTime = ${pollTime} WHERE id = ${row.id}`);
+  }
 }
 
 /**
@@ -226,12 +298,14 @@ function migrateDownloadChannelColumns() {
   // channel to read them from.
   ensureColumn("download", "source", "TEXT NOT NULL DEFAULT 'watcher'");
   ensureColumn("download", "quality", "TEXT");
+  ensureColumn("download", "mediaQuality", "TEXT");
   ensureColumn("download", "folder", "TEXT");
   ensureColumn("download", "prefix", "TEXT");
   ensureColumn("download", "ytdlpArgs", "TEXT");
   ensureColumn("download", "clipStart", "TEXT");
   ensureColumn("download", "clipEnd", "TEXT");
-  ensureColumn("download", "removeSponsor", "INTEGER NOT NULL DEFAULT 0");
+  renameRemoveSponsorColumn();
+  ensureColumn("download", "removeSponsors", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn("download", "splitChapters", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn("download", "playlistId", "TEXT");
   ensureColumn("download", "playlistTitle", "TEXT");
@@ -254,6 +328,22 @@ function migrateDownloadChannelColumns() {
   `);
 
   normalizeDownloadTimestamps();
+}
+
+/**
+ * `download.removeSponsor` became `removeSponsors`, matching the channel
+ * column and the form control that writes it - one name for the flag across
+ * the whole app rather than one per caller.
+ */
+function renameRemoveSponsorColumn() {
+  const columns = db.all(sql`PRAGMA table_info(download)`) as any[];
+
+  const hasOld = columns.some((c) => c.name === "removeSponsor");
+  const hasNew = columns.some((c) => c.name === "removeSponsors");
+
+  if (hasOld && !hasNew) {
+    db.run(sql`ALTER TABLE download RENAME COLUMN removeSponsor TO removeSponsors`);
+  }
 }
 
 /**

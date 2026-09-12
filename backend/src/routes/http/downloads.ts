@@ -1,28 +1,31 @@
-import { FastifyInstance, FastifyReply } from "fastify";
+import { FastifyInstance } from "fastify";
 import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import fs from "node:fs";
 
 import { db } from "../../db/index.js";
-import { download, settings } from "../../db/schema.js";
+import { channel, download, settings } from "../../db/schema.js";
 import * as DownloadQueue from "../../services/download-queue.js";
 import { startManualDownload } from "../../services/manual-download.js";
 import * as Poster from "../../services/poster.js";
+import * as MediaQuality from "../../services/media-quality.js";
 import {
   contentDisposition,
   contentTypeFor,
   parseRange,
   resolveDownloadFile,
-  resolveNewFilePath
+  resolveNewFilePath,
+  withFileExists
 } from "../../services/download-file.js";
 import { broadcast } from "../ws/websockets.js";
 import {
   emptyDownloadInfo,
   isDownloadStatus,
-  type DownloadStatus
+  isDownloadType,
+  type DownloadStatus,
+  type DownloadType
 } from "../../models/download.model.js";
-import type { Download } from "../../db/types.js";
+import type { Download, Settings } from "../../db/types.js";
 
-const TYPES = new Set(["video", "audio", "thumbnail"]);
 const VIDEO_FORMATS = new Set(["auto", "mp4", "ios"]);
 const AUDIO_FORMATS = new Set(["m4a", "mp3", "opus", "wav", "flac"]);
 const CODECS = new Set(["auto", "h264", "h265", "av1", "vp9"]);
@@ -42,23 +45,36 @@ const AUDIO_QUALITIES = new Set(["best", "320kbps", "192kbps", "128kbps"]);
 const TIMESTAMP = /^(\d{1,2}:){0,2}\d{1,2}(\.\d+)?$/;
 
 /**
- * Comma-separated, so one chip can stand for several statuses — the list's
+ * Comma-separated, so one menu can stand for several values — the list's
  * "active" counter is queued and running together, not running alone.
  *
  * Unknown values are dropped instead of rejected, matching how `page` and
  * `limit` are handled below: a listing endpoint quietly answering with
  * everything is friendlier than a 400 in the middle of a paging session.
- * An empty result means no filter, not "match nothing".
+ * An empty result means no filter, not "match nothing" — which is also what
+ * an empty parameter means, so a client that always sends `statuses=` rather
+ * than omitting it gets the unfiltered list instead of nothing.
  */
-function parseStatuses(value: unknown): DownloadStatus[] {
+function parseList<T extends string>(
+  value: unknown,
+  isValid: (entry: unknown) => entry is T
+): T[] {
   if (typeof value !== "string") return [];
 
   const wanted = value
     .split(",")
     .map((entry) => entry.trim().toLowerCase())
-    .filter(isDownloadStatus);
+    .filter(isValid);
 
   return [...new Set(wanted)];
+}
+
+function parseStatuses(value: unknown): DownloadStatus[] {
+  return parseList(value, isDownloadStatus);
+}
+
+function parseTypes(value: unknown): DownloadType[] {
+  return parseList(value, isDownloadType);
 }
 
 /**
@@ -109,10 +125,23 @@ const SEARCHABLE_NAME = sql`lower_u(COALESCE(${download.prefix}, '') || COALESCE
  * the count that sizes the paginator have to see exactly the same rows, or
  * the UI would offer pages the filter cannot fill.
  */
-function buildFilter(statuses: DownloadStatus[], search: string | null): SQL | undefined {
+function buildFilter(
+  statuses: DownloadStatus[],
+  types: DownloadType[],
+  search: string | null
+): SQL | undefined {
   const clauses: SQL[] = [];
 
   if (statuses.length) clauses.push(inArray(download.status, statuses));
+
+  // Each group narrows the last: picking "audio" and "done" means audio rows
+  // that are done, not every audio row plus every done row. Within a group
+  // the values are alternatives, which is what the menu's checkmarks show.
+  //
+  // `type` is nullable, and `IN` never matches NULL — so a row queued before
+  // the type snapshot existed drops out of a type-filtered list, which is the
+  // honest answer for a row whose type nobody recorded.
+  if (types.length) clauses.push(inArray(download.type, types));
 
   // Substring match rather than an anchored one: people remember a word from
   // the middle of a video title far more often than its first word. No index
@@ -127,13 +156,15 @@ function buildFilter(statuses: DownloadStatus[], search: string | null): SQL | u
 
 /**
  * One page of history, newest first, for whatever combination of status
- * filter and name search was asked for. Shared by the plain listing and the
- * search endpoint so the two can never drift apart in paging or ordering.
+ * filter, type filter and name search was asked for. Each narrowing is
+ * optional and they compose, so a search can be restricted to one status or
+ * one kind of file without a second trip.
  */
-async function listDownloads(query: {
+async function listDownloads(settings: Settings, query: {
   limit?: string;
   page?: string;
   statuses?: string;
+  types?: string;
   name?: string;
 }) {
   const take = Math.min(Math.max(Number(query.limit) || 50, 1), 500);
@@ -143,8 +174,9 @@ async function listDownloads(query: {
   const requested = Math.max(Math.trunc(Number(query.page)) || 1, 1);
 
   const statuses = parseStatuses(query.statuses);
+  const types = parseTypes(query.types);
   const search = parseSearch(query.name);
-  const where = buildFilter(statuses, search);
+  const where = buildFilter(statuses, types, search);
 
   const [counted] = await db
     .select({ total: sql<number>`COUNT(*)` })
@@ -173,77 +205,72 @@ async function listDownloads(query: {
   // Echoed back so a client can tell which filter produced this page — the
   // list arrives asynchronously, and a stale response must be recognisable.
   return {
-    items: Poster.decorateAll(items),
+    items: await withFileExists(Poster.decorateAll(items), settings),
     total,
     page: current,
     pages,
     limit: take,
     statuses,
+    types,
     name: typeof query.name === "string" ? query.name.trim() : ""
   };
 }
 
 /**
- * The newest download a watcher produced, optionally narrowed to some
- * statuses. Shared by the widget's lookup and the existence probe below so
- * the two can never disagree about which row "the last video" is — a probe
- * answering for a different row than the one that is then fetched would be
- * worse than no probe at all.
+ * The download behind a watcher's last video, optionally narrowed to some
+ * statuses and types.
+ *
+ * Pinned to `channel.lastVideoId` rather than simply the newest row, because
+ * that is the video the card names and pictures: a scan writes the channel's
+ * last video as soon as it queues it, so a download that then fails leaves
+ * the newest *finished* row belonging to an older video. Answering with that
+ * row put the previous video behind the current one's poster and title. With
+ * nothing to play the card now says so instead of playing the wrong file.
+ *
+ * Falls back to the newest row when the watcher has no last video recorded —
+ * a channel row deleted out from under its downloads, or one that never
+ * completed a scan — where "the newest one" is the best answer available.
+ *
+ * The narrowing reuses `buildFilter`, so a filter means the same thing here
+ * as it does in the listing rather than being spelled out a second way.
  */
 async function newestForWatcher(
   watcherId: number,
-  statuses: DownloadStatus[]
+  statuses: DownloadStatus[],
+  types: DownloadType[]
 ): Promise<Download | undefined> {
-  const where = statuses.length
-    ? and(eq(download.watcherId, watcherId), inArray(download.status, statuses))
-    : eq(download.watcherId, watcherId);
+  const [watcher] = await db
+    .select({ lastVideoId: channel.lastVideoId })
+    .from(channel)
+    .where(eq(channel.id, watcherId));
+
+  const clauses: SQL[] = [eq(download.watcherId, watcherId)];
+
+  if (watcher?.lastVideoId) {
+    clauses.push(eq(download.videoId, watcher.lastVideoId));
+  }
+
+  const narrowed = buildFilter(statuses, types, null);
+
+  if (narrowed) clauses.push(narrowed);
 
   const [row] = await db
     .select()
     .from(download)
-    .where(where)
+    .where(and(...clauses))
     .orderBy(desc(download.createdAt), desc(download.id))
     .limit(1);
 
   return row;
 }
 
-/**
- * Answers an existence probe for one row.
- *
- * A HEAD response carries no body, so the status code is the answer: 200 when
- * the file behind the row is readable inside the downloads folder, and
- * whatever `resolveDownloadFile` decided otherwise — 409 for a job that has
- * not produced a file yet, 410 for one deleted or moved since, 403 for a path
- * that points outside the downloads folder. The same checks the file endpoint
- * applies before streaming anything, so a 200 here means that endpoint will
- * serve the bytes rather than fail a moment later in a <video> element.
- *
- * The headers are what a body would otherwise have said: which row answered,
- * how large the file is and what it holds. `content-length` is deliberately
- * not used for the size — Fastify recomputes it for the empty payload — so
- * the value travels in `x-file-size` where it survives.
- */
-async function replyFileExists(reply: FastifyReply, row: Download | undefined) {
-  if (!row) return reply.code(404).send();
-
-  const [appSettings] = await db
+async function loadSettings(): Promise<Settings | undefined> {
+  const [row] = await db
     .select()
     .from(settings)
     .where(eq(settings.id, 1));
 
-  if (!appSettings) return reply.code(500).send();
-
-  const file = await resolveDownloadFile(row, appSettings);
-
-  if (!file.ok) return reply.code(file.status).send();
-
-  return reply
-    .header("x-download-id", String(row.id))
-    .header("x-file-size", String(file.size))
-    .header("content-type", contentTypeFor(file.filename))
-    .code(200)
-    .send();
+  return row;
 }
 
 function normalize(value: unknown): string | null {
@@ -270,7 +297,10 @@ function parseManualBody(body: any):
 
   const type = normalize(body?.type) ?? "video";
 
-  if (!TYPES.has(type)) {
+  // The same three words the `types` filter accepts, from one list — a type
+  // the form can produce and the listing cannot filter by would be a row
+  // nobody could find again.
+  if (!isDownloadType(type)) {
     return { ok: false, error: `Unsupported type "${type}"` };
   }
 
@@ -321,7 +351,11 @@ function parseManualBody(body: any):
       ytdlpArgs: normalize(body?.ytdlpArgs),
       clipStart,
       clipEnd,
-      removeSponsor: body?.removeSponsor === true,
+      // `removeSponsor` is the spelling the manual-download form used before
+      // the flag settled on one name; still accepted so a tab left open
+      // across an upgrade does not quietly stop cutting sponsor segments.
+      removeSponsors:
+        body?.removeSponsors === true || body?.removeSponsor === true,
       splitChapters: body?.splitChapters === true
     }
   };
@@ -333,20 +367,22 @@ export async function downloadsRoutes(app: FastifyInstance) {
    * it grows without bound — a year of watched channels is tens of thousands
    * of rows, and shipping all of them to render ten is what the `page`
    * argument exists to avoid.
-   */
-  app.get("/api/downloads", async (req) => listDownloads(req.query as any));
-
-  /**
-   * The same listing, narrowed to rows whose prefix+title contains `name`.
-   * A separate route rather than another query parameter because searching is
-   * its own gesture in the UI — the field clears the status chips when it is
-   * used — and the client asks for it by URL rather than by remembering to
-   * omit a parameter.
    *
-   * `page`, `limit` and `statuses` are still honoured, so the paginator keeps
-   * working over a result set and a search can be narrowed to one status.
+   * Every way of narrowing the list is a query parameter here: `statuses` and
+   * `types` for the filter menu, `name` for the search field. Searching used
+   * to be its own route, but it was the same handler reached by a different
+   * URL — which made a search that is also filtered awkward to ask for, and
+   * left two places for paging or ordering to drift apart.
    */
-  app.get("/api/downloads/search", async (req) => listDownloads(req.query as any));
+  app.get("/api/downloads", async (req, reply) => {
+    const appSettings = await loadSettings();
+
+    if (!appSettings) {
+      return reply.code(500).send({ error: "Settings unavailable" });
+    }
+
+    return listDownloads(appSettings, req.query as any);
+  });
 
   /**
    * Queue counts for the dashboard. One grouped query rather than fetching
@@ -391,17 +427,24 @@ export async function downloadsRoutes(app: FastifyInstance) {
   });
 
   /**
-   * The newest download a watcher produced — what the widget shows for a
-   * channel. Newest rather than a list because the widget has room for one
+   * The download behind a watcher's last video — what the widget shows for a
+   * channel. One row rather than a list because the widget has room for one
    * card, and asking for it by watcher saves paging through the whole history
-   * to find the row.
+   * to find it.
    *
-   * `statuses` narrows it the same way the listing does, so the widget can
-   * ask for the latest finished file rather than whatever was queued last.
+   * `statuses` and `types` narrow it the same way they narrow the listing, so
+   * the widget can ask for a finished file rather than whatever state the row
+   * is in. `null` is the answer when the last video has no row that matches —
+   * it failed, or is still queued — and the card has nothing to play. That is
+   * an ordinary answer for a card to get, not a failure, so it is a 200 rather
+   * than a 404 that every page load would print in the browser console.
+   *
+   * The row carries `fileExists`, which is what the card checks before
+   * offering to play.
    */
   app.get("/api/downloads/by-watcher/:watcherId", async (req, reply) => {
     const { watcherId } = req.params as { watcherId: string };
-    const { statuses } = req.query as { statuses?: string };
+    const { statuses, types } = req.query as { statuses?: string; types?: string };
 
     const id = Number(watcherId);
 
@@ -409,54 +452,19 @@ export async function downloadsRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "watcherId must be a number" });
     }
 
-    const row = await newestForWatcher(id, parseStatuses(statuses));
+    const row = await newestForWatcher(id, parseStatuses(statuses), parseTypes(types));
 
-    if (!row) return reply.code(404).send({ error: "Not found" });
+    if (!row) return reply.send(null);
 
-    return Poster.decorate(row);
-  });
+    const appSettings = await loadSettings();
 
-  /**
-   * Does the last video of a subscription still have a playable file?
-   *
-   * HEAD rather than GET because the answer is the status code and nothing
-   * else: the player asks this before it offers a play button, and pulling a
-   * whole row over the wire to look at one field would be the expensive way
-   * to learn a yes or no.
-   *
-   * `statuses` narrows which row counts as "the last video", exactly as it
-   * does for the lookup above — callers should pass the same filter to both,
-   * so the row that answers here is the row that is then played.
-   */
-  app.head("/api/downloads/subscription/:id/exists", async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const { statuses } = req.query as { statuses?: string };
+    if (!appSettings) {
+      return reply.code(500).send({ error: "Settings unavailable" });
+    }
 
-    const watcherId = Number(id);
+    const [withFile] = await withFileExists([Poster.decorate(row)], appSettings);
 
-    if (!Number.isInteger(watcherId)) return reply.code(400).send();
-
-    return replyFileExists(reply, await newestForWatcher(watcherId, parseStatuses(statuses)));
-  });
-
-  /**
-   * The same probe for one download row named directly, for a caller that
-   * already has the id — telling a row whose file is still on disk from one
-   * deleted outside the app, without asking for the bytes to find out.
-   */
-  app.head("/api/downloads/download/:id/exists", async (req, reply) => {
-    const { id } = req.params as { id: string };
-
-    const rowId = Number(id);
-
-    if (!Number.isInteger(rowId)) return reply.code(400).send();
-
-    const [row] = await db
-      .select()
-      .from(download)
-      .where(eq(download.id, rowId));
-
-    return replyFileExists(reply, row);
+    return withFile;
   });
 
   /**
@@ -619,11 +627,15 @@ export async function downloadsRoutes(app: FastifyInstance) {
     // holding an absolute path that the file endpoint can use directly.
     const [updated] = await db
       .update(download)
-      .set({ filePath: file.path })
+      .set({
+        filePath: file.path,
+        mediaQuality: await MediaQuality.probe(file.path, row.type)
+      })
       .where(eq(download.id, rowId))
       .returning();
 
-    const decorated = Poster.decorate(updated);
+    // Just resolved above, so the file is known to be there.
+    const decorated = { ...Poster.decorate(updated), fileExists: true };
 
     broadcast("download-updated", decorated);
 

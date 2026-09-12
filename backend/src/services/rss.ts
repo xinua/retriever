@@ -9,22 +9,18 @@ const parser = new Parser({
   },
 });
 
-export type RssResult = {
-  videoId: string
-  title?: string
-  description?: string
-  thumbnail?: string
-  link?: string
-  published?: string
-} | null;
-
-export type RssFetchResult = {
+export type RssVideo = {
   videoId: string | null
   title?: string
   description?: string
   thumbnail?: string
   link?: string
   published?: string
+};
+
+export type RssFeedResult = {
+  /** Newest first, as the feed orders them. Empty when nothing was returned. */
+  videos: RssVideo[]
   etag?: string | null
   notModified?: boolean
 };
@@ -47,10 +43,28 @@ function extractYouTubeVideoId(entry: any): string | null {
   return null;
 }
 
-export async function getLatestVideo(
+function toVideo(entry: any): RssVideo {
+  return {
+    videoId: extractYouTubeVideoId(entry),
+    title: entry?.title,
+    description: entry?.mediaGroup?.['media:description']?.[0] ?? null,
+    thumbnail: entry?.mediaGroup?.['media:thumbnail']?.[0]?.$.url ?? null,
+    link: entry?.link,
+    published: entry?.pubDate
+  };
+}
+
+/**
+ * The feed's entries, newest first.
+ *
+ * A scan reads more than the top entry when it is filtering Shorts out, and
+ * one fetch answers for the whole feed either way — so the parse hands back
+ * every entry and lets the caller decide how far down it cares to look.
+ */
+export async function getFeedVideos(
   rssUrl: string,
   prevEtag?: string | null
-): Promise<RssFetchResult | null> {
+): Promise<RssFeedResult> {
 
   const headers: Record<string,string> = {};
 
@@ -62,7 +76,7 @@ export async function getLatestVideo(
 
   if (res.status === 304) {
     return {
-      videoId: null,
+      videos: [],
       notModified: true,
       etag: prevEtag ?? null
     };
@@ -76,30 +90,11 @@ export async function getLatestVideo(
 
   const feed = await parser.parseString(xml);
 
-  const entry = feed.items?.[0];
-  
-
-  if (!entry) {
-    return {
-      videoId: null,
-      etag: res.headers.get("etag")
-    };
-  }
-
-  const videoId = extractYouTubeVideoId(entry);
-
   return {
-    videoId,
-    title: entry?.title,
-    description: entry.mediaGroup?.['media:description'][0] ?? null,
-    thumbnail: entry.mediaGroup?.['media:thumbnail']?.[0]?.$.url ?? null,
-    link: entry?.link,
-    published: entry?.pubDate,
+    videos: (feed.items ?? []).map(toVideo),
     etag: res.headers.get("etag")
   };
 }
-
-
 
 export async function getFeedInfo(rssUrl: string) {
   const feed = await parser.parseURL(rssUrl);

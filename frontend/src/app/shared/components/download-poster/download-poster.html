@@ -2,8 +2,8 @@
 @let hasError = isFailed && download().error;
 @let isPending = download().status === downloadStatus.QUEUED || download().status === downloadStatus.RUNNING;
 
-@if (activeVideo() !== download().id) {
-  @let isAbleToOpen = download().type !== 'thumbnail' && !!download().filePath;
+@if (activeMedia() !== download().id) {
+  @let isAbleToOpen = download().type !== 'thumbnail' && hasFile();
 
   <rt-steam-card
     [imageSourceUrl]="download().thumbnailPath"
@@ -30,6 +30,7 @@
         preload="metadata"
         type="video/mp4"
         class="w-full h-auto no-shadow aspect-video object-cover relative z-1"
+        (error)="handleError()"
       ></video>
     } @else if (download()?.type === 'audio') {
       @if (!!download()?.thumbnailPath) {
@@ -42,10 +43,12 @@
       }
       <div class="w-full absolute bottom-0 left-0 z-1">
         <rt-audio-player
+          #previewAudio
           playerSize="xs"
           [audioUrl]="mediaUrl()"
           [duration]="download().duration"
           (click)="$event.stopPropagation()"
+          (gotError)="handleError()"
         ></rt-audio-player>
       </div>
     }

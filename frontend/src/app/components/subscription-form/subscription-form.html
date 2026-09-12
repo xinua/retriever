@@ -1,211 +1,219 @@
 <mat-card>
   <mat-card-header class="mb-5">
-    <mat-card-title>{{ isEditing() ? 'Edit channel' : 'Add channel' }}</mat-card-title>
-    <mat-card-subtitle class="font-thin!"> Track your favorite YouTube Channel. </mat-card-subtitle>
+    <mat-card-title>{{ isEditing() ? 'Edit subscription' : 'Add subscription' }}</mat-card-title>
+    <mat-card-subtitle class="font-thin!">Track your favorite YouTube Channel.</mat-card-subtitle>
 
     <mat-icon fontIcon="close" class="absolute top-4 right-4 text-white cursor-pointer" (click)="closeForm()" />
   </mat-card-header>
 
   <mat-card-content class="mt-2">
     <form #formEl [formGroup]="form" (ngSubmit)="save(form.value)" class="grid grid-cols-1 gap-6 md:grid-cols-12">
-      <!-- Name -->
-      <mat-form-field appearance="outline" class="md:col-span-12" subscriptSizing="dynamic">
-        <mat-label>Channel name</mat-label>
-        <input matInput formControlName="name" placeholder="Custom channel name" />
-
-        @if (!isEditing()) {
-          <mat-hint> Leave empty to use real channel name </mat-hint>
-        }
-      </mat-form-field>
-
-      <!-- URL -->
-      <mat-form-field appearance="outline" class="md:col-span-12" subscriptSizing="dynamic">
-        <mat-label>Channel/RSS URL</mat-label>
-        <input
-          matInput
-          formControlName="rssUrl"
-          placeholder="https://www.youtube.com/feeds/videos.xml?channel_id=..."
-        />
-
-        @if (form.get('rssUrl')?.value && isEditing()) {
-          <mat-icon
-            matSuffix
-            fontIcon="link"
-            (click)="copyToClipboard(form.get('rssUrl')?.value)"
-            class="cursor-pointer"
+      <!-- Channel URL and Name -->
+      <div class="grid grid-cols-2 gap-x-6 md:col-span-12">
+        <!-- URL -->
+        <mat-form-field appearance="outline" class="col-span-1" subscriptSizing="dynamic">
+          <mat-label>Channel/RSS URL</mat-label>
+          <input
+            matInput
+            formControlName="rssUrl"
+            placeholder="https://www.youtube.com/feeds/videos.xml?channel_id=..."
           />
-        }
 
-        @if (!isEditing()) {
-          <mat-hint class="text-xs/6"> Just paste channel URL and leave the rest to the app 😎 </mat-hint>
-        }
+          @if (form.get('rssUrl')?.value && isEditing()) {
+            <mat-icon
+              matSuffix
+              fontIcon="link"
+              (click)="copyToClipboard(form.get('rssUrl')?.value)"
+              class="cursor-pointer"
+            />
+          }
 
-        @if (form.get('rssUrl')?.invalid) {
-          <mat-error>URL is required</mat-error>
-        }
-      </mat-form-field>
+          @if (!isEditing()) {
+            <mat-hint class="text-xs/6 text-gray-500">
+              Just paste channel URL and leave the rest to the app 😎
+            </mat-hint>
+          }
 
-      <!-- Type -->
-      <mat-form-field appearance="outline" class="md:col-span-12" subscriptSizing="dynamic" hideRequiredMarker>
-        <mat-label>Type</mat-label>
-        <mat-select formControlName="type">
-          <mat-option [value]="types.VIDEO">Video</mat-option>
-          <mat-option [value]="types.AUDIO">Audio</mat-option>
-        </mat-select>
-      </mat-form-field>
+          @if (form.get('rssUrl')?.invalid) {
+            <mat-error>URL is required</mat-error>
+          }
+        </mat-form-field>
 
-      <!-- Codec -->
-      @if (form.controls.type.value === types.VIDEO) {
-        <mat-form-field appearance="outline" class="md:col-span-12" subscriptSizing="dynamic" hideRequiredMarker>
-          <mat-label>Codec</mat-label>
-          <mat-select formControlName="codec">
-            @for (codec of codecOptions; track codec) {
-              <mat-option [value]="codec" class="flex items-center gap-2">
-                <span class="order-1">
-                  {{ codecLabels[codec] }}
-                </span>
+        <!-- Name -->
+        <mat-form-field appearance="outline" class="col-span-1" subscriptSizing="dynamic">
+          <mat-label>Channel name</mat-label>
+          <input matInput formControlName="name" placeholder="Custom channel name" />
 
-                @if (codec === 'h264') {
-                  <mat-icon svgIcon="avc" class="order-2" />
-                } @else if (codec === 'h265') {
-                  <mat-icon fontIcon="hevc" class="order-2" />
+          @if (!isEditing()) {
+            <mat-hint class="text-gray-500"> Leave empty to use real channel name </mat-hint>
+          }
+        </mat-form-field>
+      </div>
+
+      <!-- Poll type and Time/Interval -->
+      <div class="grid grid-cols-2 gap-x-6 md:col-span-12 pb-2">
+        @if (form.controls.pollType.value === pollType.INTERVAL) {
+          <!-- Poll repeat interval -->
+          <mat-form-field appearance="outline" class="col-span-1 h-fit" subscriptSizing="dynamic">
+            <mat-label>Check interval</mat-label>
+            <input matInput type="number" mask="0999" formControlName="pollInterval" placeholder="60 minutes" />
+            <span matSuffix class="mr-4 text-xs md:text-base whitespace-nowrap">{{
+              form.controls.pollInterval.value * 60 | time: '[Hh ]Mm'
+            }}</span>
+
+            @if (form.controls.pollInterval.errors?.['required'] && form.controls.pollInterval.touched) {
+              <mat-error>Interval is required</mat-error>
+            }
+
+            @if (form.controls.pollInterval.errors?.['min'] || form.controls.pollInterval.errors?.['max']) {
+              <mat-error>Interval must be between 1 and 1440 minutes</mat-error>
+            }
+          </mat-form-field>
+        } @else {
+          <!-- Poll specific times -->
+          @let pollTimes = form.controls.pollTime.value ?? [];
+
+          <mat-form-field appearance="outline" class="col-span-1 h-fit" subscriptSizing="dynamic">
+            <mat-label>Poll time</mat-label>
+            <mat-select formControlName="pollTime" multiple>
+              <mat-select-trigger>
+                @if (pollTimes.length > 3) {
+                  {{ pollTimes.length }} times a day
+                } @else {
+                  {{ pollTimes.join(', ') }}
                 }
+              </mat-select-trigger>
+
+              @for (time of pollTimeOptions; track time) {
+                <mat-option [value]="time">{{ time }}</mat-option>
+              }
+            </mat-select>
+
+            @if (form.controls.pollTime.errors?.['required'] && form.controls.pollTime.touched) {
+              <mat-error>At least one time is required</mat-error>
+            }
+          </mat-form-field>
+        }
+
+        <!-- Poll type -->
+        <mat-form-field appearance="outline" class="col-span-1 h-fit" subscriptSizing="dynamic" hideRequiredMarker>
+          <mat-label>Poll type</mat-label>
+          <mat-select formControlName="pollType">
+            <mat-option value="interval">Interval</mat-option>
+            <mat-option value="time">Time</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        @if (form.controls.pollType.value === pollType.INTERVAL) {
+          <mat-hint class="col-span-2 mt-1 pl-4 h-0 overflow-visible text-gray-500">
+            Tip: keep polling ≥ 1min unless you love rate-limits and suffering.
+          </mat-hint>
+        }
+      </div>
+
+      <!-- Additional flags and Interval start/end -->
+      <div class="grid grid-cols-2 gap-x-6 md:col-span-12 pb-2">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="h-fit sub-flags">
+          <mat-label>Additional flags</mat-label>
+          <mat-select [value]="selectedOptions()" (selectionChange)="onOptionChange($event)" multiple>
+            <mat-select-trigger>
+              @for (option of selectedOptions(); track option) {
+                @let flag = option | flags;
+
+                <span class="text-sm">
+                  @if (option === 'startFromLast') {
+                    {{ flag.label }} {{ flag.descriptionActive | lowercase }}
+                  } @else {
+                    {{ flag.descriptionActive | titlecase }} {{ flag.label | lowercase }}
+                  }
+                </span>
+                @if (selectedOptions().length > 1 && $index < selectedOptions().length - 1) {
+                  ,
+                }
+              }
+            </mat-select-trigger>
+
+            @for (option of flags(); track option) {
+              <mat-option
+                [value]="option.value"
+                [matTooltip]="option?.tooltip"
+                [matTooltipDisabled]="!option?.tooltip"
+                [matTooltipPosition]="'right'"
+              >
+                <div class="py-1 flex items-center gap-2">
+                  <mat-icon [fontIcon]="option.icon" />
+
+                  <div>
+                    <p>{{ option.label }}</p>
+                    <span class="text-xs">
+                      @let isSelected = selectedOptions().includes(option.value);
+                      {{ isSelected ? option.descriptionActive : option.descriptionInactive }}
+                    </span>
+                  </div>
+                </div>
               </mat-option>
             }
           </mat-select>
         </mat-form-field>
-      }
 
-      <!-- Format -->
-      <mat-form-field appearance="outline" class="md:col-span-12" subscriptSizing="dynamic" hideRequiredMarker>
-        @let isVideoType = form.controls.type.value === types.VIDEO;
-
-        <mat-label>Format</mat-label>
-
-        <mat-select formControlName="format">
-          @for (format of formatOptions$ | async; track format) {
-            @let label = isVideoType ? videoFormatLabels[format] : audioFormatLabels[format];
-            <mat-option [value]="format">
-              {{ label }}
-            </mat-option>
-          }
-        </mat-select>
-      </mat-form-field>
-
-      <!-- Poll type -->
-      <mat-form-field appearance="outline" class="md:col-span-12" subscriptSizing="dynamic" hideRequiredMarker>
-        <mat-label>Poll type</mat-label>
-        <mat-select formControlName="pollType">
-          <mat-option value="interval">Interval</mat-option>
-          <mat-option value="time">Time</mat-option>
-        </mat-select>
-        <mat-hint
-          >Interval: check every X minutes. <br />
-          Time: check once a day at a specific time.
-        </mat-hint>
-      </mat-form-field>
-
-      @if (form.controls.pollType.value === pollType.INTERVAL) {
-        <!-- Poll repeat interval -->
-        <mat-form-field appearance="outline" class="md:col-span-12" subscriptSizing="dynamic">
-          <mat-label>Check interval</mat-label>
-          <input matInput type="number" formControlName="pollInterval" placeholder="60 minutes" />
-          <span matSuffix class="mr-4">{{ form.controls.pollInterval.value * 60 | time: TimeFormat.LONG }}</span>
-          <mat-hint>Tip: keep polling ≥ 1min unless you love rate-limits and suffering.</mat-hint>
-          @if (form.controls.pollInterval.errors?.['required'] && form.controls.pollInterval.touched) {
-            <mat-error>Interval is required</mat-error>
-          }
-          @if (form.controls.pollInterval.errors?.['min'] || form.controls.pollInterval.errors?.['max']) {
-            <mat-error>Interval must be between 1 and 1440 minutes</mat-error>
-          }
-        </mat-form-field>
-      } @else {
-        <!-- Poll specific time -->
-        <mat-form-field appearance="outline" class="md:col-span-12" subscriptSizing="dynamic">
-          <mat-label>Pick a time</mat-label>
-          <input matInput [matTimepicker]="picker" formControlName="pollTime" />
-          <mat-timepicker #picker />
-
-          <mat-timepicker-toggle matIconSuffix [for]="picker">
-            <mat-icon matTimepickerToggleIcon>keyboard_arrow_down</mat-icon>
-          </mat-timepicker-toggle>
-
-          @if (form.controls.pollTime.errors?.['required'] && form.controls.pollTime.touched) {
-            <mat-error>Time is required</mat-error>
-          }
-        </mat-form-field>
-      }
-
-      <!-- Shorts -->
-      <div
-        class="md:col-span-4 flex items-center justify-between gap-3 rounded-lg border border-gray-800 px-4 py-3 cursor-pointer"
-        (click)="downloadShortsToggle.toggle()"
-      >
-        <div>
-          <div class="text-sm font-medium">Shorts</div>
-          @if (form.get('downloadShorts')?.value) {
-            <div class="text-xs">Include</div>
-          } @else {
-            <div class="text-xs">Ignore</div>
-          }
-        </div>
-        <mat-slide-toggle
-          formControlName="downloadShorts"
-          #downloadShortsToggle
-          (click)="$event.stopPropagation()"
-        ></mat-slide-toggle>
-      </div>
-
-      <!-- Notify HA -->
-      <div
-        class="md:col-span-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-800 px-4 py-3 cursor-pointer"
-        (click)="notifyHAToggle.toggle()"
-      >
-        <div>
-          @let localWebhook = form.controls.webhookOverride;
-          @let notifyControl = form.controls.notifyHA;
-
-          <div class="text-sm font-medium">Webhook</div>
-
-          @if (form.get('notifyHA')?.value) {
-            <div class="text-xs">Send</div>
-          } @else {
-            <div class="text-xs">Do not send</div>
-          }
-        </div>
-        <mat-slide-toggle
-          formControlName="notifyHA"
-          #notifyHAToggle
-          (click)="$event.stopPropagation()"
-        ></mat-slide-toggle>
-
-        @if (notifyControl.value && !localWebhook.valid && !globalWebhookURL()?.length) {
-          <div class="text-xs text-red-500 col-span-12 w-full">Please set a custom or global webhook URL</div>
+        @if (form.controls.pollType.value === pollType.INTERVAL) {
+          <rt-interval-range
+            formControlName="intervalPeriod"
+            class="col-span-1 w-full"
+            [interval]="form.controls.pollInterval.value"
+          />
         }
       </div>
 
-      <!-- Download last video now -->
-      @if (!isEditing()) {
-        <div
-          class="md:col-span-4 flex items-center justify-between gap-3 rounded-lg border border-gray-800 px-4 py-3 cursor-pointer"
-          (click)="startFromLastToggle.toggle()"
-          matTooltip="Turn on to download last video now"
-        >
-          <div>
-            <div class="text-sm font-medium">Start with</div>
-            @if (form.get('startFromLast')?.value) {
-              <div class="text-xs">Last video</div>
-            } @else {
-              <div class="text-xs">Next video</div>
+      <!-- Type, Codec and Format -->
+      <div class="grid grid-cols-3 gap-6 md:col-span-12">
+        <!-- Type -->
+        <mat-form-field appearance="outline" class="col-span-1" subscriptSizing="dynamic" hideRequiredMarker>
+          <mat-label>Type</mat-label>
+          <mat-select formControlName="type">
+            <mat-option [value]="types.VIDEO">Video</mat-option>
+            <mat-option [value]="types.AUDIO">Audio</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <!-- Codec -->
+        @if (form.controls.type.value === types.VIDEO) {
+          <mat-form-field appearance="outline" class="col-span-1" subscriptSizing="dynamic" hideRequiredMarker>
+            <mat-label>Codec</mat-label>
+            <mat-select formControlName="codec">
+              @for (codec of codecOptions; track codec) {
+                <mat-option [value]="codec" class="flex items-center gap-2">
+                  <span class="order-1">
+                    {{ codecLabels[codec] }}
+                  </span>
+
+                  @if (codec === 'h264') {
+                    <mat-icon svgIcon="avc" class="order-2" />
+                  } @else if (codec === 'h265') {
+                    <mat-icon fontIcon="hevc" class="order-2" />
+                  }
+                </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        }
+
+        <!-- Format -->
+        <mat-form-field appearance="outline" class="col-span-1" subscriptSizing="dynamic" hideRequiredMarker>
+          @let isVideoType = form.controls.type.value === types.VIDEO;
+
+          <mat-label>Format</mat-label>
+
+          <mat-select formControlName="format">
+            @for (format of formatOptions$ | async; track format) {
+              @let label = isVideoType ? videoFormatLabels[format] : audioFormatLabels[format];
+              <mat-option [value]="format">
+                {{ label }}
+              </mat-option>
             }
-          </div>
-          <mat-slide-toggle
-            formControlName="startFromLast"
-            #startFromLastToggle
-            (click)="$event.stopPropagation()"
-          ></mat-slide-toggle>
-        </div>
-      }
+          </mat-select>
+        </mat-form-field>
+      </div>
 
       <!-- Advanced (collapsible) -->
       <div class="md:col-span-12">
@@ -288,7 +296,7 @@
             <mat-icon class="text-base" [fontIcon]="isEditing() ? 'edit' : 'add'" />
           }
 
-          {{ isEditing() ? 'Update' : 'Add' }}
+          {{ isEditing() ? 'Update' : 'Subscribe' }}
         </button>
       </div>
     </form>

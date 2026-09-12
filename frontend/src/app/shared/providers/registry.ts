@@ -28,4 +28,7 @@ export const iconRegistry: string[] = [
   'dots',
   'dots_1',
   'dots_2',
+  'audio_note',
+  'video_circle',
+  'audio_circle',
 ];

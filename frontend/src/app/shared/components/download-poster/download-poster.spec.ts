@@ -4,6 +4,7 @@ import { DownloadRecordMock } from '@shared/constants';
 import { DownloadModel } from '@shared/models';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient } from '@angular/common/http';
+import { provideNotifier } from '../../providers';
 
 describe('Poster', () => {
   let component: DownloadPoster;
@@ -12,7 +13,7 @@ describe('Poster', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [DownloadPoster],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideNotifier()],
     }).compileComponents();
 
     fixture = TestBed.createComponent(DownloadPoster);

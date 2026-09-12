@@ -127,6 +127,7 @@ export class SubscriptionsViewComponent implements OnInit {
     this._httpService
       .scanSubscription(id)
       .pipe(
+        tap(() => this._notifier.notify('info', 'Scanned successfully')),
         filterDefined(),
         switchMap(() => this._httpService.getSubscriptions()),
       )
@@ -170,6 +171,7 @@ export class SubscriptionsViewComponent implements OnInit {
       data: {
         title: 'Confirmation',
         message: 'Are you sure you want to delete this subscription?',
+        actionText: 'Delete',
       },
     });
 

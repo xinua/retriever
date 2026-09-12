@@ -33,6 +33,20 @@ const SITE_MARK: Partial<Record<Download["platform"], string>> = {
 };
 
 /**
+ * The shared avatar file for a YouTube channel.
+ *
+ * Keyed on the channel rather than on whoever asked for it, because everyone
+ * looking at that channel wants the same picture: every download it ever
+ * produced, and every subscription watching it — two subscriptions on one
+ * channel read this one file. That makes it shared artwork like
+ * `video-<id>.jpg` (see manual-download.ts), so no single reader may delete
+ * it; channels.ts drops it only once the last one is gone.
+ */
+export function avatarName(channelId: string): string {
+  return `channel-${channelId}.jpg`;
+}
+
+/**
  * The uploader picture a row should show, as a path the browser can load, or
  * null when the row has none — a YouTube channel whose avatar was never
  * fetched, which the client renders as its "not found" stand-in.
@@ -41,7 +55,7 @@ export function avatarFor(row: Download): string | null {
   if (row.platform === "youtube") {
     if (!row.channelId) return null;
 
-    const name = `channel-${row.channelId}.jpg`;
+    const name = avatarName(row.channelId);
 
     return ImagesService.exists(name) ? `/images/${name}` : null;
   }

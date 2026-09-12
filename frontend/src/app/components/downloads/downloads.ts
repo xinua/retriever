@@ -4,7 +4,6 @@ import {
   Component,
   computed,
   DestroyRef,
-  effect,
   ElementRef,
   HostListener,
   inject,
@@ -15,20 +14,30 @@ import {
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButton, MatIconButton } from '@angular/material/button';
-import { MatCard, MatCardContent, MatCardHeader, MatCardSubtitle, MatCardTitle } from '@angular/material/card';
+import { MatCard, MatCardContent, MatCardHeader, MatCardTitle } from '@angular/material/card';
+import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { MatFormField, MatInput, MatLabel } from '@angular/material/input';
-import { MatPaginator, PageEvent } from '@angular/material/paginator';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatPaginator, MatPaginatorIntl, PageEvent } from '@angular/material/paginator';
+import { MatSelectModule } from '@angular/material/select';
 import { MatTableModule } from '@angular/material/table';
-import { Badge, DownloadRecord } from '@shared/components';
+import { ConfirmationDialog, DownloadRecord, FilterDownloads } from '@shared/components';
 import { AppearDirective, BgDirective } from '@shared/directives';
-import { DownloadInfoModel, DownloadModel, DownloadsPageModel, DownloadStatus, Platform } from '@shared/models';
-import { AnimationService, HttpService, StorageService } from '@shared/services';
+import {
+  DownloadInfoModel,
+  DownloadModel,
+  DownloadsPageModel,
+  DownloadStatus,
+  FilterModel,
+  Platform,
+} from '@shared/models';
+import { AnimationService, CustomPaginatorIntl, HttpService, StorageService } from '@shared/services';
 import { NotifierService } from 'angular-notifier';
-import { debounceTime, distinctUntilChanged, finalize, forkJoin, iif, Observable, Subject, switchMap, tap } from 'rxjs';
+import { hasFile } from '@shared/helpers';
+import { debounceTime, distinctUntilChanged, filter, finalize, Observable, Subject, switchMap, take, tap } from 'rxjs';
 import { WsService } from '../../shared/services/ws.service';
 import { NoData } from '../no-data/no-data';
-import { DOWNLOADS_STATUS_FILTERS } from './downloads.const';
 
 /** Long enough to merge a delete's HTTP response with its own broadcast. */
 const REFILL_DEBOUNCE_MS = 100;
@@ -36,6 +45,8 @@ const REFILL_DEBOUNCE_MS = 100;
 @Component({
   selector: 'rt-downloads',
   imports: [
+    MatMenuModule,
+    MatSelectModule,
     MatCard,
     MatCardContent,
     MatCardHeader,
@@ -46,17 +57,17 @@ const REFILL_DEBOUNCE_MS = 100;
     MatInput,
     MatTableModule,
     BgDirective,
-    MatCardSubtitle,
     AsyncPipe,
     MatPaginator,
     MatFormField,
     MatLabel,
     ReactiveFormsModule,
     NoData,
-    Badge,
     DownloadRecord,
     AppearDirective,
+    FilterDownloads,
   ],
+  providers: [{ provide: MatPaginatorIntl, useClass: CustomPaginatorIntl }],
   templateUrl: './downloads.html',
   styleUrl: './downloads.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -67,6 +78,7 @@ export class Downloads implements OnInit {
   private readonly _wsService = inject(WsService);
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _notifier = inject(NotifierService);
+  private readonly _dialog = inject(MatDialog);
   private readonly _animationService = inject(AnimationService);
 
   @HostListener('window:keydown', ['$event'])
@@ -107,14 +119,12 @@ export class Downloads implements OnInit {
   readonly status = DownloadStatus;
   readonly downloadInfo$: Observable<DownloadInfoModel>;
   readonly platform = Platform;
-  readonly statuses = DOWNLOADS_STATUS_FILTERS;
 
   downloads = this._storage.downloads;
   progressValue = signal(0);
 
   paginator = this._storage.paginator;
   filters = this._storage.filters;
-  filters$ = toObservable(this.filters);
   searchControl = new FormControl<string>('');
   showSearch = signal<boolean>(false);
   isAnimationInProgress = signal<boolean>(false);
@@ -131,21 +141,12 @@ export class Downloads implements OnInit {
       distinctUntilChanged((a, b) => a.length === b.length),
       switchMap(() => this._httpService.getDownloadsInfo()),
     );
-
-    effect(() => {
-      this._storage.filters.set(this.filters());
-      if (!!this.filters()[0]) this.searchControl.setValue('');
-    });
   }
 
   ngOnInit() {
-    this._fetchDownloads()
-      .pipe(switchMap(() => this._checkDownloadFiles()))
-      .subscribe();
+    this._fetchDownloads().subscribe();
 
-    this._trackSearch()
-      .pipe(switchMap(() => this._checkDownloadFiles()))
-      .subscribe();
+    this._trackSearch().subscribe();
 
     this._trackRefill().subscribe((result) => this._syncPage(result));
 
@@ -153,7 +154,7 @@ export class Downloads implements OnInit {
       .downloadUpdated$()
       .pipe(
         takeUntilDestroyed(this._destroyRef),
-        tap((download) => this._upsert(download)),
+        tap((download) => this._onDownloadUpdated(download)),
       )
       .subscribe();
 
@@ -191,9 +192,7 @@ export class Downloads implements OnInit {
 
   onPageChange(event: PageEvent) {
     this.paginator.set({ total: event.length, page: event.pageIndex, limit: event.pageSize });
-    this._fetchDownloads()
-      .pipe(switchMap(() => this._checkDownloadFiles()))
-      .subscribe();
+    this._fetchDownloads().subscribe();
   }
 
   trackById(_index: number, download: DownloadModel) {
@@ -214,7 +213,7 @@ export class Downloads implements OnInit {
   }
 
   saveAs(download: DownloadModel) {
-    if (!download.filePath) return;
+    if (!hasFile(download)) return;
 
     const link = document.createElement('a');
 
@@ -260,11 +259,11 @@ export class Downloads implements OnInit {
       });
   }
 
-  filter(status: DownloadStatus | null) {
-    this.filters.set([status]);
-    this.searchControl.setValue('');
+  filterDownloads(filters: FilterModel) {
+    this.filters.set(filters);
+
     this._httpService
-      .getDownloads(1, this.paginator().limit, this.filters())
+      .getDownloads(1, this.paginator().limit, this.filters(), this.searchControl.value)
       .pipe(
         tap((result: DownloadsPageModel) =>
           this.paginator.update((current) => ({ ...current, total: result.total, page: result.page - 1 })),
@@ -274,13 +273,33 @@ export class Downloads implements OnInit {
   }
 
   clearFinished() {
-    this._httpService.clearFinishedDownloads().subscribe({
-      next: () => {
-        this.downloads.update((rows) => rows.filter((r) => !this._isFinished(r)));
-        this._refill$.next();
+    this._openConfirmationDialog()
+      .pipe(
+        take(1),
+        filter(Boolean),
+        switchMap(() => this._httpService.clearFinishedDownloads()),
+      )
+      .subscribe({
+        next: () => {
+          this.downloads.update((rows) => rows.filter((r) => !this._isFinished(r)));
+          this._refill$.next();
+        },
+        error: () => this._notifier.notify('error', 'Could not clear the list.'),
+      });
+  }
+
+  private _openConfirmationDialog(): Observable<boolean> {
+    const dialogRef = this._dialog.open(ConfirmationDialog, {
+      restoreFocus: false,
+      data: {
+        title: 'Clear finished downloads',
+        message: 'Are you sure you want to remove all download records?',
+        cancelText: 'Cancel',
+        actionText: 'Clear',
       },
-      error: () => this._notifier.notify('error', 'Could not clear the list.'),
     });
+
+    return dialogRef.afterClosed();
   }
 
   private _trackRefill(): Observable<DownloadsPageModel> {
@@ -288,22 +307,25 @@ export class Downloads implements OnInit {
       takeUntilDestroyed(this._destroyRef),
       debounceTime(REFILL_DEBOUNCE_MS),
       switchMap(() =>
-        this._httpService.getDownloads(this.paginator().page + 1, this.paginator().limit, this.filters()),
+        this._httpService.getDownloads(
+          this.paginator().page + 1,
+          this.paginator().limit,
+          this.filters(),
+          this.searchControl.value,
+        ),
       ),
       tap((result: DownloadsPageModel) => this.paginator.update((current) => ({ ...current, total: result.total }))),
     );
   }
 
   private _fetchDownloads(): Observable<DownloadsPageModel> {
-    return iif(
-      () => !!this.searchControl.value,
-      this._httpService.searchDownloads(this.searchControl.value, this.paginator().limit, this.paginator().page + 1),
-      this._httpService.getDownloads(this.paginator().page + 1, this.paginator().limit, this.filters()),
-    ).pipe(
-      tap((result: DownloadsPageModel) =>
-        this.paginator.update((current) => ({ ...current, total: result.total, page: result.page - 1 })),
-      ),
-    );
+    return this._httpService
+      .getDownloads(this.paginator().page + 1, this.paginator().limit, this.filters(), this.searchControl.value)
+      .pipe(
+        tap((result: DownloadsPageModel) =>
+          this.paginator.update((current) => ({ ...current, total: result.total, page: result.page - 1 })),
+        ),
+      );
   }
 
   private _trackSearch(): Observable<DownloadsPageModel> {
@@ -311,26 +333,9 @@ export class Downloads implements OnInit {
       takeUntilDestroyed(this._destroyRef),
       debounceTime(300),
       distinctUntilChanged(),
-      tap(() => this.filters.set([null])),
-      switchMap((value) => this._httpService.searchDownloads(value, this.paginator().limit, 1)),
+      switchMap((value) => this._httpService.getDownloads(1, this.paginator().limit, this.filters(), value)),
       tap((result: DownloadsPageModel) =>
         this.paginator.update((current) => ({ ...current, total: result.total, page: 0 })),
-      ),
-    );
-  }
-
-  private _checkDownloadFiles(): Observable<boolean[]> {
-    return forkJoin(
-      this.downloads().map((download) =>
-        this._httpService
-          .checkDownloadFile(download.id)
-          .pipe(
-            tap((result) =>
-              this.downloads.update((downloads) =>
-                downloads.map((d) => (d.id === download.id ? { ...d, filePath: result ? d.filePath : null } : d)),
-              ),
-            ),
-          ),
       ),
     );
   }
@@ -349,6 +354,20 @@ export class Downloads implements OnInit {
       download.status === DownloadStatus.FAILED ||
       download.status === DownloadStatus.CANCELED
     );
+  }
+
+  /**
+   * A row already on the page is merged in place. A row that is not belongs to
+   * the server's view of the page — a subscription queueing a new download, or
+   * progress on a row from another page — so it is not prepended blindly, which
+   * would overflow the page limit. A newly queued row refills the page instead.
+   */
+  private _onDownloadUpdated(download: DownloadModel) {
+    if (this.downloads().some((d) => d.id === download.id)) {
+      this._upsert(download);
+    } else if (download.status === DownloadStatus.QUEUED) {
+      this._refill$.next();
+    }
   }
 
   private _upsert(download: DownloadModel) {

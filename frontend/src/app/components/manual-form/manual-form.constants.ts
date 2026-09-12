@@ -1,9 +1,18 @@
 import { AudioFormats, Codecs, VideoQuality, Types, VideoFormats } from '@shared/models';
 
 export const TYPE_ICONS = {
-  [Types.VIDEO]: 'play_arrow',
-  [Types.AUDIO]: 'music_note',
-  [Types.THUMBNAIL]: 'image',
+  [Types.VIDEO]: {
+    fontIcon: 'play_arrow',
+    svgIcon: null,
+  },
+  [Types.AUDIO]: {
+    svgIcon: 'audio_note',
+    fontIcon: null,
+  },
+  [Types.THUMBNAIL]: {
+    fontIcon: 'image',
+    svgIcon: null,
+  },
 };
 
 export const CODEC_ICONS = {

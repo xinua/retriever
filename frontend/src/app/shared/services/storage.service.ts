@@ -1,21 +1,21 @@
 import { computed, effect, Injectable, signal } from '@angular/core';
 import {
+  DefaultFilters,
   DefaultManualForm,
+  DefaultPaginator,
   DefaultSettings,
   DefaultUiConfig,
-  DefaultFilters,
-  DefaultPaginator,
 } from '../constants/defaults.const';
 import {
-  SubscriptionModel,
   DownloadModel,
-  DownloadStatus,
+  FilterModel,
   ManualDownloadModel,
   NextCheckModel,
   Nullable,
-  SettingsModel,
-  UiConfig,
   PaginatorModel,
+  SettingsModel,
+  SubscriptionModel,
+  UiConfig,
 } from '../models';
 
 @Injectable({
@@ -29,7 +29,7 @@ export class StorageService {
   nextCheck = signal<Nullable<NextCheckModel>>(null);
   downloads = signal<DownloadModel[]>([]);
   uiConfig = signal<UiConfig>(DefaultUiConfig);
-  filters = signal<DownloadStatus[]>(DefaultFilters);
+  filters = signal<FilterModel>(DefaultFilters);
   paginator = signal<PaginatorModel>(DefaultPaginator);
   manualDownloadForm = signal<ManualDownloadModel>(DefaultManualForm);
 
@@ -48,14 +48,12 @@ export class StorageService {
   );
 
   constructor() {
-    this.filters.set((JSON.parse(localStorage.getItem('downloadsFilters')) as DownloadStatus[]) || DefaultFilters);
     this.paginator.set((JSON.parse(localStorage.getItem('paginator')) as PaginatorModel) || DefaultPaginator);
     this.manualDownloadForm.set(
       (JSON.parse(localStorage.getItem('manualDownloadForm')) as ManualDownloadModel) || DefaultManualForm,
     );
 
     effect(() => {
-      localStorage.setItem('downloadsFilters', JSON.stringify(this.filters()));
       localStorage.setItem('manualDownloadForm', JSON.stringify(this.manualDownloadForm()));
       localStorage.setItem('paginator', JSON.stringify({ ...DefaultPaginator, limit: this.paginator().limit }));
     });

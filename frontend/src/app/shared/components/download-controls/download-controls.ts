@@ -6,6 +6,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatFormField, MatInput } from '@angular/material/input';
 import { MatMenu, MatMenuModule } from '@angular/material/menu';
 import { MatTooltip } from '@angular/material/tooltip';
+import { hasFile } from '../../helpers/common.helpers';
 import { DownloadModel, DownloadStatus } from '../../models/download.model';
 import { StorageService } from '../../services/storage.service';
 import { HttpService } from '../../services/http.service';
@@ -32,6 +33,7 @@ export class DownloadControls {
   copyFilePath = output<DownloadModel>();
 
   filePath = '';
+  hasFile = computed(() => hasFile(this.download()));
   downloadsFolder = computed(() => this._storage.settings().downloadsDir);
   actionsMenu = viewChild<MatMenu>('actionsMenu');
 

@@ -11,7 +11,7 @@ import {
 import { MatIcon } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { ProgressBarComponent } from '../progress-bar/progress-bar.component';
-import { TimeFormat, TimePipe } from '../../pipes/time.pipe';
+import { TimePipe } from '../../pipes/time.pipe';
 import { AUDIO_PLAYER_SIZES } from './audio-player.const';
 import { PlayerSize } from './audio-player.model';
 
@@ -28,7 +28,7 @@ export class AudioPlayer {
   playerSize = input<PlayerSize>('md');
   gotError = output<ErrorEvent>();
 
-  private readonly nativePlayer = viewChild.required<ElementRef<HTMLAudioElement>>('nativePlayer');
+  readonly nativePlayer = viewChild.required<ElementRef<HTMLAudioElement>>('nativePlayer');
 
   readonly isPlaying = signal(false);
   readonly isMuted = signal(false);
@@ -41,8 +41,6 @@ export class AudioPlayer {
 
   /** True from the first slider `input` until the seek is committed, so `timeupdate` cannot snap the thumb back. */
   private readonly isSeeking = signal(false);
-
-  readonly timeFormat = TimeFormat;
 
   readonly totalDuration = computed(() => this.mediaDuration() || this.duration());
 

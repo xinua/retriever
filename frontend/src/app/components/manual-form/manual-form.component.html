@@ -5,29 +5,36 @@
   </mat-card-header>
 
   <mat-card-content class="mt-2">
-    <form [formGroup]="form" (ngSubmit)="download()">
+    <form [formGroup]="form">
       <mat-form-field appearance="outline" class="w-full" #urlMatInput>
         <input matInput formControlName="url" #urlInput (click)="pasteUrl()" />
         <mat-label>Paste video/playlist/channel URL</mat-label>
 
-        <div
-          matSuffix
-          class="flex items-center h-13 px-5 rounded-r-md"
-          [class.cursor-pointer]="!isPending()"
-          [class.hover:bg-gray-100/10]="!isPending()"
-          [matTooltip]="isPending() ? 'Working…' : 'Download'"
-          (click)="download()"
-        >
-          <mat-icon
-            [fontIcon]="isPending() ? 'radar' : 'download'"
-            [class]="
-              isPending()
-                ? 'text-yellow-500! animate-spin'
-                : form.controls.url.value && form.controls.url.valid
-                  ? `text-(--rt-accent)! animate-bounce`
-                  : ''
-            "
-          />
+        <div matSuffix class="flex items-center">
+          @if (form.controls.url.value) {
+            <button mat-icon-button (click)="clearUrl()" class="hover:bg-gray-100/10!" matTooltip="Clear">
+              <mat-icon fontIcon="close" class="text-white! animate-cicle-once" />
+            </button>
+          }
+
+          <div
+            class="flex items-center h-13 px-5 rounded-r-md"
+            [class.cursor-pointer]="!isPending()"
+            [class.hover:bg-gray-100/10]="!isPending()"
+            [matTooltip]="isPending() ? 'Working…' : 'Download'"
+            (click)="download()"
+          >
+            <mat-icon
+              [fontIcon]="isPending() ? 'radar' : 'download'"
+              [class]="
+                isPending()
+                  ? 'text-yellow-500! animate-spin'
+                  : form.controls.url.value && form.controls.url.valid
+                    ? `text-(--rt-accent)! animate-bounce`
+                    : ''
+              "
+            />
+          </div>
         </div>
 
         @if ((isSubmitted() || form.controls.url.dirty) && form.controls.url.invalid) {
@@ -52,7 +59,11 @@
           <mat-label>Type</mat-label>
           <mat-select formControlName="type">
             <mat-select-trigger class="flex items-end gap-2 w-fit h-full">
-              <mat-icon matSuffix [fontIcon]="typeIcons[form.controls.type.value]" />
+              @if (typeIcons[form.controls.type.value].fontIcon) {
+                <mat-icon matSuffix [fontIcon]="typeIcons[form.controls.type.value]?.fontIcon" />
+              } @else {
+                <mat-icon matSuffix [svgIcon]="typeIcons[form.controls.type.value]?.svgIcon" />
+              }
               {{ form.controls.type.value | titlecase }}
             </mat-select-trigger>
 
@@ -116,6 +127,7 @@
         @if (isThumbnail) {
           <mat-form-field appearance="outline" class="w-full col-span-1">
             <mat-label>Thumbnail</mat-label>
+            <mat-icon matPrefix fontIcon="emoji_nature" />
             <input matInput [disabled]="true" value="JPG" />
           </mat-form-field>
         }

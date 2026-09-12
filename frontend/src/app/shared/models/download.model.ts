@@ -2,7 +2,7 @@ import { AudioFormats, Codecs, VideoQuality, Types, VideoFormats, AudioQuality }
 import { Nullable } from './common.model';
 
 export enum DownloadStatus {
-  TOTAL = null,
+  TOTAL = 'total',
   QUEUED = 'queued',
   RUNNING = 'running',
   DONE = 'done',
@@ -47,6 +47,8 @@ export interface DownloadModel {
   codec: Nullable<Codecs>;
   /** Manual downloads only; watchers always take the best available. */
   quality: Nullable<VideoQuality | AudioQuality>;
+  /** What the finished file really is — "1080p" or "320kbps"; null until probed. */
+  mediaQuality: Nullable<string>;
   folder: Nullable<string>;
   prefix: Nullable<string>;
   ytdlpArgs: Nullable<string>;
@@ -65,6 +67,13 @@ export interface DownloadModel {
   eta: Nullable<string>;
   totalBytes: Nullable<number>;
   filePath: Nullable<string>;
+  /**
+   * Whether the server can serve `filePath` right now. Checked on disk when
+   * the row is answered over HTTP; rows pushed over the websocket leave it
+   * out — see `hasFile()`. `filePath` is kept even when this is false, so a
+   * moved file can still be re-pointed from where it used to be.
+   */
+  fileExists?: boolean;
   avatarPath: Nullable<string>;
   thumbnailPath: Nullable<string>;
   authorUrl: Nullable<string>;

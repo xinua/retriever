@@ -6,8 +6,9 @@
   >
     @if (download()?.type === 'video') {
       <video
+        #videoPlayer
         [src]="mediaUrl()"
-        (click)="openVideo($event)"
+        (click)="togglePlay($event)"
         controls
         autoplay
         preload="metadata"
@@ -16,7 +17,7 @@
         (error)="handleError()"
       ></video>
     } @else {
-      <div class="relative w-full h-full flex items-end justify-center cursor-pointer" (click)="openVideo($event)">
+      <div class="relative w-full h-full flex items-end justify-center cursor-pointer" (click)="togglePlay($event)">
         @if (!!download()?.thumbnailPath) {
           <img [src]="download()?.thumbnailPath" alt="Poster" [class]="'w-full object-cover ' + posterClass()" />
         }
@@ -34,7 +35,7 @@
     }
   </div>
 } @else {
-  <div [class.cursor-pointer]="!fileNotFound()" (click)="openVideo($event)">
+  <div [class.cursor-pointer]="canPlay()" (click)="togglePlay($event)">
     <ng-content />
   </div>
 }

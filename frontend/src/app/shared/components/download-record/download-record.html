@@ -5,12 +5,7 @@
 @let isActive = isRunning || isQueued;
 @let hasError = isFailed && download().error;
 
-<div
-  class="p-5 rounded-xl bg-white/3 overflow-hidden transition-height duration-500"
-  [class.glass]="!isActive"
-  [class.mb-5]="index() !== paginator().limit - 1"
-  #record
->
+<div class="p-5 rounded-xl bg-white/3 overflow-hidden transition-height duration-500" [class.glass]="!isActive" #record>
   <div class="flex flex-col gap-5">
     @if (isActive) {
       <rt-progress-info [download]="download()" (cancel)="cancel.emit(download())" />
@@ -29,7 +24,7 @@
         <div
           class="flex flex-col w-full relative md:overflow-x-hidden"
           rtAppear
-          [animationName]="paginator().page === 0 ? 'rise' : 'none'"
+          [animationName]="paginator().page === 0 && paginator().limit !== 1 ? 'rise' : 'none'"
           [animationDelay]="0.75"
         >
           <div
@@ -68,7 +63,7 @@
           }
 
           @if (download().playlistTitle) {
-            <div class="text-xs text-gray-600 truncate">
+            <div class="text-xs text-gray-600 truncate lg:h-0 lg:overflow-visible">
               <mat-icon class="text-sm! h-4! w-4! align-middle">playlist_play</mat-icon>
               {{ download().playlistTitle }}
               @if (download().playlistIndex) {
@@ -82,7 +77,7 @@
       </div>
 
       <div
-        class="flex flex-col items-end gap-2 col-span-1"
+        class="flex flex-col items-center lg:items-end gap-2 col-span-1"
         [class.justify-center]="download().status === downloadStatus.RUNNING"
       >
         <div class="hidden lg:block">

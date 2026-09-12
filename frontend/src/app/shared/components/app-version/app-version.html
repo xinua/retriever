@@ -1,0 +1,19 @@
+<div
+  class="cursor-pointer relative z-1"
+  matTooltip="Cache is outdated. Please refresh the page. (Ctrl + F5)"
+  matTooltipPosition="above"
+  [matTooltipDisabled]="!cacheExpired()"
+  (click)="showReleaseNotes()"
+>
+  <div
+    class="flex items-center gap-2 rounded-full border border-gray-800 bg-black px-3 py-1 text-xs select-none"
+    [class.rainbow-outline]="cacheExpired() || isUpdateAvailable()"
+    matTooltip="Update available"
+    [matTooltipDisabled]="!isUpdateAvailable()"
+    matTooltipPosition="below"
+  >
+    <mat-icon class="h-4! w-4! text-xs! text-(--rt-accent)!" svgIcon="retriever" />
+    <span class="hidden lg:inline">retriever:</span>
+    <span>{{ version() }}</span>
+  </div>
+</div>

@@ -16,6 +16,10 @@
   margin-right: 0 !important;
 }
 
+::ng-deep .sub-flags .mat-mdc-select-panel {
+  max-height: 305px;
+}
+
 .animate-spin {
   animation: spin 1s linear infinite;
 }

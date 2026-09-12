@@ -11,6 +11,12 @@ services:
       HOST: 0.0.0.0
       DATA_DIR: /data
       DOWNLOADS_DIR: ./downloads
+      # The clock a subscription's poll hours are read against: the times a
+      # "time" subscription polls at, and the hours an interval is restricted
+      # to, are wall-clock and mean whatever this says they mean. Left unset
+      # the container is UTC, so set it to your own zone or a 09:00 poll will
+      # not happen at 09:00 for you.
+      TZ: Etc/UTC
       # Uncomment together with the `pot` service below to route YouTube
       # extraction through a proof-of-origin token provider. Left unset, the
       # POT plugin is never loaded and yt-dlp behaves exactly as before.
