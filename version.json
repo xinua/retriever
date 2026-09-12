@@ -1,0 +1,80 @@
+{
+  "version": "1.1.5",
+  "releaseDate": "2026-09-11",
+  "changelog": [
+    {
+      "version": "1.1.5",
+      "releaseDate": "2026-09-11",
+      "changelog": {
+        "bugfixes": [
+          "Fix \"Download again\" for subscriptions (ignore archieve)",
+          "Split archieve.txt. Each sub have now it's own archieve",
+          "Fix tests",
+          "Check whether a download record and file exists so poster is not displayed as a clickable element",
+          "Fix animation for 1 item per page (remove)",
+          "Fix and enhance \"Add channel\" form"
+        ],
+        "features": [
+          "Added possibility to fix file path (if file was moved/renamed)",
+          "Create menu in Subscription block ⋯",
+          "- Open widget",
+          "- Copy HA card (simple iframe with widget url)",
+          "- Copy HA automation (simple ready automation)",
+          "Add player to the subscription",
+          "- Poster now plays video/audio on click instead of redirect to video url",
+          "- Video name now redirects to video url",
+          "- Same with channel name and avatar"
+        ],
+        "improvements": [
+          "Custom audio player",
+          "\"Downloaded by subscription\" indicator in download record",
+          "Channel avatar new component, new UI",
+          "Fix mobile UI",
+          "Copy file path moved from Download Indicator to the right menu ⋯",
+          "Paginator: 1/5/10/25/100 items per page",
+          "Enhance HA widget",
+          "- Fix size in all states poster/video/audio",
+          "- Add animations",
+          "- Show poster for audio",
+          "- Replace audio player with custom",
+          "Oher UI enhancements and fixes...",
+          "Optimize building"
+        ]
+      }
+    },
+    {
+      "version": "1.1.3",
+      "releaseDate": "2026-09-07",
+      "changelog": {
+        "bugfixes": [
+          "Fix ffmpeg error with wrong posters format for youtube audio",
+          "Fix Webhook test payload and rename channelId to watcherId",
+          "Fix subscription-form toggle click"
+        ],
+        "features": [
+          "Remove startDownloaderStatusPolling",
+          "Add authorUrl, avatarPath and update thumbnailPath",
+          "Add --embed-metadata by default",
+          "Remove default audio poster",
+          "Show preloader while downloading if there is no thumbnail",
+          "Added \"Auto downloaded by subscription\" indicator to the download record"
+        ],
+        "improvements": [
+          "Inset poster to audio file from unknown sources if possible",
+          "Add player to the HA widget",
+          "Add menu to subscription-info"
+        ],
+        "other": []
+      }
+    },
+    {
+      "version": "1.1.2",
+      "releaseDate": "2026-09-01",
+      "changelog": {
+        "other": [
+          "Initial release"
+        ]
+      }
+    }
+  ]
+}
