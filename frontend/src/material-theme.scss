@@ -125,9 +125,15 @@ html {
       rt-downloads .mat-mdc-table {
         --mat-sys-outline: white;
       }
+      --mat-select-panel-background-color: #181717;
+      --mat-sys-surface-container: #181717;
+      --mat-expansion-header-description-color: #ffffff;
+      --mat-form-field-filled-container-color: rgba(255, 255, 255, 0.08);
     }
   }
 }
+
+// .mat-mdc-select-panel
 
 body {
   --mat-sys-surface: #0f0f0f;

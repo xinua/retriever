@@ -37,16 +37,8 @@ Perfect if you:
 ![Demo 2](demo/2.webp)
 ![Demo 3](demo/3.webp)
 
-<details>
-  <summary>📸 Expand more screenshots</summary>
-  <br>
-  <img src="demo/theme/static.gif" alt="Step 1" width="100%">
-  <img src="demo/theme/animations/fire.gif" alt="Step 2" width="100%">
-  <img src="demo/theme/animations/rain.gif" alt="Step 3" width="100%">
-  <img src="demo/theme/animations/snow.gif" alt="Step 4" width="100%">
-  <img src="demo/theme/animations/stars.gif" alt="Step 5" width="100%">
-  <img src="demo/theme/animations/matrix.gif" alt="Step 6" width="100%">
-</details>
+📸 Expand more screenshots  
+![Step 1](demo/theme/static.gif)![Step 2](demo/theme/animations/fire.gif)![Step 3](demo/theme/animations/rain.gif)![Step 4](demo/theme/animations/snow.gif)![Step 5](demo/theme/animations/stars.gif)![Step 6](demo/theme/animations/matrix.gif)
 
 ## ✨ Features
 
@@ -226,7 +218,14 @@ Most settings live in the UI (⚙️ in the header). These environment variables
 | `MAX_MANUAL_ITEMS` | `500`                   | Cap on how many videos one pasted channel/playlist queues |
 | `POT_BASE_URL`     | *(unset)*               | POT provider server to use — see below. Unset = disabled  |
 | `POT_PLUGIN_DIR`   | `/app/pot-plugin`       | Where the bundled POT plugin lives                        |
+| `VERSION_CHECK_ENABLED` | `true`             | Set to `false` to never look for a new release            |
+| `VERSION_CHECK_WINDOW`  | `00:00-02:00`      | UTC window the daily check picks its random time from     |
+| `VERSION_CHECK_URL`     | *(the manifest on GitHub)* | Where to read the published version from          |
 
+
+### Update check
+
+Once a day Retriever reads its published `version.json` from GitHub to see whether a newer release exists, and serves the answer from `/api/version`. The check runs at a random moment inside `VERSION_CHECK_WINDOW` — a different one per install, so every Retriever in the world does not knock at the same second — and the result is cached in the database on your `/data` volume. Restarting the container replays that schedule rather than starting a new day, so restarts never cost a request; a failed check keeps yesterday's answer and retries in an hour. Nothing is sent: it is a plain GET of a public file. Set `VERSION_CHECK_ENABLED=false` to turn it off entirely.
 
 In the **Settings** dialog you can set the downloads folder, a cookies file, global `yt-dlp` arguments, how many downloads run at once, and your webhook URL — plus update `yt-dlp` itself with one click.
 
@@ -312,13 +311,11 @@ url: http://localhost:31080/widget/1
 aspect_ratio: 50%
 ```
 
-**Don't type any of this.** Expand a subscription and open its **⋯** menu:
+**Don't type any of this.** Expand a subscription and open its **⋯** menu under poster:
 
 - **Open widget** — the page on its own, to check it
 - **HA Card** — Copy the YAML above, with this watcher's id filled in
 - **HA Automation** — Copy the automation YAML, with the id and your webhook already in place
-
-To find a **watcher id** by hand, expand the subscription and hover over the channel name.
 
 ---
 

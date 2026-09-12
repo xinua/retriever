@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DownloadInfo } from './download-info';
-import { DownloadModel, DownloadStatus, Types } from '@shared/models';
+import { DownloadModel, DownloadStatus, Types, VideoQuality } from '@shared/models';
 import { DownloadRecordMock } from '@shared/constants';
 
 describe('DownloadInfo', () => {
@@ -52,6 +52,14 @@ describe('DownloadInfo', () => {
 
     expect(cell('size')).toBe('—');
     expect(cell('codec')).toBe('—');
+  });
+
+  it('shows the probed file quality over the requested one', async () => {
+    await render({ quality: VideoQuality.BEST, mediaQuality: '1080p' });
+    expect(cell('quality')).toBe('1080p');
+
+    await render({ quality: VideoQuality.BEST, mediaQuality: null });
+    expect(cell('quality')).toBe('Best');
   });
 
   it('hides format, quality, codec and duration for thumbnails', async () => {

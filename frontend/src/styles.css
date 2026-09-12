@@ -36,8 +36,21 @@
   }
 }
 
+@keyframes cicle-once {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(180deg);
+  }
+}
+
 .animate-shrink {
   animation: shrink 0.5s ease-in-out forwards !important;
+}
+
+.animate-cicle-once {
+  animation: cicle-once 0.5s ease-in-out forwards !important;
 }
 
 .font-drop-shade {
@@ -684,4 +697,12 @@ html {
 
 .mat-mdc-form-field-required-marker::after {
   color: var(--mat-sys-primary);
+}
+
+.notifier__notification.notifier__notification--update {
+  color: white;
+  background-color: black;
+  .notifier__notification-button {
+    filter: invert(1);
+  }
 }

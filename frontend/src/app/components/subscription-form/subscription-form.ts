@@ -1,4 +1,4 @@
-import { AsyncPipe } from '@angular/common';
+import { AsyncPipe, LowerCasePipe, TitleCasePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -7,10 +7,11 @@ import {
   effect,
   inject,
   OnInit,
+  Signal,
   signal,
   viewChild,
 } from '@angular/core';
-import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import {
   FormBuilder,
   FormGroup,
@@ -32,9 +33,7 @@ import {
 } from '@angular/material/expansion';
 import { MatIcon } from '@angular/material/icon';
 import { MatError, MatFormField, MatHint, MatInput, MatLabel, MatSuffix } from '@angular/material/input';
-import { MatSelect } from '@angular/material/select';
-import { MatSlideToggle } from '@angular/material/slide-toggle';
-import { MatTimepicker, MatTimepickerInput, MatTimepickerToggle } from '@angular/material/timepicker';
+import { MatSelectChange, MatSelectModule } from '@angular/material/select';
 import { MatTooltip } from '@angular/material/tooltip';
 import { AudioFormatLabels, CodecLabels, DefaultSubscription, VideoFormatLabels } from '@shared/constants';
 import { equalJson } from '@shared/helpers';
@@ -50,8 +49,13 @@ import {
 import { HttpService, SnackbarType, StorageService } from '@shared/services';
 import { RtValidators } from '@shared/validators';
 import { NotifierService } from 'angular-notifier';
+import { NgxMaskDirective } from 'ngx-mask';
 import { catchError, combineLatest, map, Observable, of, startWith, tap } from 'rxjs';
-import { TimeFormat, TimePipe } from '../../shared/pipes/time.pipe';
+import { TimePipe } from '../../shared/pipes/time.pipe';
+import { IntervalRange } from './components/interval-range/interval-range';
+import { FlagsPipe } from './flags.pipe';
+import { POLL_TIME_OPTIONS, SUBSCRIPTION_FLAG_OPTIONS } from './subscription-form.const';
+import { SubscriptionFlagKey } from './subscription-form.model';
 
 @Component({
   selector: 'rt-subscription-form',
@@ -77,15 +81,16 @@ import { TimeFormat, TimePipe } from '../../shared/pipes/time.pipe';
     MatInput,
     MatLabel,
     MatOption,
-    MatSelect,
-    MatSlideToggle,
     ReactiveFormsModule,
     MatSuffix,
-    MatTimepickerToggle,
-    MatTimepickerInput,
-    MatTimepicker,
     MatTooltip,
     TimePipe,
+    NgxMaskDirective,
+    MatSelectModule,
+    FlagsPipe,
+    TitleCasePipe,
+    LowerCasePipe,
+    IntervalRange,
   ],
   templateUrl: './subscription-form.html',
   styleUrl: './subscription-form.css',
@@ -96,8 +101,9 @@ export class SubscriptionForm implements OnInit {
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _httpService = inject(HttpService);
   private readonly _storage = inject(StorageService);
-  private readonly _formDirective = viewChild<FormGroupDirective>(FormGroupDirective);
   private readonly _notifier = inject(NotifierService);
+
+  private readonly _formDirective = viewChild<FormGroupDirective>(FormGroupDirective);
 
   protected readonly defaultChannel = DefaultSubscription;
   globalWebhookURL = computed((): string => this._storage.settings().webhookUrl);
@@ -109,6 +115,19 @@ export class SubscriptionForm implements OnInit {
   /** Folders on disk under the downloads root, plus every subscription tag. */
   folders = this._storage.folderOptions;
 
+  /** Flags are stored on the form itself; the multi-select is just a view of those controls. */
+  private _formValue!: Signal<Partial<SubscriptionModel>>;
+  selectedOptions = computed(
+    (): SubscriptionFlagKey[] => {
+      const value = this._formValue();
+
+      return this.flags()
+        .filter((flag) => !!value?.[flag.value])
+        .map((flag) => flag.value);
+    },
+    { equal: equalJson },
+  );
+
   readonly codecs = Codecs;
   readonly types = Types;
   readonly videoFormats = VideoFormats;
@@ -117,7 +136,10 @@ export class SubscriptionForm implements OnInit {
   readonly audioFormatLabels = AudioFormatLabels;
   readonly codecLabels = CodecLabels;
   readonly pollType = PollType;
-  readonly TimeFormat = TimeFormat;
+  readonly flags = computed(() =>
+    SUBSCRIPTION_FLAG_OPTIONS.filter((flag) => (this.isEditing() ? flag.isEditing : true)),
+  );
+  readonly pollTimeOptions = POLL_TIME_OPTIONS;
   formatOptions$: Observable<VideoFormats[] | AudioFormats[]>;
   codecOptions = Object.values(this.codecs);
 
@@ -142,6 +164,7 @@ export class SubscriptionForm implements OnInit {
       }),
       notifyHA: this._fb.control(false, { nonNullable: true, validators: Validators.required }),
       webhookOverride: this._fb.control({ value: '', disabled: true }),
+      pollOnce: this._fb.control(false, { nonNullable: true }),
       prefix: this._fb.control(''),
       tag: this._fb.control(''),
       pollType: this._fb.control(PollType.INTERVAL, {
@@ -152,8 +175,13 @@ export class SubscriptionForm implements OnInit {
         nonNullable: false,
         validators: [Validators.required, Validators.min(1), Validators.max(1440)],
       }),
-      pollTime: this._fb.control(null),
+      pollTime: this._fb.control<string[]>([], { nonNullable: true }),
+      splitChapters: this._fb.control(false, { nonNullable: true, validators: Validators.required }),
+      removeSponsors: this._fb.control(false, { nonNullable: true, validators: Validators.required }),
+      intervalPeriod: this._fb.control(null),
     });
+
+    this._formValue = toSignal(this.form.valueChanges, { initialValue: this.form.getRawValue() });
 
     this.formatOptions$ = this.form.controls.type.valueChanges.pipe(
       startWith(this.form.controls.type.value),
@@ -230,6 +258,16 @@ export class SubscriptionForm implements OnInit {
       .subscribe();
   }
 
+  onOptionChange({ value }: MatSelectChange<SubscriptionFlagKey[]>) {
+    this.form.patchValue(
+      Object.fromEntries(this.flags().map((flag) => [flag.value, value.includes(flag.value)])) as Record<
+        SubscriptionFlagKey,
+        boolean
+      >,
+    );
+    this.form.updateValueAndValidity();
+  }
+
   /**
    * Control "required" validator for webhookOverride control\
    * Add/Remove validator if global webhook was added/deleted while editing/adding a channel
@@ -288,9 +326,10 @@ export class SubscriptionForm implements OnInit {
   }
 
   private _trackIsEditing() {
-    // On channel edit, patch the form with the new values
     if (this._storage.editingSubscription()) {
-      this.form.patchValue(this._storage.editingSubscription());
+      const subscription = this._storage.editingSubscription();
+
+      this.form.patchValue({ ...subscription, pollTime: subscription.pollTime ?? [] });
       this.form.addValidators(RtValidators.formChanged(this.form.value, equalJson));
     } else {
       this.form.clearValidators();

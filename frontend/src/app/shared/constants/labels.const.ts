@@ -23,6 +23,7 @@ export const AudioFormatLabels: Record<AudioFormats, string> = {
 };
 
 export const DownloadStatusLabels: Record<DownloadStatus, string> = {
+  [DownloadStatus.TOTAL]: 'Total',
   [DownloadStatus.QUEUED]: 'Queued',
   [DownloadStatus.RUNNING]: 'Downloading',
   [DownloadStatus.DONE]: 'Done',

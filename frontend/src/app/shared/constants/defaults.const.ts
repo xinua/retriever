@@ -2,6 +2,8 @@ import {
   BgType,
   Codecs,
   DownloadStatus,
+  FilterGroupModel,
+  FilterModel,
   ManualDownloadModel,
   PaginatorModel,
   SettingsModel,
@@ -34,7 +36,8 @@ export const DefaultSubscription: SubscriptionModel = {
   tag: '',
   pollType: PollType.INTERVAL,
   pollInterval: null,
-  pollTime: null,
+  pollTime: [],
+  intervalPeriod: null,
 };
 
 export const MockSubscription: SubscriptionModel = {
@@ -65,6 +68,7 @@ export const MockSubscription: SubscriptionModel = {
   totalDownloads: 0,
   createdAt: new Date('2024-01-01T10:00:00Z'),
   updatedAt: new Date('2024-06-01T12:00:00Z'),
+  intervalPeriod: null,
 };
 
 export const DefaultSettings: SettingsModel = {
@@ -105,4 +109,18 @@ export const DefaultManualForm: ManualDownloadModel = {
   splitChapters: false,
 };
 
-export const DefaultFilters: DownloadStatus[] = [];
+export const DefaultFilters: FilterModel = {
+  types: [],
+  statuses: [],
+};
+
+export const DefaultFilterGroups: readonly FilterGroupModel[] = Object.freeze([
+  {
+    name: 'types',
+    filters: Object.values(Types),
+  },
+  {
+    name: 'statuses',
+    filters: Object.values(DownloadStatus).filter((status) => status !== DownloadStatus.TOTAL),
+  },
+]);

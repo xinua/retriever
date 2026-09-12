@@ -20,8 +20,12 @@ import {
     </mat-dialog-content>
 
     <mat-dialog-actions>
-      <button matButton mat-dialog-close class="text-gray-300!" disableRipple>Cancel</button>
-      <button matButton="tonal" mat-dialog-close="true" disableRipple cdkFocusInitial>Delete</button>
+      <button matButton mat-dialog-close class="text-gray-300!" disableRipple>
+        {{ data?.cancelText || 'Cancel' }}
+      </button>
+      <button matButton="tonal" mat-dialog-close="true" disableRipple cdkFocusInitial>
+        {{ data?.actionText || 'Action' }}
+      </button>
     </mat-dialog-actions>
   `,
   styles: [

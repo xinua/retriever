@@ -1,4 +1,6 @@
 import { Observable } from 'rxjs';
+import type { Nullable } from '../models/common.model';
+import type { DownloadModel } from '../models/download.model';
 
 export function equal<T, R>(source: T, target: R): boolean {
   return Object.keys(source).every((key) =>
@@ -42,3 +44,13 @@ export const clearTextEffect = (text: string): Observable<string> => {
     }, 100);
   });
 };
+
+/**
+ * Whether a download has a file that can be played or saved. The server's
+ * on-disk answer when the row carries one; otherwise the path alone, which is
+ * right for the rows the websocket pushes — a download that just finished, or
+ * a path that was just set, has its file.
+ */
+export function hasFile(download: Nullable<DownloadModel>): boolean {
+  return download?.fileExists ?? !!download?.filePath;
+}

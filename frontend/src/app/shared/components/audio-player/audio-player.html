@@ -32,7 +32,7 @@
 
   <div class="progress-container w-full">
     <small class="w-full whitespace-nowrap d-block"
-      >{{ currentTimeValue() | time: timeFormat.SHORT }} / {{ durationValue() | time: timeFormat.SHORT }}</small
+      >{{ currentTimeValue() | time: '[H:]MM:SS' }} / {{ durationValue() | time: '[H:]MM:SS' }}</small
     >
 
     <div class="relative">
@@ -43,7 +43,7 @@
         [max]="totalDuration() || 1"
         [value]="currentTime()"
         aria-label="Seek"
-        [attr.aria-valuetext]="currentTimeValue() | time: timeFormat.SHORT"
+        [attr.aria-valuetext]="currentTimeValue() | time: '[H:]MM:SS'"
         (input)="onSeekInput($event)"
         (change)="onSeekCommit($event)"
         (pointerup)="onSeekCommit($event)"
@@ -57,6 +57,7 @@
         [speed]="isPlaying() ? 1 : 0"
         [amplitude]="size().amplitude"
         class="w-full mr-8"
+        [showPlayHead]="isPlaying()"
       />
     </div>
   </div>

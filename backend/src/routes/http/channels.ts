@@ -6,8 +6,13 @@ import {getFeedInfo} from "../../services/rss.js";
 import {YoutubeService} from "../../services/youtube.service.js";
 import {ImagesService} from "../../services/images.service.js";
 import {isSubPoster, runChannelOnce} from "../../services/worker.js";
+import {avatarName} from "../../services/avatar.js";
 import { removeArchive } from "../../services/ytdlp.js";
-import { calculateNextCheck } from "../../utils/schedule.helper.js";
+import {
+  calculateNextCheck,
+  normalizePollTimes,
+  parseIntervalPeriod
+} from "../../utils/schedule.helper.js";
 import { broadcast } from "../ws/websockets.js";
 import { getLastCheck } from "../../utils/last-check.helper.js";
 
@@ -20,6 +25,31 @@ function extractChannelIdFromRss(url: string): string | null {
   return match?.[1] ?? null;
 }
 
+/**
+ * Drops the channel's avatar, unless something else is still looking at it.
+ *
+ * `channel-<id>.jpg` is one file per YouTube channel, not per subscription
+ * (see avatar.ts): a second subscription on the same channel reads it, and so
+ * does every download row that channel produced — which outlive the
+ * subscription, since deleting one only nulls their `watcherId`. Nothing
+ * re-fetches it on their behalf, so removing it with the first subscription
+ * to go stripped the picture off the survivors for good.
+ *
+ * The count runs after the row is gone, so what it sees is exactly the
+ * readers that remain.
+ */
+async function releaseAvatar(channelId: string | null) {
+  if (!channelId) return;
+
+  const readers = await db.get<{ n: number }>(sql`
+    SELECT (SELECT COUNT(*) FROM channel WHERE "channelId" = ${channelId})
+         + (SELECT COUNT(*) FROM download WHERE "channelId" = ${channelId}) AS n
+  `);
+
+  if ((readers?.n ?? 0) > 0) return;
+
+  await ImagesService.remove(avatarName(channelId));
+}
 
 export function channelsRoutes(app: FastifyInstance) {
   // GET all
@@ -101,7 +131,7 @@ export function channelsRoutes(app: FastifyInstance) {
           description = info.description ?? null;
 
           if (info.avatar) {
-            avatarPath = await ImagesService.download(info.avatar, `channel-${channelId}.jpg`);
+            avatarPath = await ImagesService.download(info.avatar, avatarName(channelId!));
           }
         }
       } catch (e) {
@@ -132,10 +162,14 @@ export function channelsRoutes(app: FastifyInstance) {
           startFromLast: body.startFromLast ?? true,
           downloadShorts: body.downloadShorts ?? false,
           notifyHA: body.notifyHA ?? false,
+          splitChapters: body.splitChapters ?? false,
+          removeSponsors: body.removeSponsors ?? false,
 
           pollType: body.pollType ?? "interval",
           pollInterval: body.pollInterval ? +body.pollInterval : null,
-          pollTime: body.pollTime ?? null,
+          pollOnce: body.pollOnce ?? false,
+          pollTime: normalizePollTimes(body.pollTime),
+          intervalPeriod: parseIntervalPeriod(body.intervalPeriod),
 
           prefix: body.prefix ?? null,
           tag: body.tag ?? null,
@@ -182,9 +216,22 @@ export function channelsRoutes(app: FastifyInstance) {
       .from(channel)
       .where(eq(channel.id, Number(id)));
   
+    // Only the JSON columns are reshaped; the rest of the body still goes
+    // through as it is. Guarded on the key being present so a partial update
+    // does not blank a field it never mentioned.
+    const patch = { ...body };
+
+    if ("pollTime" in body) {
+      patch.pollTime = normalizePollTimes(body.pollTime);
+    }
+
+    if ("intervalPeriod" in body) {
+      patch.intervalPeriod = parseIntervalPeriod(body.intervalPeriod);
+    }
+
     const updatedChannel = {
       ...existing,
-      ...body
+      ...patch
     };
   
     const nextCheckAt = calculateNextCheck(
@@ -194,7 +241,7 @@ export function channelsRoutes(app: FastifyInstance) {
   
     await db.update(channel)
       .set({
-        ...body,
+        ...patch,
         nextCheckAt,
         updatedAt: new Date().toISOString()
       })
@@ -233,7 +280,7 @@ export function channelsRoutes(app: FastifyInstance) {
     // seen everything.
     await removeArchive(Number(id));
 
-    if (row?.channelAvatarPath) await ImagesService.remove(row.channelAvatarPath);
+    await releaseAvatar(row?.channelId ?? null);
 
     // Only the channel's own copy — a path left over from before the split
     // points at the shared cache, which the download rows still read.

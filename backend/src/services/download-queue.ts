@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { db } from "../db/index.js";
 import { channel, download, settings } from "../db/schema.js";
@@ -15,6 +15,7 @@ import * as InfoCache from "./info-cache.js";
 import * as Ffmpeg from "./ffmpeg.js";
 import * as Poster from "./poster.js";
 import * as CoverArt from "./cover-art.js";
+import * as MediaQuality from "./media-quality.js";
 import { isFfmpegFailure, isPermanent } from "./retry-policy.js";
 
 const PROGRESS_BROADCAST_MS = 1000;
@@ -133,6 +134,8 @@ export async function enqueue(req: DownloadRequest): Promise<Download | null> {
       type: req.channel.type,
       format: req.channel.format,
       codec: req.channel.codec,
+      removeSponsors: req.channel.removeSponsors,
+      splitChapters: req.channel.splitChapters,
       // Written explicitly: the column default is SQLite's "YYYY-MM-DD HH:MM:SS"
       // while retry() and every other timestamp use ISO 8601. Both orderings
       // below are text comparisons, so one row in the other format sorts wrong.
@@ -158,7 +161,7 @@ export type ManualOptions = {
   ytdlpArgs: string | null;
   clipStart: string | null;
   clipEnd: string | null;
-  removeSponsor: boolean;
+  removeSponsors: boolean;
   splitChapters: boolean;
 };
 
@@ -195,7 +198,7 @@ export async function enqueueManual(
       ytdlpArgs: options.ytdlpArgs,
       clipStart: options.clipStart,
       clipEnd: options.clipEnd,
-      removeSponsor: options.removeSponsor,
+      removeSponsors: options.removeSponsors,
       splitChapters: options.splitChapters,
       playlistId: playlist.id,
       playlistTitle: playlist.title,
@@ -240,7 +243,7 @@ function optionsFromRow(row: Download): ytdlp.JobOptions {
     ytdlpArgs: row.ytdlpArgs,
     clipStart: row.clipStart,
     clipEnd: row.clipEnd,
-    removeSponsor: !!row.removeSponsor,
+    removeSponsors: !!row.removeSponsors,
     splitChapters: !!row.splitChapters,
     // The user asked for this file by name; "already in the archive" must not
     // silently turn that into a no-op.
@@ -456,7 +459,9 @@ async function start(id: number) {
         return;
       }
 
-      await finish(id, "done", { filePath: output, progress: 100 });
+      const mediaQuality = await MediaQuality.probe(output, opts.type);
+
+      await finish(id, "done", { filePath: output, progress: 100, mediaQuality });
       await onSuccess(ch, current);
 
       // Cosmetic and slower than the notification deserves to wait for.
@@ -551,7 +556,13 @@ async function failFfmpeg(
 
   await finish(id, "failed", {
     error: message,
-    ...(rescued ? { filePath: rescued, progress: 100 } : {})
+    ...(rescued
+      ? {
+          filePath: rescued,
+          progress: 100,
+          mediaQuality: await MediaQuality.probe(rescued, opts.type)
+        }
+      : {})
   });
 
   broadcast("notification", {
@@ -939,7 +950,12 @@ function formatEta(seconds: number | null): string | null {
 async function finish(
   id: number,
   status: "done" | "failed" | "canceled",
-  patch: { error?: string | null; filePath?: string | null; progress?: number }
+  patch: {
+    error?: string | null;
+    filePath?: string | null;
+    progress?: number;
+    mediaQuality?: string | null;
+  }
 ) {
   // Terminal either way, so the cached extraction has no further use.
   void InfoCache.drop(id);
@@ -953,7 +969,8 @@ async function finish(
       eta: null,
       ...(patch.error !== undefined ? { error: patch.error } : {}),
       ...(patch.filePath !== undefined ? { filePath: patch.filePath } : {}),
-      ...(patch.progress !== undefined ? { progress: patch.progress } : {})
+      ...(patch.progress !== undefined ? { progress: patch.progress } : {}),
+      ...(patch.mediaQuality !== undefined ? { mediaQuality: patch.mediaQuality } : {})
     })
     .where(eq(download.id, id));
 
@@ -1044,6 +1061,7 @@ async function requeueTransient(
       eta: null,
       error: null,
       filePath: null,
+      mediaQuality: null,
       startedAt: null
     })
     .where(eq(download.id, id));
@@ -1068,6 +1086,7 @@ export async function retry(id: number): Promise<Download | null> {
       eta: null,
       error: null,
       filePath: null,
+      mediaQuality: null,
       startedAt: null,
       finishedAt: null,
       createdAt: new Date().toISOString()
@@ -1088,4 +1107,47 @@ export function resume() {
   // Before anything spawns, so a running job's scratch space is never in
   // scope, and its own row is still "queued" if the crash left it that way.
   void sweepAbandonedTemp().finally(() => pump());
+
+  void backfillMediaQuality();
+}
+
+/**
+ * Probes the finished downloads that predate the mediaQuality column, one at
+ * a time so a long history does not start a burst of ffprobes at boot. Rows
+ * whose file has gone are skipped without a probe, and simply stay unlabelled.
+ */
+async function backfillMediaQuality(): Promise<void> {
+  const rows = await db
+    .select({ id: download.id, filePath: download.filePath, type: download.type })
+    .from(download)
+    .where(
+      and(
+        eq(download.status, "done"),
+        isNull(download.mediaQuality),
+        isNotNull(download.filePath),
+        inArray(download.type, ["video", "audio"])
+      )
+    );
+
+  let labelled = 0;
+
+  for (const row of rows) {
+    const mediaQuality = await MediaQuality.probe(row.filePath, row.type);
+
+    if (!mediaQuality) continue;
+
+    // Only if nothing re-queued the row while the probe ran.
+    const [updated] = await db
+      .update(download)
+      .set({ mediaQuality })
+      .where(and(eq(download.id, row.id), eq(download.status, "done")))
+      .returning({ id: download.id });
+
+    if (!updated) continue;
+
+    labelled += 1;
+    await emit(row.id);
+  }
+
+  if (labelled) console.log(`media quality: labelled ${labelled} existing downloads`);
 }

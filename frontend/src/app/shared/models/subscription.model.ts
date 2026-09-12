@@ -53,6 +53,17 @@ export enum AudioQuality {
   LQ = '128kbps',
 }
 
+export interface IntervalPeriodModel {
+  start: Nullable<Date>;
+  end: Nullable<Date>;
+}
+
+/** Hours of the day (0-24) the subscription is polled between. `null` — and the full span — mean all day. */
+export interface IntervalRangeModel {
+  start: number;
+  end: number;
+}
+
 export interface SubscriptionModel {
   id: Nullable<number>;
   channelId: string;
@@ -66,14 +77,18 @@ export interface SubscriptionModel {
   color: Nullable<string>;
   format: VideoFormats | AudioFormats;
   codec: Codecs;
+  splitChapters?: Nullable<boolean>;
+  removeSponsors?: Nullable<boolean>;
   ytdlpArgs: Nullable<string>;
   enabled?: boolean;
   startFromLast: boolean;
   downloadShorts: boolean;
   notifyHA: boolean;
+  intervalPeriod: Nullable<IntervalRangeModel>;
   pollType: PollType;
   pollInterval: Nullable<number>;
-  pollTime: Nullable<string>;
+  pollTime: Nullable<string[]>;
+  pollOnce?: Nullable<boolean>;
   prefix: Nullable<string>;
   tag: Nullable<string>;
   webhookOverride: Nullable<string>;
@@ -106,7 +121,11 @@ export interface ChannelFormModel {
   tag: FormControl<SubscriptionModel['tag']>;
   pollType: FormControl<SubscriptionModel['pollType']>;
   pollInterval: FormControl<SubscriptionModel['pollInterval']>;
-  pollTime: FormControl<SubscriptionModel['pollTime']>;
+  pollTime: FormControl<string[]>;
+  splitChapters: FormControl<SubscriptionModel['splitChapters']>;
+  removeSponsors: FormControl<SubscriptionModel['removeSponsors']>;
+  pollOnce: FormControl<SubscriptionModel['pollOnce']>;
+  intervalPeriod: FormControl<SubscriptionModel['intervalPeriod']>;
 }
 
 export type NextCheckModel = {

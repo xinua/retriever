@@ -1,3 +1,7 @@
+::ng-deep .mat-mdc-menu-content {
+  padding-top: 0 !important;
+}
+
 ::ng-deep .file-name .mat-mdc-form-field-subscript-wrapper.mat-mdc-form-field-bottom-align {
   display: none !important;
 }

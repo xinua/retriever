@@ -83,6 +83,13 @@ export async function binary(): Promise<string> {
   return status_.location ? path.join(status_.location, "ffmpeg") : "ffmpeg";
 }
 
+/** The ffprobe next to `binary()` — the probe only accepts a directory holding both. */
+export async function probeBinary(): Promise<string> {
+  const status_ = known() ?? (await status());
+
+  return status_.location ? path.join(status_.location, "ffprobe") : "ffprobe";
+}
+
 async function run(): Promise<FfmpegStatus> {
   const dirs = candidateDirs();
 

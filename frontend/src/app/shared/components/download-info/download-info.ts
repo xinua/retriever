@@ -1,7 +1,7 @@
 import { Component, input } from '@angular/core';
 import { DownloadModel } from '../../models/download.model';
 import { MatTableModule } from '@angular/material/table';
-import { DownloadStatus, SizePipe, TimeFormat, TimePipe } from '../..';
+import { DownloadStatus, SizePipe, TimePipe } from '../..';
 import { DatePipe, TitleCasePipe } from '@angular/common';
 
 @Component({
@@ -13,5 +13,4 @@ import { DatePipe, TitleCasePipe } from '@angular/common';
 export class DownloadInfo {
   download = input.required<DownloadModel>();
   readonly downloadStatus = DownloadStatus;
-  readonly timeFormat = TimeFormat;
 }

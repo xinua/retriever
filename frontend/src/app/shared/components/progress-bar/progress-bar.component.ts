@@ -20,12 +20,15 @@ const round = (n: number) => Math.round(n * 1000) / 1000;
  * Material 3 Expressive "wavy" linear progress indicator.
  *
  * The active indicator is a travelling wave, separated from the straight inactive track by a
- * gap, with a stop indicator at the end of the track. Colors can be themed from the outside:
+ * gap, with a stop indicator at the end of the track. With `showPlayHead` a vertical playhead
+ * is drawn in that gap, marking the end of the wave. Colors can be themed from the outside:
  *
  * ```css
  * rt-progress-bar {
  *   --rt-progress-active-color: var(--mat-sys-tertiary);
  *   --rt-progress-track-color: #333;
+ *   --rt-progress-play-head-color: #fff;
+ *   --rt-progress-play-head-width: 2px;
  * }
  * ```
  */
@@ -59,6 +62,9 @@ const round = (n: number) => Math.round(n * 1000) / 1000;
         <div class="inactive" [style.left]="inactiveStart()"></div>
         <div class="stop"></div>
         <div class="layer active" [style.clip-path]="activeClip()"><ng-container [ngTemplateOutlet]="wave" /></div>
+        @if (showPlayHead()) {
+          <div class="play-head" [style.left]="playHeadStart()"></div>
+        }
       }
     </div>
   `,
@@ -66,6 +72,8 @@ const round = (n: number) => Math.round(n * 1000) / 1000;
     :host {
       --rt-progress-active-color: var(--mat-sys-primary, #22c55e);
       --rt-progress-track-color: var(--mat-sys-secondary-container, #4b5563);
+      --rt-progress-play-head-color: var(--rt-progress-active-color);
+      --rt-progress-play-head-width: var(--rt-thickness);
       --rt-progress-gap: 4px;
 
       display: block;
@@ -133,6 +141,21 @@ const round = (n: number) => Math.round(n * 1000) / 1000;
       transform: translateY(-50%);
     }
 
+    /*
+     * Vertical marker sitting in the gap at the end of the wave. Its position is clamped so the
+     * marker stays inside the track once the progress reaches 100%.
+     */
+    .play-head {
+      position: absolute;
+      top: 50%;
+      width: var(--rt-progress-play-head-width);
+      height: 200%;
+      border-radius: 999px;
+      background: var(--rt-progress-play-head-color);
+      transform: translate(-50%, -50%);
+      transition: left 0.25s ease-in-out;
+    }
+
     .indeterminate-a {
       animation: rt-indeterminate-a 2s cubic-bezier(0.4, 0, 0.2, 1) infinite backwards;
     }
@@ -187,6 +210,7 @@ const round = (n: number) => Math.round(n * 1000) / 1000;
 
       .active,
       .inactive,
+      .play-head,
       .amplitude {
         transition: none;
       }
@@ -196,6 +220,9 @@ const round = (n: number) => Math.round(n * 1000) / 1000;
 export class ProgressBarComponent {
   /** Progress in percent, 0-100. Ignored while `indeterminate` is set. */
   value = input<number>(0);
+
+  /** Draw a vertical playhead at the end of the wave. Ignored while `indeterminate` is set. */
+  showPlayHead = input<boolean>(false);
 
   /** Show the looping indeterminate animation instead of `value`. */
   indeterminate = input<boolean>(false);
@@ -231,6 +258,16 @@ export class ProgressBarComponent {
   protected readonly activeClip = computed(() => `inset(0 ${round(100 - this.progress())}% 0 0)`);
 
   protected readonly inactiveStart = computed(() => `calc(${round(this.progress())}% + var(--rt-progress-gap))`);
+
+  /**
+   * Centre of the playhead: the middle of the gap that separates the wave from the inactive
+   * track, pulled back at the very end so the marker never hangs off the track.
+   */
+  protected readonly playHeadStart = computed(
+    () =>
+      `min(calc(${round(this.progress())}% + var(--rt-progress-gap) / 2),` +
+      ` calc(100% - var(--rt-progress-play-head-width) / 2))`,
+  );
 
   /**
    * Vertical scale applied to the wave, so it can flatten out at both ends of the track.

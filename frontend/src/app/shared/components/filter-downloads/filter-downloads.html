@@ -1,0 +1,30 @@
+<button
+  mat-icon-button
+  [class]="hasActiveFilters() ? 'text-(--rt-accent)!' : 'text-white!'"
+  [matMenuTriggerFor]="filterMenu"
+  aria-label="Download filters"
+>
+  <mat-icon [fontIcon]="hasActiveFilters() ? 'filter_alt' : 'filter_alt_off'" />
+</button>
+
+<mat-menu #filterMenu>
+  @for (group of filterGroups(); track group) {
+    <button mat-menu-item [matMenuTriggerFor]="index">{{ group.name | titlecase }}</button>
+
+    <mat-menu #index>
+      @for (filter of group.filters; track filter) {
+        <button
+          mat-menu-item
+          [value]="filter"
+          (click)="filterDownloads({ group: group.name, filter: filter }); $event.stopPropagation()"
+        >
+          @let isActive = filter | isActiveFilter: filters();
+          <span class="flex items-center justify-between gap-8">
+            {{ filter | titlecase }}
+            <mat-icon [fontIcon]="isActive ? 'check' : ''" />
+          </span>
+        </button>
+      }
+    </mat-menu>
+  }
+</mat-menu>

@@ -2,54 +2,38 @@
 
 <section class="lg:px-8 mt-10 rounded-lg fade-in" rtBg>
   <mat-card class="bg-gray-900/60 border border-gray-800 shadow-none relative">
-    <mat-card-header class="flex flex-col lg:flex-row lg:items-end! justify-between! overflow-hidden relative">
+    <mat-card-header class="flex flex-col lg:flex-row lg:items-center! justify-between! overflow-hidden relative pb-4!">
       <mat-card-title>Downloads</mat-card-title>
 
-      @if (downloadInfo?.total > 1) {
-        <mat-card-subtitle class="my-2!">
-          @for (status of statuses; track status) {
-            @let amount = downloadInfo?.[status.name];
-
-            @if (amount > 0) {
-              <rt-badge
-                [badgeClass]="status.class + ' ' + (filters()[0] === status.value ? 'scale-110' : '')"
-                [isClickable]="true"
-                (click)="filter(status.value)"
-              >
-                {{ amount }} {{ status.label }}
-              </rt-badge>
-            }
-          }
-        </mat-card-subtitle>
-      }
-
-      <div class="flex items-center gap-3 justify-end lg:justify-start absolute top-5 right-5 lg:static">
-        @if (downloadInfo?.total > paginator().limit) {
-          <div class="search relative min-w-10 hidden lg:block">
-            <div #searchFieldContainer class="search-field-container" [class.show]="showSearch()">
-              <mat-form-field appearance="outline" class="search-downloads pr-4">
-                <mat-label>Search</mat-label>
-                <input
-                  matInput
-                  [maxLength]="30"
-                  autoFocus
-                  [formControl]="searchControl"
-                  (focusout)="!searchControl.value ? showSearch.set(false) : null"
-                  #searchField
-                />
-              </mat-form-field>
-            </div>
-
-            <mat-icon class="cursor-pointer relative z-1" (click)="searchField.focus(); showSearch.set(true)"
-              >search</mat-icon
-            >
+      <div class="flex items-center gap-3 justify-end lg:justify-start absolute top-2 right-3 lg:static">
+        <div class="search relative min-w-10 hidden lg:block">
+          <div #searchFieldContainer class="search-field-container" [class.show]="showSearch()">
+            <mat-form-field appearance="outline" class="search-downloads pr-4">
+              <mat-label>Search</mat-label>
+              <input
+                matInput
+                [maxLength]="30"
+                autoFocus
+                [formControl]="searchControl"
+                (focusout)="!searchControl.value ? showSearch.set(false) : null"
+                #searchField
+              />
+            </mat-form-field>
           </div>
-        }
+
+          <button mat-icon-button (click)="searchField.focus(); showSearch.set(true)" class="text-white!">
+            <mat-icon class="cursor-pointer relative z-1">search</mat-icon>
+          </button>
+        </div>
+
+        <div class="">
+          <rt-filter-downloads (startFiltering)="filterDownloads($event)" />
+        </div>
 
         @if (downloadInfo?.done > 0) {
           <button
             mat-stroked-button
-            class="border-transparent! bg-[#0f0f0f]! h-14! hidden! lg:flex!"
+            class="border-transparent! bg-[#0f0f0f]! hidden! lg:flex!"
             (click)="clearFinished()"
           >
             <mat-icon class="text-base!">playlist_remove</mat-icon>
@@ -65,7 +49,7 @@
 
     <mat-card-content class="mt-2 pb-0!">
       @if (downloads().length || isAnimationInProgress()) {
-        <div class="flex flex-col overflow-hidden" #downloadsContainer>
+        <div class="flex flex-col gap-5 overflow-hidden" #downloadsContainer>
           @for (download of downloads(); track trackById($index, download)) {
             <rt-download-record
               [download]="download"
@@ -77,25 +61,40 @@
               (saveAs)="saveAs($event)"
               (copyFilePath)="copyFilePath($event)"
               rtAppear
-              [animationName]="paginator().page === 0 ? ($index % 2 === 0 ? 'move-left' : 'move-right') : 'reveal'"
+              [animationName]="
+                paginator().page === 0 && paginator().limit !== 1
+                  ? $index % 2 === 0
+                    ? 'move-left'
+                    : 'move-right'
+                  : 'reveal'
+              "
             />
           }
         </div>
 
         @defer (when downloads().length > 0 || isAnimationInProgress()) {
-          <mat-paginator
-            #paginatorElement
-            [length]="paginator().total"
-            [pageSize]="paginator().limit"
-            [pageSizeOptions]="[1, 5, 10, 25, 100]"
-            pageSize="5"
-            [pageIndex]="paginator().page"
-            [showFirstLastButtons]="true"
-            (page)="onPageChange($event)"
-            aria-label="Select page"
-            class="mt-4 bg-transparent!"
-          >
-          </mat-paginator>
+          <div class="flex justify-between items-center flex-col md:flex-row">
+            <div
+              class="flex items-end gap-4 text-xs font-calculator font-bold whitespace-nowrap mx-auto md:mx-0 my-4 md:my-0"
+            >
+              <span>Total:{{ downloadInfo?.total || 0 }}</span>
+              <span class="text-green-500">Completed:{{ downloadInfo?.done || 0 }}</span>
+              <span class="text-red-500">Failed:{{ downloadInfo?.failed || 0 }}</span>
+            </div>
+
+            <mat-paginator
+              #paginatorElement
+              [length]="paginator().total"
+              [pageSize]="paginator().limit"
+              [pageSizeOptions]="[1, 5, 10, 25, 100]"
+              pageSize="5"
+              [pageIndex]="paginator().page"
+              [showFirstLastButtons]="true"
+              (page)="onPageChange($event)"
+              aria-label="Select page"
+              class="bg-transparent!"
+            />
+          </div>
         }
       } @else {
         <rt-no-data

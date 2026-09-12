@@ -16,6 +16,7 @@ export const DownloadRecordMock: DownloadModel = {
   format: VideoFormats.MP4,
   codec: Codecs.H264,
   quality: VideoQuality.BEST,
+  mediaQuality: null,
   folder: null,
   prefix: '',
   ytdlpArgs: '',

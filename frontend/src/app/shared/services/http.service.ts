@@ -1,26 +1,28 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { catchError, map, Observable, of, tap } from 'rxjs';
+import { catchError, EMPTY, Observable, tap } from 'rxjs';
+import { SettingsModel } from '../../shared';
 import { webhookExamplePayload } from '../components/webhook-snackbar/webhook-snackbar.constants';
 import { DefaultSettings, DefaultUiConfig } from '../constants';
+import { silent } from '../interceptors/error.interceptor';
 import {
-  FoldersModel,
-  SubscriptionModel,
   DownloadInfoModel,
   DownloadModel,
   DownloadsPageModel,
-  DownloadStatus,
+  FilterModel,
+  FoldersModel,
   ManualDownloadRequest,
   ManualDownloadResult,
+  Nullable,
   NextCheckModel,
   PotStatusModel,
+  SubscriptionModel,
   UiConfig,
+  VersionModel,
   YtdlpStatusModel,
   YtdlpUpdateModel,
 } from '../models';
-import { silent } from '../interceptors/error.interceptor';
 import { StorageService } from './storage.service';
-import { SettingsModel } from '../../shared';
 
 @Injectable({
   providedIn: 'root',
@@ -28,6 +30,14 @@ import { SettingsModel } from '../../shared';
 export class HttpService {
   private readonly _http = inject(HttpClient);
   private readonly _storage = inject(StorageService);
+
+  /**
+   * Completes without emitting when the request fails: the version check is a
+   * nice-to-have, so there is nothing to show, nothing to throw and no toast.
+   */
+  checkVersion(): Observable<VersionModel> {
+    return this._http.get<VersionModel>('/api/version', { context: silent() }).pipe(catchError(() => EMPTY));
+  }
 
   getError(): Observable<void> {
     return this._http.get<void>('/error').pipe(
@@ -126,74 +136,33 @@ export class HttpService {
     return this._http.post<YtdlpUpdateModel>('/api/ytdlp/update', {});
   }
 
-  /**
-   * One page of history. Paging is server side — the table grows without
-   * bound, so the page the list shows is the only part worth transferring.
-   * The rows land in storage; the envelope is returned so the caller can size
-   * its paginator from `total`/`pages`.
-   */
-  getDownloads(page = 1, limit = 50, statuses: DownloadStatus[] = []): Observable<DownloadsPageModel> {
-    // A caller with no filter selected passes [null]; sending `statuses=null`
-    // would be a value the server has to recognise as junk, so drop the
-    // parameter entirely instead.
-    const wanted = statuses.filter(Boolean).join(',');
-    const filter = wanted ? `&statuses=${encodeURIComponent(wanted)}` : '';
+  getDownloads(page = 1, limit = 50, filters: FilterModel, name = ''): Observable<DownloadsPageModel> {
+    let params = new HttpParams().set('page', page).set('limit', limit);
 
-    return this._http.get<DownloadsPageModel>(`/api/downloads?page=${page}&limit=${limit}${filter}`).pipe(
+    for (const [group, values] of Object.entries(filters)) {
+      if (values?.length) params = params.set(group, values.join(','));
+    }
+
+    if (name) params = params.set('name', name);
+
+    return this._http.get<DownloadsPageModel>('/api/downloads', { params }).pipe(
       tap((result) => this._storage.downloads.set(result.items)),
       catchError(async () => ({ items: [], total: 0, page, pages: 1, limit })),
     );
   }
 
   /**
-   * Checks whether the last video of a subscription still has a file on disk.
-   *
-   * A HEAD: the answer is the status code, so nothing is transferred but
-   * headers. Any failure — 404 for a subscription that has downloaded nothing,
-   * 410 for a file deleted outside the app — is the "no" half of the answer,
-   * which is why it is mapped to `false` rather than left to error, and why
-   * the request is marked silent so the interceptor does not announce it.
-   *
-   * `statuses` has to match what the caller will then fetch, or the row this
-   * answers for is not the row that gets played.
-   *
-   * @param id - The id of the subscription.
-   * @param statuses - Which downloads count as the last video.
-   * @returns An observable that emits a boolean indicating if the file exists.
+   * The download behind a watcher's last video — the one the card names and
+   * pictures — optionally narrowed to some statuses. `null` when there is no
+   * such row: the last video failed, or is still queued.
    */
-  checkSubscriptionFile(id: number, statuses: DownloadStatus[] = []): Observable<boolean> {
-    const wanted = statuses.filter(Boolean).join(',');
-    const filter = wanted ? `?statuses=${encodeURIComponent(wanted)}` : '';
+  getDownloadByWatcher(watcherId: number, filters: FilterModel): Observable<Nullable<DownloadModel>> {
+    const wanted = Object.entries(filters).filter(([, value]) => value?.length);
+    const filter = !!wanted.length
+      ? `${wanted.map(([key, value]) => `${key}=${encodeURIComponent(value.join(','))}`).join('&')}`
+      : '';
 
-    return this._exists(`/api/downloads/subscription/${id}/exists${filter}`);
-  }
-
-  /**
-   * Checks if a file exists.
-   * @param id - The id of the download.
-   * @returns An observable that emits a boolean indicating if the file exists.
-   */
-  checkDownloadFile(id: number): Observable<boolean> {
-    return this._exists(`/api/downloads/download/${id}/exists`);
-  }
-
-  /** Shared shape of the two probes above: 2xx is yes, any error is no. */
-  private _exists(url: string): Observable<boolean> {
-    return this._http.head(url, { context: silent(), observe: 'response' }).pipe(
-      map(() => true),
-      catchError(() => of(false)),
-    );
-  }
-
-  /**
-   * The newest download a watcher produced, optionally narrowed to some
-   * statuses. 404 when the watcher has none, so callers should expect an error.
-   */
-  getDownloadByWatcher(watcherId: number, statuses: DownloadStatus[] = []): Observable<DownloadModel> {
-    const wanted = statuses.filter(Boolean).join(',');
-    const filter = wanted ? `?statuses=${encodeURIComponent(wanted)}` : '';
-
-    return this._http.get<DownloadModel>(`/api/downloads/by-watcher/${watcherId}${filter}`);
+    return this._http.get<Nullable<DownloadModel>>(`/api/downloads/by-watcher/${watcherId}?${filter}`);
   }
 
   getDownloadsInfo(): Observable<DownloadInfoModel> {
@@ -206,13 +175,6 @@ export class HttpService {
    */
   createDownload(request: ManualDownloadRequest): Observable<ManualDownloadResult> {
     return this._http.post<ManualDownloadResult>('/api/downloads', request);
-  }
-
-  searchDownloads(query: string, limit = 5, page = 1): Observable<DownloadsPageModel> {
-    return this._http.get<DownloadsPageModel>(`/api/downloads/search?name=${query}&page=${page}&limit=${limit}`).pipe(
-      tap((result) => this._storage.downloads.set(result.items)),
-      catchError(async () => ({ items: [], total: 0, page: 1, pages: 1, limit: 50 })),
-    );
   }
 
   /**

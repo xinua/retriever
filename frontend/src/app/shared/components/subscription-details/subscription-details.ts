@@ -7,7 +7,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { Codecs, PollType, SubscriptionModel, Types } from '@shared/models';
 import { AudioFormatLabels, CodecLabels, VideoFormatLabels } from '../../constants/labels.const';
 import { DayPipe } from '../../pipes/day.pipe';
-import { TimeFormat, TimePipe } from '../../pipes/time.pipe';
+import { TimePipe } from '../../pipes/time.pipe';
 import { StorageService } from '../../services/storage.service';
 import { RtSteamCard } from '../steam-card/steam-card';
 import { HA_AUTOMATION_CODE, WIDGET_CODE } from '../../../components/widget-page/widget.constants';
@@ -46,7 +46,6 @@ export class SubscriptionDetails {
   readonly codecLabels = CodecLabels;
   readonly videoFormatLabels = VideoFormatLabels;
   readonly audioFormatLabels = AudioFormatLabels;
-  readonly TimeFormat = TimeFormat;
 
   readonly settings = this._storage.settings;
 

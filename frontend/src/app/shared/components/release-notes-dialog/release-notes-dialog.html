@@ -1,0 +1,59 @@
+@let isOutdated = data.current !== data.latest;
+
+<mat-card class="px-4 py-2 lg:px-8 lg:py-4">
+  <mat-card-header class="font-calculator! relative">
+    <button mat-icon-button (click)="dialogRef.close()" class="absolute! top-0 -right-4">
+      <mat-icon class="text-white!">close</mat-icon>
+    </button>
+
+    <mat-card-title class="text-2xl!">Release Notes</mat-card-title>
+
+    <mat-card-subtitle class="pb-2">
+      Latest version {{ data.latest }}
+      <small [class]="isOutdated ? 'text-red-500' : 'text-green-500'">
+        ({{ isOutdated ? 'Update available' : 'Up to date' }})
+      </small>
+    </mat-card-subtitle>
+  </mat-card-header>
+
+  <mat-card-content class="max-h-[80vh] overflow-y-auto">
+    @if (!!latestChangelog()) {
+      @for (type of changeTypes(); track $index) {
+        <h3 class="text-lg font-medium mt-4">{{ type | titlecase }}</h3>
+        <ul>
+          @for (change of latestChangelog()?.[type]; track $index) {
+            <li [class.sub-item]="change | listItem: true">
+              {{ change | listItem }}
+            </li>
+          }
+        </ul>
+      }
+    }
+
+    @if (latestChangelog()?.images?.length > 0) {
+      <div class="grid grid-cols-1 gap-4 mt-4">
+        @for (image of latestChangelog()?.images; track $index) {
+          <img [src]="image" alt="Image" class="w-full h-auto col-span-1" loading="lazy" />
+        }
+      </div>
+    }
+  </mat-card-content>
+
+  <mat-card-footer [class]="'pt-4! flex items-center ' + (isOutdated ? 'justify-between' : 'justify-end')">
+    @if (isOutdated) {
+      <div class="latest flex flex-col">
+        <p>Latest version: {{ data.latest }}</p>
+        <p>
+          <small>Released on {{ data.releaseDate | date: 'MMM d, yyyy' }}</small>
+        </p>
+      </div>
+    }
+
+    <div class="current flex flex-col">
+      <p>Current version: {{ data.current }}</p>
+      <p>
+        <small>Released on {{ currentVersionInfo().releaseDate | date: 'MMM d, yyyy' }}</small>
+      </p>
+    </div>
+  </mat-card-footer>
+</mat-card>

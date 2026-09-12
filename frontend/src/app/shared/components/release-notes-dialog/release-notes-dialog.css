@@ -1,0 +1,15 @@
+ul {
+  padding-left: 1rem;
+
+  li {
+    list-style: '— ';
+    margin-left: 1rem;
+    line-height: 1.7;
+    font-size: 1rem;
+  }
+
+  .sub-item {
+    list-style: circle;
+    margin-left: 2rem;
+  }
+}

@@ -13,3 +13,6 @@ export * from './player/player';
 export * from './audio-player/audio-player';
 export * from './download-controls/download-controls';
 export * from './status-indicator/status-indicator';
+export * from './app-version/app-version';
+export * from './release-notes-dialog/release-notes-dialog';
+export * from './filter-downloads/filter-downloads';

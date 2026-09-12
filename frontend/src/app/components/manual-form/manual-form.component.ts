@@ -45,6 +45,7 @@ import { catchError, filter, from, map, Observable, of, skip, tap } from 'rxjs';
 import { finalize, startWith, take } from 'rxjs/operators';
 import { CODEC_ICONS, FORMAT_ICONS, QUALITY_ICONS, TYPE_ICONS } from './manual-form.constants';
 import { DefaultManualForm } from '@shared/constants';
+import { MatButtonModule } from '@angular/material/button';
 
 @Component({
   selector: 'rt-manual-form',
@@ -72,6 +73,7 @@ import { DefaultManualForm } from '@shared/constants';
     MatExpansionPanelTitle,
     MatAutocompleteModule,
     MatCheckbox,
+    MatButtonModule,
   ],
 })
 export class ManualFormComponent implements OnInit, AfterViewInit {
@@ -143,6 +145,14 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
     this._trackTypeChange().subscribe((type) => this._syncFormats(type));
   }
 
+  clearUrl(): void {
+    this.form.controls.url.setValue('', { emitEvent: false });
+    this.form.controls.url.enable();
+    this.form.markAsPristine();
+    this.form.markAsUntouched();
+    this.form.updateValueAndValidity();
+  }
+
   trackFormChanges() {
     this.form.valueChanges
       .pipe(
@@ -159,6 +169,7 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
     if (this.isPending()) return;
 
     this.isSubmitted.set(true);
+    this.form.controls.url.disable();
 
     if (this.form.controls.url.value.trim() === '' && this._storage.uiConfig().autoPaste) {
       from(navigator.clipboard.readText())
@@ -181,7 +192,10 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
       .createDownload(this._toRequest())
       .pipe(
         takeUntilDestroyed(this._destroyRef),
-        finalize(() => this.isPending.set(false)),
+        finalize(() => {
+          this.isPending.set(false);
+          this.form.controls.url.enable();
+        }),
       )
       .subscribe({
         next: (result) => {

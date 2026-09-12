@@ -55,6 +55,38 @@ export const uiConfig = sqliteTable("ui_config", {
     .default(sql`(datetime('now'))`)
 });
 
+/**
+ * Singleton, like `settings`. Holds the last answer from the published
+ * version manifest plus the instant the next check is due, so the schedule
+ * survives a restart: the container comes back up, reads `nextCheckAt`, and
+ * waits instead of asking GitHub again. See services/version-check.ts.
+ */
+export const versionCheck = sqliteTable("version_check", {
+  id: integer("id").primaryKey().default(1),
+
+  latestVersion: text("latestVersion"),
+  releaseDate: text("releaseDate"),
+
+  // The manifest verbatim, so the changelog is served without the schema
+  // having to know its shape.
+  payload: text("payload"),
+
+  // Last successful fetch; `lastAttemptAt` also moves on a failed one.
+  checkedAt: text("checkedAt"),
+  lastAttemptAt: text("lastAttemptAt"),
+  lastError: text("lastError"),
+
+  nextCheckAt: text("nextCheckAt"),
+
+  createdAt: text("createdAt")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+
+  updatedAt: text("updatedAt")
+    .notNull()
+    .default(sql`(datetime('now'))`)
+});
+
 export const channelGroup = sqliteTable("channel_group", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull().unique(),
@@ -104,9 +136,45 @@ export const channel = sqliteTable("channel", {
     .notNull()
     .default(false),
 
+  splitChapters: integer("splitChapters", { mode: "boolean" })
+    .notNull()
+    .default(false),
+
+  removeSponsors: integer("removeSponsors", { mode: "boolean" })
+    .notNull()
+    .default(false),
+
   pollType: text("pollType").notNull().default("interval"),
   pollInterval: integer("pollInterval"),
-  pollTime: text("pollTime"),
+
+  /**
+   * "Poll once a day": after the subscription captures a video, it is held
+   * until the next day rather than polled again - the schedule skips ahead to
+   * tomorrow's first slot. `lastCaptureAt` is what "captured" means here, so
+   * the hold survives a restart and is decided the same way wherever it is
+   * read - see schedule.helper.ts.
+   */
+  pollOnce: integer("pollOnce", { mode: "boolean" })
+    .notNull()
+    .default(false),
+
+  /**
+   * "time" polling: the wall-clock hours to poll at, as `["09:00", "18:00"]`.
+   * JSON rather than a child table because it is only ever read and written
+   * whole, alongside the row. Hours are read against the server's local
+   * clock, so `TZ` decides what "09:00" means - see schedule.helper.ts.
+   */
+  pollTime: text("pollTime", { mode: "json" }).$type<string[]>(),
+
+  /**
+   * "interval" polling: the hours of the day the subscription is polled
+   * between, as `{ "start": 9, "end": 18 }`. Null - and the full 0-24 span,
+   * which the client sends as null - place no limit.
+   */
+  intervalPeriod: text("intervalPeriod", { mode: "json" }).$type<{
+    start: number;
+    end: number;
+  }>(),
 
   prefix: text("prefix"),
   tag: text("tag"),
@@ -158,11 +226,18 @@ export const download = sqliteTable("download", {
   source: text("source").notNull().default("watcher"),
 
   // Snapshot of the channel's settings at queue time, so editing the channel
-  // later does not rewrite the history of what was already downloaded.
+  // later does not rewrite the history of what was already downloaded. The
+  // two flags below are part of that snapshot for a watcher row, and the
+  // request's own choice for a manual one.
   type: text("type"),
   format: text("format"),
   codec: text("codec"),
   quality: text("quality"),
+
+  // What the finished file turned out to be — "1080p" for video, "320kbps"
+  // for audio — probed once it lands. `quality` above is only what was asked
+  // for, and a watcher row never asks. See services/media-quality.ts.
+  mediaQuality: text("mediaQuality"),
 
   // Manual-download options. Unused by watcher rows, which still read the
   // live channel so editing a channel keeps affecting its queued downloads.
@@ -172,7 +247,7 @@ export const download = sqliteTable("download", {
   clipStart: text("clipStart"),
   clipEnd: text("clipEnd"),
 
-  removeSponsor: integer("removeSponsor", { mode: "boolean" })
+  removeSponsors: integer("removeSponsors", { mode: "boolean" })
     .notNull()
     .default(false),
 

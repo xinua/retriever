@@ -44,17 +44,16 @@
           </p>
         </div>
 
-        <div class="grid grid-cols-2 gap-10 py-4 border-b border-gray-700">
-          @let isWebhookEnabled = sub().notifyHA;
-          @let isCustom = sub().webhookOverride?.length;
-          @let haWebhook = sub().webhookOverride ?? settings().webhookUrl;
-
+        @let isWebhookEnabled = sub().notifyHA;
+        @let isCustom = sub().webhookOverride?.length;
+        @let haWebhook = sub().webhookOverride ?? settings().webhookUrl;
+        <div
+          class="grid grid-cols-2 gap-10 py-4 border-b border-gray-700"
+          [matTooltip]="haWebhook"
+          [matTooltipDisabled]="!isWebhookEnabled"
+        >
           <span>Webhook:</span>
-          <span
-            class="whitespace-nowrap overflow-hidden text-ellipsis"
-            [matTooltip]="haWebhook"
-            [matTooltipDisabled]="!isWebhookEnabled"
-          >
+          <span class="whitespace-nowrap overflow-hidden text-ellipsis">
             <span
               [class]="'inline-block h-2 w-2 mr-2 rounded-full ' + (isWebhookEnabled ? 'bg-green-400' : 'bg-red-400')"
             ></span>
@@ -70,7 +69,11 @@
               class="flex items-center gap-2 border-gray-800 px-4 py-1 text-xs rounded-full h-8 bg-[#008000]"
               matTooltip="Type"
             >
-              <mat-icon>{{ sub().type }}_file</mat-icon>
+              @if (sub().type === types.VIDEO) {
+                <mat-icon fontIcon="play_circle" />
+              } @else {
+                <mat-icon svgIcon="audio_note" />
+              }
               {{ sub().type | titlecase }}
             </div>
 
@@ -97,6 +100,16 @@
           </div>
         </div>
 
+        <div
+          class="grid grid-cols-2 gap-10 py-4 border-b border-gray-700"
+          [matTooltip]="(sub().pollOnce ? 'Stop' : 'Continue') + ' polling after today\'s first capture'"
+        >
+          <span>Polling:</span>
+          <span>
+            <span>{{ sub().pollOnce ? 'One-time' : 'Ongoing' }}</span>
+          </span>
+        </div>
+
         <div class="grid grid-cols-2 gap-10 py-4 border-b border-gray-700">
           @if (isIntervalSelected) {
             <span>Poll interval:</span>
@@ -105,12 +118,22 @@
           }
           @if (isIntervalSelected && sub().pollInterval) {
             <span>
-              {{ sub().pollInterval * 60 | time: TimeFormat.LONG }}
+              {{ sub().pollInterval * 60 | time: '[Hh ]Mm' }}
             </span>
           } @else {
-            <span>{{ sub().pollTime | date: 'HH:mm' }}</span>
+            <span>{{ sub().pollTime?.join(', ') }}</span>
           }
         </div>
+
+        @if (isIntervalSelected && sub()?.intervalPeriod?.start && sub()?.intervalPeriod?.end) {
+          <div class="grid grid-cols-2 gap-10 py-4 border-b border-gray-700">
+            <span>Polling time range:</span>
+            <span
+              >{{ sub()?.intervalPeriod?.start * 60 * 60 | time: 'HH:MM' }} -
+              {{ sub()?.intervalPeriod?.end * 60 * 60 | time: 'HH:MM' }}</span
+            >
+          </div>
+        }
 
         <div class="grid grid-cols-2 gap-10 py-4 border-b border-gray-700">
           <span>Total downloads:</span>

@@ -4,8 +4,11 @@ import eslintConfigPrettier from 'eslint-config-prettier';
 
 export default [
   {
+    ignores: ['dist/', 'coverage/', 'out-tsc/', '.angular/', '**/*.min.js'],
+  },
+
+  {
     files: ['**/*.ts'],
-    ignores: ['node_modules', 'dist', 'coverage', '*.min.js'],
     languageOptions: {
       parser: tsparser,
       parserOptions: {

@@ -3,13 +3,13 @@
     <div class="max-w-screen max-h-screen flex flex-col relative overflow-hidden">
       @let isVideoPlaying = download()?.type === 'video' && isPlaying();
       @if (!isVideoPlaying) {
-        <ng-container *ngTemplateOutlet="watcherInfo"></ng-container>
+        <ng-container *ngTemplateOutlet="watcherInfoTemplate"></ng-container>
       }
 
-      <ng-container *ngTemplateOutlet="videoTitle"></ng-container>
+      <ng-container *ngTemplateOutlet="videoTitleTemplate"></ng-container>
 
       @if (canPlay()) {
-        <ng-container *ngTemplateOutlet="playButton"></ng-container>
+        <ng-container *ngTemplateOutlet="playButtonTemplate"></ng-container>
       }
 
       @if (!isVideoPlaying) {
@@ -24,12 +24,13 @@
 
       @if (isPlaying()) {
         @if (download()?.type === 'audio') {
-          <ng-container *ngTemplateOutlet="audioPlayer"></ng-container>
+          <ng-container *ngTemplateOutlet="audioPlayerTemplate"></ng-container>
         } @else {
           <video
-            #previewVideo
+            #videoPlayer
             [src]="videoUrl()"
             (click)="togglePlay($event)"
+            (error)="handleError()"
             controls
             autoplay
             preload="metadata"
@@ -44,7 +45,7 @@
   <div class="h-screen flex items-center justify-center text-center text-gray-400">No subscription found...</div>
 }
 
-<ng-template #watcherInfo>
+<ng-template #watcherInfoTemplate>
   <div class="flex items-center gap-2 absolute top-4 left-4 bg-black/90 rounded-md px-2 py-1 z-12">
     <div
       class="rounded-full bg-green-500 w-4 h-4"
@@ -55,7 +56,7 @@
   </div>
 </ng-template>
 
-<ng-template #videoTitle>
+<ng-template #videoTitleTemplate>
   <div
     class="max-w-full px-4 bg-black/70 absolute bottom-0 left-0 right-0 py-2 z-3 transition-opacity duration-1000"
     [class.opacity-0]="isPlaying()"
@@ -66,7 +67,7 @@
   </div>
 </ng-template>
 
-<ng-template #playButton>
+<ng-template #playButtonTemplate>
   <!-- Overlay -->
   <div
     class="absolute top-0 left-0 right-0 bottom-0 bg-black/50 flex items-center justify-center opacity-100 md:opacity-1 hover:opacity-100 transition-opacity duration-300 z-2"
@@ -82,14 +83,15 @@
   </div>
 </ng-template>
 
-<ng-template #audioPlayer>
+<ng-template #audioPlayerTemplate>
   <div class="w-full h-full cursor-pointer absolute top-0 left-0 z-10" (click)="togglePlay($event)">
-    <div #previewAudio class="absolute bottom-0 left-0 w-full rise z-11 cursor-auto">
+    <div #audioContainer class="absolute bottom-0 left-0 w-full rise z-11 cursor-auto">
       <rt-audio-player
         playerSize="lg"
         [audioUrl]="videoUrl()"
         [duration]="download().duration"
         (click)="$event.stopPropagation()"
+        (gotError)="handleError()"
       />
     </div>
   </div>

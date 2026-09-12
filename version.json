@@ -1,7 +1,52 @@
 {
-  "version": "1.1.5",
-  "releaseDate": "2026-09-11",
+  "version": "1.1.6",
+  "releaseDate": "2026-09-17",
   "changelog": [
+    {
+      "version": "1.1.6",
+      "releaseDate": "2026-09-17",
+      "changelog": {
+        "bugfixes": [
+          "Fix multiple subscriptions to the same channel",
+          "- Deleting one subscription no longer removes the avatar/poster still used by other subscriptions or downloads that shared the same media files",
+          "Fix \"Ignore shorts\" flag (_was ignored on the backend_)",
+          "Fix empty/\"best\" `quality` field in download record info (_now shows real file quality_)",
+          "Fix downloads list not being re-sorted when a new download arrives from a subscription's watcher"
+        ],
+        "features": [
+          "Get actual app version info from repo (checked once a night)",
+          "Show \"Update available\" notification",
+          "Show release notes in a popup",
+          "Subscription form",
+          "- Add \"Remove sponsors\" flag",
+          "- Add \"Split chapters\" flag",
+          "- Add \"One-time polling\" (stop polling for today after the first successful download)",
+          "- \"Time\" poll type is now multi-select",
+          "- \"Interval\" poll type now supports an active time range",
+          "Downloads",
+          "- Add filter by type (audio/video/thumbnail)"
+        ],
+        "improvements": [
+          "Show pages instead of \"1-5 of 10\"",
+          "Update and fix URL input",
+          "Subscription form",
+          "- More flexible polling",
+          "Downloads",
+          "- Enhance filters",
+          "- Move downloads info to the bottom",
+          "Move \"fileExists\" logic to the backend (filePath still kept as a reference even if the file no longer exists/was moved/removed)"
+        ],
+        "other": [
+          "Other UI fixes and improvements"
+        ],
+        "images": [
+          "https://raw.githubusercontent.com/xinua/retriever/main/frontend/public/assets/release/1.1.6/1.webp",
+          "https://raw.githubusercontent.com/xinua/retriever/main/frontend/public/assets/release/1.1.6/2.webp",
+          "https://raw.githubusercontent.com/xinua/retriever/main/frontend/public/assets/release/1.1.6/3.webp",
+          "https://raw.githubusercontent.com/xinua/retriever/main/frontend/public/assets/release/1.1.6/4.webp"
+        ]
+      }
+    },
     {
       "version": "1.1.5",
       "releaseDate": "2026-09-11",
@@ -39,6 +84,9 @@
           "- Replace audio player with custom",
           "Oher UI enhancements and fixes...",
           "Optimize building"
+        ],
+        "images": [
+          "https://raw.githubusercontent.com/xinua/retriever/main/frontend/public/assets/release/1.1.5/1.webp"
         ]
       }
     },

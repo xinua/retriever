@@ -34,7 +34,11 @@
 
   # ffmpeg is required by yt-dlp to merge separate video/audio streams and to
   # extract audio. yt-dlp ships musl builds, so alpine needs no glibc shim.
-  RUN apk add --no-cache ffmpeg ca-certificates && \
+  #
+  # tzdata carries the zone database. Alpine ships none, and without it a TZ of
+  # Europe/Kyiv does not fail - it silently resolves to UTC, so a subscription
+  # set to poll at 09:00 would poll at some other hour with nothing to say why.
+  RUN apk add --no-cache ffmpeg ca-certificates tzdata && \
       case "${TARGETARCH:-amd64}" in \
         amd64) YTDLP_ASSET=yt-dlp_musllinux ;; \
         arm64) YTDLP_ASSET=yt-dlp_musllinux_aarch64 ;; \
@@ -89,7 +93,7 @@
   CMD ["node", "dist/server.js"]
 
   LABEL org.opencontainers.image.source="https://github.com/xinua/retriever"
-  LABEL org.opencontainers.image.version="1.1.5"
+  LABEL org.opencontainers.image.version="1.1.6"
   LABEL org.opencontainers.image.title="Retriever"
   LABEL org.opencontainers.image.description="yt-dlp Web UI"
   LABEL org.opencontainers.image.documentation="https://github.com/xinua/retriever/blob/main/README.md"

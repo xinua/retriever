@@ -4,3 +4,4 @@ export * from './scroll-token';
 export * from './page-elements.const';
 export * from './layout.const';
 export * from './mocks.const';
+export * from './version.const';

@@ -10,10 +10,12 @@ import { initSchema, requeueStaleDownloads } from "./db/init.js";
 import { db } from "./db/index.js";
 import { settings } from "./db/schema.js";
 import { startWorker } from "./services/worker.js";
+import { startVersionCheck } from "./services/version-check.js";
 import * as DownloadQueue from "./services/download-queue.js";
 import { eq } from "drizzle-orm";
 
 import { healthRoutes } from "./routes/http/public.js";
+import { versionRoutes } from "./routes/http/version.js";
 import { settingsRoutes } from "./routes/http/settings.js";
 import { uiConfigRoutes } from "./routes/http/ui-config.js";
 import { channelsRoutes } from "./routes/http/channels.js";
@@ -50,6 +52,7 @@ const app = Fastify({ logger: true });
 
 await app.register(cors, { origin: true });
 await app.register(healthRoutes);
+await app.register(versionRoutes);
 await app.register(settingsRoutes);
 await app.register(uiConfigRoutes);
 await app.register(channelsRoutes);
@@ -102,6 +105,7 @@ app.setNotFoundHandler((req, reply) => {
 });
 
 startWorker();
+startVersionCheck();
 DownloadQueue.resume();
 
 process.on('SIGTERM', async () => {

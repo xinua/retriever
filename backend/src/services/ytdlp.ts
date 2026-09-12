@@ -365,7 +365,7 @@ export type JobOptions = {
   ytdlpArgs: string | null;
   clipStart: string | null;
   clipEnd: string | null;
-  removeSponsor: boolean;
+  removeSponsors: boolean;
   splitChapters: boolean;
   /**
    * The watcher whose archive this job records itself in, so a channel is
@@ -396,8 +396,8 @@ export function optionsFromChannel(ch: Channel): JobOptions {
     ytdlpArgs: ch.ytdlpArgs,
     clipStart: null,
     clipEnd: null,
-    removeSponsor: false,
-    splitChapters: false,
+    removeSponsors: !!ch.removeSponsors,
+    splitChapters: !!ch.splitChapters,
     archiveWatcherId: ch.id
   };
 }
@@ -996,7 +996,7 @@ export async function buildArgs(
     args.push("--download-sections", section);
   }
 
-  if (opts.removeSponsor && opts.type !== "thumbnail") {
+  if (opts.removeSponsors && opts.type !== "thumbnail") {
     args.push("--sponsorblock-remove", "default");
   }
 

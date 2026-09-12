@@ -32,18 +32,28 @@ export async function resolveDownloadFile(
     return { ok: false, status: 409, error: "This download has no file on disk" };
   }
 
-  let realRoot: string;
+  const realRoot = await realDownloadsRoot(settings);
 
-  try {
-    realRoot = await fsp.realpath(ytdlp.downloadsRoot(settings));
-  } catch {
+  if (!realRoot) {
     return { ok: false, status: 500, error: "Downloads folder is not available" };
   }
 
+  return resolveInsideRoot(row.filePath.trim(), realRoot);
+}
+
+async function realDownloadsRoot(settings: Settings): Promise<string | null> {
+  try {
+    return await fsp.realpath(ytdlp.downloadsRoot(settings));
+  } catch {
+    return null;
+  }
+}
+
+async function resolveInsideRoot(filePath: string, realRoot: string): Promise<ResolvedFile> {
   let realFile: string;
 
   try {
-    realFile = await fsp.realpath(row.filePath.trim());
+    realFile = await fsp.realpath(filePath);
   } catch {
     // Deleted, moved, or on an unmounted volume since the download finished.
     return { ok: false, status: 410, error: "File is no longer on disk" };
@@ -60,7 +70,14 @@ export async function resolveDownloadFile(
     };
   }
 
-  const stats = await fsp.stat(realFile);
+  let stats: Awaited<ReturnType<typeof fsp.stat>>;
+
+  try {
+    stats = await fsp.stat(realFile);
+  } catch {
+    // Removed between the realpath above and this call.
+    return { ok: false, status: 410, error: "File is no longer on disk" };
+  }
 
   if (!stats.isFile()) {
     return { ok: false, status: 403, error: "Not a regular file" };
@@ -72,6 +89,56 @@ export async function resolveDownloadFile(
     size: stats.size,
     filename: path.basename(realFile)
   };
+}
+
+export type WithFileExists<T> = T & { fileExists: boolean };
+
+/**
+ * Tells each row whether the file endpoint would serve it right now, so a
+ * client can offer play and save only where they will work — without a probe
+ * per row, and without a 404 in the console for every file deleted outside
+ * the app.
+ *
+ * Only the rows being answered with are checked, never the whole table: this
+ * runs on every page of the listing, and a page is a few dozen stat calls
+ * where the table is tens of thousands. The checks run in parallel and are
+ * exactly the ones `resolveDownloadFile` applies, so `true` here means the
+ * endpoint will stream the bytes rather than fail a moment later.
+ *
+ * The answer is computed per response and never written back. `filePath`
+ * keeps pointing where the file was: a downloads folder that is not mounted
+ * yet makes every file look gone, and erasing the paths then would lose them
+ * for good once the volume came back. The kept path is also what "Set file
+ * path" starts from when a file really was moved.
+ *
+ * Queued and running rows are never checked — a file that is still being
+ * written, or about to be, is not missing.
+ */
+export async function withFileExists<T extends Download>(
+  rows: T[],
+  settings: Settings
+): Promise<WithFileExists<T>[]> {
+  const candidates = rows.filter(
+    (row) => row.status !== "queued" && row.status !== "running" && row.filePath?.trim()
+  );
+
+  // One realpath of the root for the whole page rather than one per row; when
+  // it is missing, nothing inside it can be served and no row is looked at.
+  const realRoot = candidates.length ? await realDownloadsRoot(settings) : null;
+
+  const found = new Set<number>();
+
+  if (realRoot) {
+    await Promise.all(
+      candidates.map(async (row) => {
+        const file = await resolveInsideRoot(row.filePath!.trim(), realRoot);
+
+        if (file.ok) found.add(row.id);
+      })
+    );
+  }
+
+  return rows.map((row) => ({ ...row, fileExists: found.has(row.id) }));
 }
 
 const CONTENT_TYPES: Record<string, string> = {

@@ -52,4 +52,5 @@ backend/public
 backend/data
 backend/downloads
 
-scripts/
+# Local-only release tooling (kept out of the repo); frontend/scripts is tracked.
+/scripts/

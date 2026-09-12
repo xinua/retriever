@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { ImagesService } from "./images.service.js";
+import { avatarName } from "./avatar.js";
 import { YoutubeService } from "./youtube.service.js";
 import { resolveTarget, MAX_ITEMS } from "./resolve.js";
 import * as DownloadQueue from "./download-queue.js";
@@ -156,7 +157,7 @@ async function cacheAvatars(
         .map((entry) => entry.channelId)
         .filter(Boolean)
     )
-  ].filter((id) => !hasImage(`channel-${id}.jpg`)) as string[];
+  ].filter((id) => !hasImage(avatarName(id as string))) as string[];
 
   const avatars = channelIds.map((channelId) => async () => {
     const info = await YoutubeService.getChannelInfo(
@@ -165,7 +166,7 @@ async function cacheAvatars(
 
     if (!info?.avatar) return;
 
-    if (await ImagesService.download(info.avatar, `channel-${channelId}.jpg`)) {
+    if (await ImagesService.download(info.avatar, avatarName(channelId))) {
       fetched.add(channelId);
     }
   });
