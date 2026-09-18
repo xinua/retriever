@@ -35,7 +35,7 @@ export interface UiConfigPayload {
 
 /** Must stay in step with DefaultUiConfig on the frontend. */
 export const DEFAULT_UI_CONFIG: UiConfigPayload = {
-  sectionsBg: "glass",
+  sectionsBg: "dotted",
   themeColor: "red",
   enableAnimations: true,
   autoPaste: false

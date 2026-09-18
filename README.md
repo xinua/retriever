@@ -37,8 +37,16 @@ Perfect if you:
 ![Demo 2](demo/2.webp)
 ![Demo 3](demo/3.webp)
 
-📸 Expand more screenshots  
-![Step 1](demo/theme/static.gif)![Step 2](demo/theme/animations/fire.gif)![Step 3](demo/theme/animations/rain.gif)![Step 4](demo/theme/animations/snow.gif)![Step 5](demo/theme/animations/stars.gif)![Step 6](demo/theme/animations/matrix.gif)
+<details>
+  <summary>📸 Expand more screenshots</summary>
+  <br>
+  <img src="demo/theme/static.gif" alt="Step 1" width="100%">
+  <img src="demo/theme/animations/fire.gif" alt="Step 2" width="100%">
+  <img src="demo/theme/animations/rain.gif" alt="Step 3" width="100%">
+  <img src="demo/theme/animations/snow.gif" alt="Step 4" width="100%">
+  <img src="demo/theme/animations/stars.gif" alt="Step 5" width="100%">
+  <img src="demo/theme/animations/matrix.gif" alt="Step 6" width="100%">
+</details>
 
 ## ✨ Features
 
@@ -62,8 +70,10 @@ Perfect if you:
 ### Watch channels
 
 - 📡 **RSS-based tracking** — no API key, no quota
-- ⏱ **Flexible polling** — every N minutes, or at a fixed time each day
-- 🎯 **Per-channel settings** — type, format, codec, folder, prefix, extra args, webhook
+- ⏱ **Flexible polling** — every N minutes within an optional active time range, or at one or more fixed times each day
+- 1️⃣ **One-time polling** — stop polling for the day once a new video has been downloaded
+- 🎯 **Per-channel settings** — type, format, codec, folder, prefix, extra args, webhook, SponsorBlock, split by chapters
+- 👯 **Same channel, many subscriptions** — e.g. grab a channel as video and as audio; each keeps its own history
 - 🩳 **Shorts** included or skipped, your call
 
 
@@ -74,7 +84,8 @@ Perfect if you:
 - ⚡ **Parallel downloads**, configurable (default 2)
 - 🔁 **Automatic retries** that know the difference between "try again" and "this video is gone"
 - ⏹ **Retry, cancel, stop-all, delete, clear finished** — all one click
-- 🔍 **Search and filter** by status across your whole history
+- 🔍 **Search and filter** by status and type (audio / video / thumbnail) across your whole history
+- 🏷 **Real file info** — the actual quality and video codec of every finished file, probed after download
 - 💾 **Save any finished file** straight to the browser
 - 🖼 **Posters everywhere** — when a download arrives with no artwork, a frame is pulled out of the file itself
 - ▶️ **Play downloaded** — watch downloaded video by click on poster
@@ -91,6 +102,7 @@ Perfect if you:
 - 📋 **Auto-paste** — the URL field grabs the link from your clipboard
 - 🧲 **Drag to reorder** — the whole page layout
 - 📱 **Responsive + PWA** — install like mobile app
+- 🆙 **Update notification** — know when a new release is out and read its notes in the app
 
 ---
 
@@ -241,7 +253,7 @@ Finished files are written to your `/downloads` mount, using the **Folder** and 
 /downloads/<folder>/<prefix><video title>.<ext>
 ```
 
-Already-downloaded videos from watched channels are recorded in `/data/ytdlp-archive.txt` and are never fetched twice. (Manual downloads deliberately skip the archive — if you asked for a file explicitly, you get it.)
+Already-downloaded videos from watched channels are recorded in a per-subscription archive, `/data/archive/watcher-<id>.txt`, and are never fetched twice by that subscription. Deleting a subscription removes its archive too. (Manual downloads deliberately skip the archive — if you asked for a file explicitly, you get it.)
 
 Download the same video into the same folder again and the new copy is numbered rather than overwriting the old one:
 
@@ -266,8 +278,8 @@ Want the video id in the filename — useful when two videos in one folder share
 
 1. Click **+ Add Subscription**
 2. Paste a YouTube channel or RSS URL
-3. Choose a polling mode — every N minutes, or at a set time each day
-4. Set the format, folder, and prefix you want for that channel
+3. Choose a polling mode — every N minutes (optionally only within an active time range), or at one or more set times each day. Turn on **one-time polling** to stop for the day after the first new download
+4. Set the format, folder, and prefix you want for that channel, and optionally remove sponsors or split by chapters
 5. Save
 
 That's it. New uploads arrive on their own.

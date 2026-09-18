@@ -19,7 +19,7 @@ export function initSchema() {
   db.run(sql`
     CREATE TABLE IF NOT EXISTS ui_config (
       id INTEGER PRIMARY KEY CHECK (id = 1),
-      sectionsBg TEXT NOT NULL DEFAULT 'glass',
+      sectionsBg TEXT NOT NULL DEFAULT 'dotted',
       themeColor TEXT NOT NULL DEFAULT 'red',
       enableAnimations INTEGER NOT NULL DEFAULT 1,
       autoPaste INTEGER NOT NULL DEFAULT 0,
@@ -128,6 +128,7 @@ export function initSchema() {
       codec TEXT,
       quality TEXT,
       mediaQuality TEXT,
+      mediaCodec TEXT,
       folder TEXT,
       prefix TEXT,
       ytdlpArgs TEXT,
@@ -188,7 +189,7 @@ function runColumnMigrations() {
   // Redundant against the CREATE TABLE above for a fresh database, and
   // deliberately so - same belt-and-braces as the settings columns below, so a
   // database created before a field existed picks it up on the next boot.
-  ensureColumn("ui_config", "sectionsBg", "TEXT NOT NULL DEFAULT 'glass'");
+  ensureColumn("ui_config", "sectionsBg", "TEXT NOT NULL DEFAULT 'dotted'");
   ensureColumn("ui_config", "themeColor", "TEXT NOT NULL DEFAULT 'red'");
   ensureColumn("ui_config", "enableAnimations", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn("ui_config", "autoPaste", "INTEGER NOT NULL DEFAULT 0");
@@ -299,6 +300,7 @@ function migrateDownloadChannelColumns() {
   ensureColumn("download", "source", "TEXT NOT NULL DEFAULT 'watcher'");
   ensureColumn("download", "quality", "TEXT");
   ensureColumn("download", "mediaQuality", "TEXT");
+  ensureColumn("download", "mediaCodec", "TEXT");
   ensureColumn("download", "folder", "TEXT");
   ensureColumn("download", "prefix", "TEXT");
   ensureColumn("download", "ytdlpArgs", "TEXT");

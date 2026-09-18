@@ -138,7 +138,7 @@ export class Downloads implements OnInit {
 
   constructor() {
     this.downloadInfo$ = toObservable(this.downloads).pipe(
-      distinctUntilChanged((a, b) => a.length === b.length),
+      distinctUntilChanged((a, b) => this._areCountsEqual(a, b)),
       switchMap(() => this._httpService.getDownloadsInfo()),
     );
   }
@@ -386,5 +386,23 @@ export class Downloads implements OnInit {
     }
 
     return target.isContentEditable || ['input', 'textarea', 'select'].includes(target.tagName?.toLowerCase());
+  }
+
+  private _areCountsEqual(a: DownloadModel[], b: DownloadModel[]): boolean {
+    return (
+      a.length === b.length && JSON.stringify(this._getStatusCounts(a)) === JSON.stringify(this._getStatusCounts(b))
+    );
+  }
+
+  private _getStatusCounts(downloads: DownloadModel[]): Record<DownloadStatus, number> {
+    const counts = downloads.reduce(
+      (acc, download) => {
+        acc[download.status] = (acc[download.status] || 0) + 1;
+        return acc;
+      },
+      {} as Record<DownloadStatus, number>,
+    );
+    console.log(counts);
+    return counts;
   }
 }

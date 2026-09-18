@@ -4,14 +4,15 @@ import { spawn } from "node:child_process";
 import * as Ffmpeg from "./ffmpeg.js";
 
 /**
- * The quality a finished file actually has, as opposed to the one that was
- * asked for. A subscription never asks for one, and a manual download mostly
- * asks for "best" — neither says what landed on disk. So the file is probed
- * once it is there: a video is labelled by its resolution ("1080p"), audio by
- * its bitrate ("320kbps").
+ * What a finished file actually is, as opposed to what was asked for. A
+ * subscription never asks for a quality, a manual download mostly asks for
+ * "best", and a codec is usually left on "auto" — none of which says what
+ * landed on disk. So the file is probed once it is there: a video is
+ * labelled by its resolution ("1080p") and its video codec ("h265"), audio
+ * by its bitrate ("320kbps").
  *
- * Best effort: a probe that fails leaves the label null, and the UI falls
- * back to the requested quality.
+ * Best effort: a probe that fails leaves the labels null, and the UI falls
+ * back to what was requested.
  */
 
 const TIMEOUT_MS = 15000;
@@ -30,8 +31,25 @@ const BITRATES = [32, 48, 64, 96, 128, 160, 192, 256, 320];
 
 const SNAP_TOLERANCE = 0.04;
 
+/**
+ * ffprobe names a codec after the decoder it uses, which is not how the app
+ * spells the same codec anywhere else — the request, the format filter and
+ * the UI all say "h265". Anything not listed keeps the name ffprobe gave it,
+ * so an unusual encode still reads as something rather than nothing.
+ */
+const CODEC_NAMES: Record<string, string> = {
+  h264: "h264",
+  avc1: "h264",
+  hevc: "h265",
+  h265: "h265",
+  av1: "av1",
+  vp9: "vp9",
+  vp8: "vp8"
+};
+
 type ProbeStream = {
   codec_type?: string;
+  codec_name?: string;
   width?: number;
   height?: number;
   bit_rate?: string;
@@ -43,17 +61,27 @@ type ProbeResult = {
   format?: { bit_rate?: string };
 };
 
-/** The label for the file at `filePath`, or null when it cannot be told. */
+/** What a probe could tell about a file; either half can be null. */
+export type MediaInfo = {
+  /** "1080p" for a video, "320kbps" for audio. */
+  quality: string | null;
+  /** The video codec, for video files only — audio has no picture to label. */
+  codec: string | null;
+};
+
+const UNKNOWN: MediaInfo = { quality: null, codec: null };
+
+/** The labels for the file at `filePath`, as far as they can be told. */
 export async function probe(
   filePath: string | null,
   type: string | null
-): Promise<string | null> {
-  if (!filePath || (type !== "video" && type !== "audio")) return null;
-  if (!isReadableFile(filePath)) return null;
+): Promise<MediaInfo> {
+  if (!filePath || (type !== "video" && type !== "audio")) return UNKNOWN;
+  if (!isReadableFile(filePath)) return UNKNOWN;
 
   const result = await run(filePath);
 
-  if (!result) return null;
+  if (!result) return UNKNOWN;
 
   // Cover art rides along as a video stream flagged attached_pic — it says
   // nothing about the media, and on an audio file it is the only one there.
@@ -61,23 +89,36 @@ export async function probe(
     (s) => !s.disposition?.attached_pic
   );
 
-  if (type === "video") {
-    const video = streams.find((s) => s.codec_type === "video");
-    const label = video ? resolutionLabel(video.width, video.height) : null;
+  const video = type === "video"
+    ? streams.find((s) => s.codec_type === "video")
+    : undefined;
 
-    if (label) return label;
+  const codec = video ? codecLabel(video.codec_name) : null;
+
+  if (video) {
+    const label = resolutionLabel(video.width, video.height);
+
+    if (label) return { quality: label, codec };
   }
 
   const audio = streams.find((s) => s.codec_type === "audio");
 
-  if (!audio) return null;
+  if (!audio) return { quality: null, codec };
 
   // Ogg and WebM keep no per-stream bitrate, so fall back to the container's.
   // Close enough for an audio-only file; a video file never gets this far
   // unless it had no picture to label.
   const bps = num(audio.bit_rate) ?? num(result.format?.bit_rate);
 
-  return bps ? bitrateLabel(bps) : null;
+  return { quality: bps ? bitrateLabel(bps) : null, codec };
+}
+
+function codecLabel(name: string | undefined): string | null {
+  const probed = name?.trim().toLowerCase();
+
+  if (!probed) return null;
+
+  return CODEC_NAMES[probed] ?? probed;
 }
 
 /**
@@ -128,7 +169,7 @@ async function run(filePath: string): Promise<ProbeResult | null> {
     "-v", "error",
     "-print_format", "json",
     "-show_entries",
-    "stream=codec_type,width,height,bit_rate:stream_disposition=attached_pic:format=bit_rate",
+    "stream=codec_type,codec_name,width,height,bit_rate:stream_disposition=attached_pic:format=bit_rate",
     filePath
   ];
 

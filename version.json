@@ -1,7 +1,30 @@
 {
-  "version": "1.1.6",
-  "releaseDate": "2026-09-17",
+  "version": "1.1.7",
+  "releaseDate": "2026-09-18",
   "changelog": [
+    {
+      "version": "1.1.7",
+      "releaseDate": "2026-09-18",
+      "changelog": {
+        "bugfixes": [
+          "Set default section background to dotted",
+          "Fix subscription form mobile UI",
+          "Update completed/failed info on downloads list change"
+        ],
+        "features": [],
+        "improvements": [
+          "Show real video codec in download record info"
+        ],
+        "other": [
+          "Other UI fixes and improvements"
+        ],
+        "images": [
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.1.7/1.webp",
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.1.7/2.webp",
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.1.7/3.webp"
+        ]
+      }
+    },
     {
       "version": "1.1.6",
       "releaseDate": "2026-09-17",
@@ -9,8 +32,8 @@
         "bugfixes": [
           "Fix multiple subscriptions to the same channel",
           "- Deleting one subscription no longer removes the avatar/poster still used by other subscriptions or downloads that shared the same media files",
-          "Fix \"Ignore shorts\" flag (_was ignored on the backend_)",
-          "Fix empty/\"best\" `quality` field in download record info (_now shows real file quality_)",
+          "Fix \"Ignore shorts\" flag (was ignored on the backend)",
+          "Fix empty/\"best\" `quality` field in download record info (now shows real file quality)",
           "Fix downloads list not being re-sorted when a new download arrives from a subscription's watcher"
         ],
         "features": [
@@ -40,10 +63,10 @@
           "Other UI fixes and improvements"
         ],
         "images": [
-          "https://raw.githubusercontent.com/xinua/retriever/main/frontend/public/assets/release/1.1.6/1.webp",
-          "https://raw.githubusercontent.com/xinua/retriever/main/frontend/public/assets/release/1.1.6/2.webp",
-          "https://raw.githubusercontent.com/xinua/retriever/main/frontend/public/assets/release/1.1.6/3.webp",
-          "https://raw.githubusercontent.com/xinua/retriever/main/frontend/public/assets/release/1.1.6/4.webp"
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.1.6/1.webp",
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.1.6/2.webp",
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.1.6/3.webp",
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.1.6/4.webp"
         ]
       }
     },
@@ -86,7 +109,7 @@
           "Optimize building"
         ],
         "images": [
-          "https://raw.githubusercontent.com/xinua/retriever/main/frontend/public/assets/release/1.1.5/1.webp"
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.1.5/1.webp"
         ]
       }
     },

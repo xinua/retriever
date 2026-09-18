@@ -623,13 +623,16 @@ export async function downloadsRoutes(app: FastifyInstance) {
       return reply.code(file.status).send({ error: file.error });
     }
 
+    const media = await MediaQuality.probe(file.path, row.type);
+
     // The resolved realpath rather than what was typed, so the column keeps
     // holding an absolute path that the file endpoint can use directly.
     const [updated] = await db
       .update(download)
       .set({
         filePath: file.path,
-        mediaQuality: await MediaQuality.probe(file.path, row.type)
+        mediaQuality: media.quality,
+        mediaCodec: media.codec
       })
       .where(eq(download.id, rowId))
       .returning();

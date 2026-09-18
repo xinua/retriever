@@ -52,7 +52,7 @@
     <div class="current flex flex-col">
       <p>Current version: {{ data.current }}</p>
       <p>
-        <small>Released on {{ currentVersionInfo().releaseDate | date: 'MMM d, yyyy' }}</small>
+        <small>Released on {{ currentVersionInfo()?.releaseDate | date: 'MMM d, yyyy' }}</small>
       </p>
     </div>
   </mat-card-footer>

@@ -49,6 +49,8 @@ export interface DownloadModel {
   quality: Nullable<VideoQuality | AudioQuality>;
   /** What the finished file really is — "1080p" or "320kbps"; null until probed. */
   mediaQuality: Nullable<string>;
+  /** The video codec the file really carries — "h265"; video only, null until probed. */
+  mediaCodec: Nullable<string>;
   folder: Nullable<string>;
   prefix: Nullable<string>;
   ytdlpArgs: Nullable<string>;
