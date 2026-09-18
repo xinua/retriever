@@ -28,6 +28,30 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
+      # Fails the release when the tag and the version baked into the sources
+      # disagree, so a forgotten version bump never reaches ghcr.
+      - name: Check versions match the tag
+        env:
+          SRC_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          expected="${SRC_TAG#v}"
+          declare -A found=(
+            [package.json]="$(jq -r .version package.json)"
+            [frontend/package.json]="$(jq -r .version frontend/package.json)"
+            [backend/package.json]="$(jq -r .version backend/package.json)"
+            [backend/package-lock.json]="$(jq -r '.packages[""].version' backend/package-lock.json)"
+            [frontend/src/app/shared/constants/version.const.ts]="$(sed -nE "s/.*APP_VERSION = '([^']+)'.*/\1/p" frontend/src/app/shared/constants/version.const.ts)"
+            [Dockerfile]="$(sed -nE 's/.*org\.opencontainers\.image\.version="([^"]+)".*/\1/p' Dockerfile)"
+          )
+          failed=0
+          for file in "${!found[@]}"; do
+            if [ "${found[$file]}" != "$expected" ]; then
+              echo "::error file=$file::version is '${found[$file]}', tag expects '$expected'"
+              failed=1
+            fi
+          done
+          exit $failed
+
       # pnpm comes from pnpm's own action rather than corepack: setup-node's
       # cache step runs `pnpm store path` and the corepack shim can pollute
       # that output, which fails the job with "Path Validation Error".
