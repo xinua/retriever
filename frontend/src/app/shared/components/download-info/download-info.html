@@ -5,7 +5,7 @@
       type: download().type,
       format: download().format,
       quality: download().mediaQuality ?? download().quality,
-      codec: download().codec,
+      codec: download().mediaCodec ?? download().codec,
       duration: download().duration,
       date: download().createdAt,
     },
@@ -46,7 +46,7 @@
       </td>
     </ng-container>
 
-    <!-- File Codec Column -->
+    <!-- Codec Column: the probed file codec, else the requested one -->
     <ng-container matColumnDef="codec">
       <th mat-header-cell *matHeaderCellDef class="text-center!">Codec</th>
       <td mat-cell *matCellDef="let element" class="text-center!">

@@ -11,7 +11,7 @@
       <!-- Channel URL and Name -->
       <div class="grid grid-cols-2 gap-x-6 md:col-span-12">
         <!-- URL -->
-        <mat-form-field appearance="outline" class="col-span-1" subscriptSizing="dynamic">
+        <mat-form-field appearance="outline" class="col-span-1 h-fit" subscriptSizing="dynamic">
           <mat-label>Channel/RSS URL</mat-label>
           <input
             matInput
@@ -29,23 +29,26 @@
           }
 
           @if (!isEditing()) {
-            <mat-hint class="text-xs/6 text-gray-500">
+            <mat-hint class="text-xs/6 text-gray-500 hidden md:block">
               Just paste channel URL and leave the rest to the app 😎
             </mat-hint>
           }
 
-          @if (form.get('rssUrl')?.invalid) {
+          @if (form.get('rssUrl')?.errors?.['required'] && form.get('rssUrl')?.touched) {
             <mat-error>URL is required</mat-error>
+          }
+          @if (form.get('rssUrl')?.errors?.['pattern'] && form.get('rssUrl')?.touched) {
+            <mat-error>Invalid URL</mat-error>
           }
         </mat-form-field>
 
         <!-- Name -->
-        <mat-form-field appearance="outline" class="col-span-1" subscriptSizing="dynamic">
+        <mat-form-field appearance="outline" class="col-span-1 h-fit" subscriptSizing="dynamic">
           <mat-label>Channel name</mat-label>
           <input matInput formControlName="name" placeholder="Custom channel name" />
 
           @if (!isEditing()) {
-            <mat-hint class="text-gray-500"> Leave empty to use real channel name </mat-hint>
+            <mat-hint class="text-gray-500 hidden md:block"> Leave empty to use real channel name </mat-hint>
           }
         </mat-form-field>
       </div>
@@ -105,31 +108,30 @@
         </mat-form-field>
 
         @if (form.controls.pollType.value === pollType.INTERVAL) {
-          <mat-hint class="col-span-2 mt-1 pl-4 h-0 overflow-visible text-gray-500">
+          <mat-hint class="col-span-2 mt-1 pl-4 h-0 overflow-visible text-gray-500 hidden md:block">
             Tip: keep polling ≥ 1min unless you love rate-limits and suffering.
           </mat-hint>
         }
       </div>
 
       <!-- Additional flags and Interval start/end -->
-      <div class="grid grid-cols-2 gap-x-6 md:col-span-12 pb-2">
-        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="h-fit sub-flags">
+      <div class="grid grid-cols-2 gap-6 md:col-span-12 pb-2">
+        <mat-form-field
+          appearance="outline"
+          subscriptSizing="dynamic"
+          class="order-2 md:order-1 h-fit sub-flags col-span-2 md:col-span-1"
+        >
           <mat-label>Additional flags</mat-label>
           <mat-select [value]="selectedOptions()" (selectionChange)="onOptionChange($event)" multiple>
             <mat-select-trigger>
               @for (option of selectedOptions(); track option) {
                 @let flag = option | flags;
+                @let text =
+                  option === 'startFromLast'
+                    ? flag.label + ' ' + (flag.descriptionActive | lowercase)
+                    : (flag.descriptionActive | titlecase) + ' ' + (flag.label | lowercase);
 
-                <span class="text-sm">
-                  @if (option === 'startFromLast') {
-                    {{ flag.label }} {{ flag.descriptionActive | lowercase }}
-                  } @else {
-                    {{ flag.descriptionActive | titlecase }} {{ flag.label | lowercase }}
-                  }
-                </span>
-                @if (selectedOptions().length > 1 && $index < selectedOptions().length - 1) {
-                  ,
-                }
+                <span class="text-sm list-comma">{{ text }}</span>
               }
             </mat-select-trigger>
 
@@ -159,14 +161,15 @@
         @if (form.controls.pollType.value === pollType.INTERVAL) {
           <rt-interval-range
             formControlName="intervalPeriod"
-            class="col-span-1 w-full"
+            class="col-span-2 md:col-span-1 w-full order-1 md:order-2"
             [interval]="form.controls.pollInterval.value"
           />
         }
       </div>
 
+      @let isVideoType = form.controls.type.value === types.VIDEO;
       <!-- Type, Codec and Format -->
-      <div class="grid grid-cols-3 gap-6 md:col-span-12">
+      <div class="grid grid-cols-2 gap-6 md:col-span-12" [class.grid-cols-3]="isVideoType">
         <!-- Type -->
         <mat-form-field appearance="outline" class="col-span-1" subscriptSizing="dynamic" hideRequiredMarker>
           <mat-label>Type</mat-label>
@@ -177,7 +180,7 @@
         </mat-form-field>
 
         <!-- Codec -->
-        @if (form.controls.type.value === types.VIDEO) {
+        @if (isVideoType) {
           <mat-form-field appearance="outline" class="col-span-1" subscriptSizing="dynamic" hideRequiredMarker>
             <mat-label>Codec</mat-label>
             <mat-select formControlName="codec">
@@ -200,8 +203,6 @@
 
         <!-- Format -->
         <mat-form-field appearance="outline" class="col-span-1" subscriptSizing="dynamic" hideRequiredMarker>
-          @let isVideoType = form.controls.type.value === types.VIDEO;
-
           <mat-label>Format</mat-label>
 
           <mat-select formControlName="format">
@@ -221,7 +222,7 @@
           <mat-expansion-panel>
             <mat-expansion-panel-header>
               <mat-panel-title>Advanced</mat-panel-title>
-              <mat-panel-description>Optional overrides per channel</mat-panel-description>
+              <mat-panel-description class="hidden! md:flex!">Optional overrides per channel</mat-panel-description>
             </mat-expansion-panel-header>
 
             <div class="grid grid-cols-1 gap-4 md:grid-cols-12">

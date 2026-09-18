@@ -37,7 +37,7 @@ export const settings = sqliteTable("settings", {
 export const uiConfig = sqliteTable("ui_config", {
   id: integer("id").primaryKey().default(1),
 
-  sectionsBg: text("sectionsBg").notNull().default("glass"),
+  sectionsBg: text("sectionsBg").notNull().default("dotted"),
   themeColor: text("themeColor").notNull().default("red"),
 
   enableAnimations: integer("enableAnimations", { mode: "boolean" })
@@ -238,6 +238,11 @@ export const download = sqliteTable("download", {
   // for audio — probed once it lands. `quality` above is only what was asked
   // for, and a watcher row never asks. See services/media-quality.ts.
   mediaQuality: text("mediaQuality"),
+
+  // The video codec the finished file actually carries, probed alongside the
+  // quality. `codec` above is only the request, which is "auto" most of the
+  // time and so says nothing about the file. Video rows only.
+  mediaCodec: text("mediaCodec"),
 
   // Manual-download options. Unused by watcher rows, which still read the
   // live channel so editing a channel keeps affecting its queued downloads.

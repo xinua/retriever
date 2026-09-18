@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "../db/index.js";
 import { channel, download, settings } from "../db/schema.js";
@@ -459,9 +459,14 @@ async function start(id: number) {
         return;
       }
 
-      const mediaQuality = await MediaQuality.probe(output, opts.type);
+      const media = await MediaQuality.probe(output, opts.type);
 
-      await finish(id, "done", { filePath: output, progress: 100, mediaQuality });
+      await finish(id, "done", {
+        filePath: output,
+        progress: 100,
+        mediaQuality: media.quality,
+        mediaCodec: media.codec
+      });
       await onSuccess(ch, current);
 
       // Cosmetic and slower than the notification deserves to wait for.
@@ -549,6 +554,7 @@ async function failFfmpeg(
   ch: Channel | undefined
 ) {
   const rescued = await ytdlp.rescueTemp(opts, appSettings, id);
+  const media = rescued ? await MediaQuality.probe(rescued, opts.type) : null;
 
   const message = rescued
     ? `${error} — ffmpeg could not finish the file, so it was kept unprocessed`
@@ -560,7 +566,8 @@ async function failFfmpeg(
       ? {
           filePath: rescued,
           progress: 100,
-          mediaQuality: await MediaQuality.probe(rescued, opts.type)
+          mediaQuality: media?.quality ?? null,
+          mediaCodec: media?.codec ?? null
         }
       : {})
   });
@@ -955,6 +962,7 @@ async function finish(
     filePath?: string | null;
     progress?: number;
     mediaQuality?: string | null;
+    mediaCodec?: string | null;
   }
 ) {
   // Terminal either way, so the cached extraction has no further use.
@@ -970,7 +978,8 @@ async function finish(
       ...(patch.error !== undefined ? { error: patch.error } : {}),
       ...(patch.filePath !== undefined ? { filePath: patch.filePath } : {}),
       ...(patch.progress !== undefined ? { progress: patch.progress } : {}),
-      ...(patch.mediaQuality !== undefined ? { mediaQuality: patch.mediaQuality } : {})
+      ...(patch.mediaQuality !== undefined ? { mediaQuality: patch.mediaQuality } : {}),
+      ...(patch.mediaCodec !== undefined ? { mediaCodec: patch.mediaCodec } : {})
     })
     .where(eq(download.id, id));
 
@@ -1062,6 +1071,7 @@ async function requeueTransient(
       error: null,
       filePath: null,
       mediaQuality: null,
+      mediaCodec: null,
       startedAt: null
     })
     .where(eq(download.id, id));
@@ -1087,6 +1097,7 @@ export async function retry(id: number): Promise<Download | null> {
       error: null,
       filePath: null,
       mediaQuality: null,
+      mediaCodec: null,
       startedAt: null,
       finishedAt: null,
       createdAt: new Date().toISOString()
@@ -1112,9 +1123,10 @@ export function resume() {
 }
 
 /**
- * Probes the finished downloads that predate the mediaQuality column, one at
- * a time so a long history does not start a burst of ffprobes at boot. Rows
- * whose file has gone are skipped without a probe, and simply stay unlabelled.
+ * Probes the finished downloads that predate the mediaQuality and mediaCodec
+ * columns, one at a time so a long history does not start a burst of ffprobes
+ * at boot. Rows whose file has gone are skipped without a probe, and simply
+ * stay unlabelled.
  */
 async function backfillMediaQuality(): Promise<void> {
   const rows = await db
@@ -1123,7 +1135,12 @@ async function backfillMediaQuality(): Promise<void> {
     .where(
       and(
         eq(download.status, "done"),
-        isNull(download.mediaQuality),
+        // A codec is only ever probed for video, so an audio row missing one
+        // is finished rather than pending.
+        or(
+          isNull(download.mediaQuality),
+          and(eq(download.type, "video"), isNull(download.mediaCodec))
+        ),
         isNotNull(download.filePath),
         inArray(download.type, ["video", "audio"])
       )
@@ -1132,14 +1149,17 @@ async function backfillMediaQuality(): Promise<void> {
   let labelled = 0;
 
   for (const row of rows) {
-    const mediaQuality = await MediaQuality.probe(row.filePath, row.type);
+    const media = await MediaQuality.probe(row.filePath, row.type);
 
-    if (!mediaQuality) continue;
+    if (!media.quality && !media.codec) continue;
 
     // Only if nothing re-queued the row while the probe ran.
     const [updated] = await db
       .update(download)
-      .set({ mediaQuality })
+      .set({
+        ...(media.quality ? { mediaQuality: media.quality } : {}),
+        ...(media.codec ? { mediaCodec: media.codec } : {})
+      })
       .where(and(eq(download.id, row.id), eq(download.status, "done")))
       .returning({ id: download.id });
 
@@ -1149,5 +1169,5 @@ async function backfillMediaQuality(): Promise<void> {
     await emit(row.id);
   }
 
-  if (labelled) console.log(`media quality: labelled ${labelled} existing downloads`);
+  if (labelled) console.log(`media info: labelled ${labelled} existing downloads`);
 }

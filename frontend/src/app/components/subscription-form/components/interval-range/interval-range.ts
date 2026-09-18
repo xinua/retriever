@@ -34,9 +34,9 @@ const formatHour = (hour: number): string => `${hour.toString().padStart(2, '0')
 
 @Component({
   selector: 'rt-interval-range',
-  imports: [ReactiveFormsModule, MatSliderModule, MatHint, MatError, MatTooltipModule],
   templateUrl: './interval-range.html',
   styleUrl: './interval-range.css',
+  imports: [ReactiveFormsModule, MatSliderModule, MatHint, MatError, MatTooltipModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [
     {

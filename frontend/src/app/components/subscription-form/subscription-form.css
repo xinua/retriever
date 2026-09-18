@@ -20,6 +20,20 @@
   max-height: 305px;
 }
 
+@media screen and (max-width: 768px) {
+  :host ::ng-deep mat-label {
+    font-size: 14px;
+  }
+}
+
+:host ::ng-deep .mdc-text-field--focused input::placeholder {
+  opacity: 0.7;
+}
+
 .animate-spin {
   animation: spin 1s linear infinite;
+}
+
+.list-comma:not(:last-child)::after {
+  content: ', ';
 }
