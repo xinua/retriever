@@ -46,7 +46,7 @@ export class RtSteamCard implements OnInit {
   imageSourceUrl = input.required<Nullable<string>>();
   pending = input<boolean>(false);
   url = input<Nullable<string>>(null);
-  imgSize = input<string>('250x250');
+  imgSize = input<string>('257x145');
   mockMessage = input<string>('Image%20not%20found');
   customClass = input<string>('rounded-md overflow-hidden h-[inherit]');
   imageClass = input<string>('');

@@ -88,12 +88,40 @@
           <mat-hint>Applied to every yt-dlp channel</mat-hint>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Parallel downloads</mat-label>
           <input matInput type="number" min="1" max="10" formControlName="ytdlpConcurrency" />
 
           @if (form.get('ytdlpConcurrency')?.invalid) {
             <mat-error>Must be between 1 and 10</mat-error>
+          }
+        </mat-form-field>
+
+        @let timeZoneControl = form.controls.timeZone;
+
+        <mat-form-field appearance="outline">
+          <mat-label>Time zone</mat-label>
+          <input matInput formControlName="timeZone" placeholder="Server clock" [matAutocomplete]="zones" />
+          <mat-icon
+            matSuffix
+            fontIcon="my_location"
+            [matTooltip]="'Use this browser\'s zone (' + browserTimeZone + ')'"
+            class="relative z-10 cursor-pointer"
+            (click)="useBrowserTimeZone()"
+          />
+
+          <mat-autocomplete #zones="matAutocomplete">
+            @for (zone of timeZoneOptions(); track zone) {
+              <mat-option [value]="zone">{{ zone }}</mat-option>
+            }
+          </mat-autocomplete>
+
+          @if (timeZoneControl.errors?.['unknownTimeZone']) {
+            <mat-error>Pick a zone from the list, such as Europe/Kyiv</mat-error>
+          } @else if (timeZoneControl.value && timeZoneControl.value !== browserTimeZone) {
+            <mat-hint>Poll hours use this zone. This browser is in {{ browserTimeZone }}</mat-hint>
+          } @else {
+            <mat-hint>The zone subscription poll hours are read in</mat-hint>
           }
         </mat-form-field>
       </div>

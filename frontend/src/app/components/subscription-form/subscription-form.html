@@ -15,6 +15,8 @@
           <mat-label>Channel/RSS URL</mat-label>
           <input
             matInput
+            type="url"
+            name="url"
             formControlName="rssUrl"
             placeholder="https://www.youtube.com/feeds/videos.xml?channel_id=..."
           />
@@ -29,8 +31,8 @@
           }
 
           @if (!isEditing()) {
-            <mat-hint class="text-xs/6 text-gray-500 hidden md:block">
-              Just paste channel URL and leave the rest to the app 😎
+            <mat-hint class="text-xs/6 text-gray-500 hidden md:block whitespace-nowrap"
+              >Just paste channel URL and leave the rest to the app 😎
             </mat-hint>
           }
 
@@ -45,10 +47,10 @@
         <!-- Name -->
         <mat-form-field appearance="outline" class="col-span-1 h-fit" subscriptSizing="dynamic">
           <mat-label>Channel name</mat-label>
-          <input matInput formControlName="name" placeholder="Custom channel name" />
+          <input matInput formControlName="name" placeholder="Custom channel name" type="text" name="name" />
 
           @if (!isEditing()) {
-            <mat-hint class="text-gray-500 hidden md:block"> Leave empty to use real channel name </mat-hint>
+            <mat-hint class="text-gray-500 hidden md:block">Leave empty to use real channel name </mat-hint>
           }
         </mat-form-field>
       </div>
@@ -94,6 +96,8 @@
 
             @if (form.controls.pollTime.errors?.['required'] && form.controls.pollTime.touched) {
               <mat-error>At least one time is required</mat-error>
+            } @else {
+              <mat-hint>Times in {{ timeZoneLabel() }}</mat-hint>
             }
           </mat-form-field>
         }
@@ -108,8 +112,8 @@
         </mat-form-field>
 
         @if (form.controls.pollType.value === pollType.INTERVAL) {
-          <mat-hint class="col-span-2 mt-1 pl-4 h-0 overflow-visible text-gray-500 hidden md:block">
-            Tip: keep polling ≥ 1min unless you love rate-limits and suffering.
+          <mat-hint class="col-span-2 mt-1 pl-4 h-0 overflow-visible text-gray-500 hidden md:block"
+            >Tip: keep polling ≥ 1min unless you love rate-limits and suffering.
           </mat-hint>
         }
       </div>
@@ -263,7 +267,13 @@
               <!-- Folder -->
               <mat-form-field appearance="outline" class="md:col-span-6" subscriptSizing="dynamic">
                 <mat-label>Destination folder</mat-label>
-                <input matInput formControlName="tag" placeholder="e.g. podcasts" type="text" [matAutocomplete]="tag" />
+                <input
+                  matInput
+                  formControlName="tag"
+                  placeholder="e.g. subscriptions"
+                  type="text"
+                  [matAutocomplete]="tag"
+                />
 
                 <mat-autocomplete #tag="matAutocomplete">
                   @for (folder of folders(); track folder) {
@@ -287,16 +297,14 @@
       <!-- Actions -->
       <div class="md:col-span-12 flex flex-wrap items-center justify-end gap-2 pt-2">
         <button mat-stroked-button type="button" class="border-gray-700" (click)="resetForm()" [disabled]="isSaving()">
-          Reset
+          @if (isEditing()) {
+            Cancel
+          } @else {
+            Reset
+          }
         </button>
 
         <button mat-flat-button color="primary" type="submit" [disabled]="form.invalid || isSaving()">
-          @if (isSaving()) {
-            <mat-icon class="text-base animate-spin" fontIcon="cached" />
-          } @else {
-            <mat-icon class="text-base" [fontIcon]="isEditing() ? 'edit' : 'add'" />
-          }
-
           {{ isEditing() ? 'Update' : 'Subscribe' }}
         </button>
       </div>

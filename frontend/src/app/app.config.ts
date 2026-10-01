@@ -10,7 +10,6 @@ import { errorInterceptor } from './shared/interceptors/error.interceptor';
 import { provideNotifier } from './shared/providers/notifier.provider';
 import { UiConfigService } from './shared/services';
 import { useIconFactory } from './shared/providers/icons.provider';
-import { provideNgxMask } from 'ngx-mask';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -26,6 +25,5 @@ export const appConfig: ApplicationConfig = {
     provideAppInitializer(() => {
       inject(UiConfigService);
     }),
-    provideNgxMask(),
   ],
 };

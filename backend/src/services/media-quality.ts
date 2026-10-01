@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import { spawn } from "node:child_process";
 
 import * as Ffmpeg from "./ffmpeg.js";
@@ -9,7 +10,7 @@ import * as Ffmpeg from "./ffmpeg.js";
  * "best", and a codec is usually left on "auto" — none of which says what
  * landed on disk. So the file is probed once it is there: a video is
  * labelled by its resolution ("1080p") and its video codec ("h265"), audio
- * by its bitrate ("320kbps").
+ * by its bitrate ("320kbps"), and either by its container ("mkv").
  *
  * Best effort: a probe that fails leaves the labels null, and the UI falls
  * back to what was requested.
@@ -58,18 +59,26 @@ type ProbeStream = {
 
 type ProbeResult = {
   streams?: ProbeStream[];
-  format?: { bit_rate?: string };
+  format?: { bit_rate?: string; duration?: string };
 };
 
-/** What a probe could tell about a file; either half can be null. */
+/** What a probe could tell about a file; any part can be null. */
 export type MediaInfo = {
   /** "1080p" for a video, "320kbps" for audio. */
   quality: string | null;
   /** The video codec, for video files only — audio has no picture to label. */
   codec: string | null;
+  /**
+   * The container, by the file's extension — "auto" lands as mkv or webm as
+   * often as mp4, and ffprobe's own name for it ("mov,mp4,m4a,3gp,...") is
+   * no more telling.
+   */
+  format: string | null;
+  /** Seconds, from the container. */
+  duration: number | null;
 };
 
-const UNKNOWN: MediaInfo = { quality: null, codec: null };
+const UNKNOWN: MediaInfo = { quality: null, codec: null, format: null, duration: null };
 
 /** The labels for the file at `filePath`, as far as they can be told. */
 export async function probe(
@@ -79,9 +88,10 @@ export async function probe(
   if (!filePath || (type !== "video" && type !== "audio")) return UNKNOWN;
   if (!isReadableFile(filePath)) return UNKNOWN;
 
+  const format = formatLabel(filePath);
   const result = await run(filePath);
 
-  if (!result) return UNKNOWN;
+  if (!result) return { ...UNKNOWN, format };
 
   // Cover art rides along as a video stream flagged attached_pic — it says
   // nothing about the media, and on an audio file it is the only one there.
@@ -94,23 +104,28 @@ export async function probe(
     : undefined;
 
   const codec = video ? codecLabel(video.codec_name) : null;
+  const duration = num(result.format?.duration);
 
   if (video) {
     const label = resolutionLabel(video.width, video.height);
 
-    if (label) return { quality: label, codec };
+    if (label) return { quality: label, codec, format, duration };
   }
 
   const audio = streams.find((s) => s.codec_type === "audio");
 
-  if (!audio) return { quality: null, codec };
+  if (!audio) return { quality: null, codec, format, duration };
 
   // Ogg and WebM keep no per-stream bitrate, so fall back to the container's.
   // Close enough for an audio-only file; a video file never gets this far
   // unless it had no picture to label.
   const bps = num(audio.bit_rate) ?? num(result.format?.bit_rate);
 
-  return { quality: bps ? bitrateLabel(bps) : null, codec };
+  return { quality: bps ? bitrateLabel(bps) : null, codec, format, duration };
+}
+
+function formatLabel(filePath: string): string | null {
+  return path.extname(filePath).slice(1).toLowerCase() || null;
 }
 
 function codecLabel(name: string | undefined): string | null {
@@ -169,7 +184,7 @@ async function run(filePath: string): Promise<ProbeResult | null> {
     "-v", "error",
     "-print_format", "json",
     "-show_entries",
-    "stream=codec_type,codec_name,width,height,bit_rate:stream_disposition=attached_pic:format=bit_rate",
+    "stream=codec_type,codec_name,width,height,bit_rate:stream_disposition=attached_pic:format=bit_rate,duration",
     filePath
   ];
 

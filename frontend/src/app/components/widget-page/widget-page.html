@@ -70,7 +70,10 @@
 <ng-template #playButtonTemplate>
   <!-- Overlay -->
   <div
-    class="absolute top-0 left-0 right-0 bottom-0 bg-black/50 flex items-center justify-center opacity-100 md:opacity-1 hover:opacity-100 transition-opacity duration-300 z-2"
+    class="absolute top-0 left-0 right-0 bottom-0 bg-black/50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-500 z-2"
+    [class.opacity-0]="!isOverlayVisible()"
+    (click)="showOverlay()"
+    (clickOutside)="isOverlayVisible.set(false)"
     #playOverlay
   >
     <!-- Play button -->

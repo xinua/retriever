@@ -11,6 +11,7 @@ export function initSchema() {
       cookiesPath TEXT,
       ytdlpArgs TEXT,
       ytdlpConcurrency INTEGER NOT NULL DEFAULT 2,
+      timeZone TEXT,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -129,6 +130,7 @@ export function initSchema() {
       quality TEXT,
       mediaQuality TEXT,
       mediaCodec TEXT,
+      mediaFormat TEXT,
       folder TEXT,
       prefix TEXT,
       ytdlpArgs TEXT,
@@ -144,6 +146,7 @@ export function initSchema() {
       speed TEXT,
       eta TEXT,
       totalBytes INTEGER,
+      phase TEXT,
       filePath TEXT,
       thumbnailPath TEXT,
       error TEXT,
@@ -199,6 +202,10 @@ function runColumnMigrations() {
   ensureColumn("settings", "ytdlpArgs", "TEXT");
   ensureColumn("settings", "ytdlpConcurrency", "INTEGER NOT NULL DEFAULT 2");
 
+  // Null until a browser fills it in, and null is how every existing install
+  // already schedules - against the server's clock - so nothing to backfill.
+  ensureColumn("settings", "timeZone", "TEXT");
+
   ensureColumn("channel", "ytdlpArgs", "TEXT");
 
   migrateChannelPollColumns();
@@ -206,6 +213,8 @@ function runColumnMigrations() {
   migrateDownloadChannelColumns();
 
   dropMeTubeColumns();
+
+  retireIosFormat();
 }
 
 /**
@@ -301,6 +310,8 @@ function migrateDownloadChannelColumns() {
   ensureColumn("download", "quality", "TEXT");
   ensureColumn("download", "mediaQuality", "TEXT");
   ensureColumn("download", "mediaCodec", "TEXT");
+  ensureColumn("download", "mediaFormat", "TEXT");
+  ensureColumn("download", "phase", "TEXT");
   ensureColumn("download", "folder", "TEXT");
   ensureColumn("download", "prefix", "TEXT");
   ensureColumn("download", "ytdlpArgs", "TEXT");
@@ -384,13 +395,39 @@ function normalizeDownloadTimestamps() {
 }
 
 /**
+ * "ios" was never a container: it was the mp4 selector plus yt-dlp posing as
+ * YouTube's iPhone client, which says nothing about whether the file plays on
+ * one. Every "ios" file is an mp4, so the rows say so. What the choice was
+ * after — something an iPhone plays — is H.264, so anything still to be
+ * downloaded that left the codec on auto asks for that instead. Finished rows
+ * keep their codec: it is the history of what was asked for.
+ */
+function retireIosFormat() {
+  db.run(sql`
+    UPDATE channel
+    SET codec = 'h264'
+    WHERE format = 'ios' AND (codec IS NULL OR codec = 'auto')
+  `);
+  db.run(sql`UPDATE channel SET format = 'mp4' WHERE format = 'ios'`);
+
+  db.run(sql`
+    UPDATE download
+    SET codec = 'h264'
+    WHERE format = 'ios'
+      AND status IN ('queued', 'running')
+      AND (codec IS NULL OR codec = 'auto')
+  `);
+  db.run(sql`UPDATE download SET format = 'mp4' WHERE format = 'ios'`);
+}
+
+/**
  * Downloads that were running when the process died can never resume,
  * so put them back in the queue on boot.
  */
 export function requeueStaleDownloads() {
   db.run(sql`
     UPDATE download
-    SET status = 'queued', progress = 0, speed = NULL, eta = NULL, startedAt = NULL
+    SET status = 'queued', progress = 0, speed = NULL, eta = NULL, phase = NULL, startedAt = NULL
     WHERE status = 'running'
   `);
 }

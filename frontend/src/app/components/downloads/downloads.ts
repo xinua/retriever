@@ -23,7 +23,8 @@ import { MatPaginator, MatPaginatorIntl, PageEvent } from '@angular/material/pag
 import { MatSelectModule } from '@angular/material/select';
 import { MatTableModule } from '@angular/material/table';
 import { ConfirmationDialog, DownloadRecord, FilterDownloads } from '@shared/components';
-import { AppearDirective, BgDirective } from '@shared/directives';
+import { BgDirective, SwipeDirective, SwipeEvent } from '@shared/directives';
+import { hasFile } from '@shared/helpers';
 import {
   DownloadInfoModel,
   DownloadModel,
@@ -34,8 +35,18 @@ import {
 } from '@shared/models';
 import { AnimationService, CustomPaginatorIntl, HttpService, StorageService } from '@shared/services';
 import { NotifierService } from 'angular-notifier';
-import { hasFile } from '@shared/helpers';
-import { debounceTime, distinctUntilChanged, filter, finalize, Observable, Subject, switchMap, take, tap } from 'rxjs';
+import {
+  debounceTime,
+  distinctUntilChanged,
+  filter,
+  finalize,
+  merge,
+  Observable,
+  Subject,
+  switchMap,
+  take,
+  tap,
+} from 'rxjs';
 import { WsService } from '../../shared/services/ws.service';
 import { NoData } from '../no-data/no-data';
 
@@ -64,8 +75,8 @@ const REFILL_DEBOUNCE_MS = 100;
     ReactiveFormsModule,
     NoData,
     DownloadRecord,
-    AppearDirective,
     FilterDownloads,
+    SwipeDirective,
   ],
   providers: [{ provide: MatPaginatorIntl, useClass: CustomPaginatorIntl }],
   templateUrl: './downloads.html',
@@ -135,11 +146,17 @@ export class Downloads implements OnInit {
   paginatorSize = computed(() => this.paginator().limit);
 
   private readonly _refill$ = new Subject<void>();
+  /** A row on another page changed status, which the page's own counts cannot show. */
+  private readonly _infoStale$ = new Subject<void>();
 
   constructor() {
-    this.downloadInfo$ = toObservable(this.downloads).pipe(
-      distinctUntilChanged((a, b) => this._areCountsEqual(a, b)),
+    this.downloadInfo$ = merge(
+      toObservable(this.downloads).pipe(distinctUntilChanged((a, b) => this._areCountsEqual(a, b))),
+      // A stop-all cancels every off-page row at once, one broadcast each.
+      this._infoStale$.pipe(debounceTime(REFILL_DEBOUNCE_MS)),
+    ).pipe(
       switchMap(() => this._httpService.getDownloadsInfo()),
+      tap((info) => this._storage.downloadInfo.set(info)),
     );
   }
 
@@ -233,11 +250,11 @@ export class Downloads implements OnInit {
 
   async remove(download: DownloadModel, elementRef: HTMLElement, downloadsContainer: HTMLDivElement) {
     let animationDuration = 0;
+    this.isAnimationInProgress.set(true);
 
-    if (this._storage.downloads().length === this.paginator().limit) {
+    if (this._storage.downloads().length === this.paginator().limit && this.paginator().limit !== 1) {
       await this._animationService.animateRemoveDownload(elementRef, downloadsContainer);
       animationDuration = AnimationService.REMOVE_DOWNLOAD_DURATION;
-      this.isAnimationInProgress.set(true);
     }
 
     this._httpService
@@ -286,6 +303,22 @@ export class Downloads implements OnInit {
         },
         error: () => this._notifier.notify('error', 'Could not clear the list.'),
       });
+  }
+
+  onSwipe(event: SwipeEvent) {
+    if (event.direction === 'right') {
+      this.onPageChange({
+        pageIndex: Math.max(this.paginator().page - 1, 0),
+        pageSize: this.paginatorSize(),
+        length: this.paginator().total,
+      });
+    } else {
+      this.onPageChange({
+        pageIndex: Math.min(this.paginator().page + 1, Math.floor(this.paginator().total / this.paginator().limit)),
+        pageSize: this.paginatorSize(),
+        length: this.paginator().total,
+      });
+    }
   }
 
   private _openConfirmationDialog(): Observable<boolean> {
@@ -367,6 +400,8 @@ export class Downloads implements OnInit {
       this._upsert(download);
     } else if (download.status === DownloadStatus.QUEUED) {
       this._refill$.next();
+    } else if (this._isFinished(download)) {
+      this._infoStale$.next();
     }
   }
 
@@ -402,7 +437,6 @@ export class Downloads implements OnInit {
       },
       {} as Record<DownloadStatus, number>,
     );
-    console.log(counts);
     return counts;
   }
 }

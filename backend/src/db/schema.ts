@@ -16,6 +16,13 @@ export const settings = sqliteTable("settings", {
 
   ytdlpConcurrency: integer("ytdlpConcurrency").notNull().default(2),
 
+  /**
+   * IANA zone, such as "Europe/Kyiv", that subscription poll hours are read
+   * in. The client fills it from the browser when it is empty. Null falls
+   * back to the server's own clock (`TZ`) - see schedule.helper.ts.
+   */
+  timeZone: text("timeZone"),
+
   createdAt: text("createdAt")
     .notNull()
     .default(sql`(datetime('now'))`),
@@ -161,8 +168,8 @@ export const channel = sqliteTable("channel", {
   /**
    * "time" polling: the wall-clock hours to poll at, as `["09:00", "18:00"]`.
    * JSON rather than a child table because it is only ever read and written
-   * whole, alongside the row. Hours are read against the server's local
-   * clock, so `TZ` decides what "09:00" means - see schedule.helper.ts.
+   * whole, alongside the row. Hours are read in `settings.timeZone` - see
+   * schedule.helper.ts.
    */
   pollTime: text("pollTime", { mode: "json" }).$type<string[]>(),
 
@@ -244,6 +251,10 @@ export const download = sqliteTable("download", {
   // time and so says nothing about the file. Video rows only.
   mediaCodec: text("mediaCodec"),
 
+  // The container the finished file landed in, by its extension. `format`
+  // above is only the request, and "auto" leaves it to yt-dlp.
+  mediaFormat: text("mediaFormat"),
+
   // Manual-download options. Unused by watcher rows, which still read the
   // live channel so editing a channel keeps affecting its queued downloads.
   folder: text("folder"),
@@ -274,6 +285,9 @@ export const download = sqliteTable("download", {
   speed: text("speed"),
   eta: text("eta"),
   totalBytes: integer("totalBytes"),
+  // What a running job is doing once the transfer is over. "converting" while
+  // ffmpeg re-encodes to the requested codec; null the rest of the time.
+  phase: text("phase"),
 
   filePath: text("filePath"),
 

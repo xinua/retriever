@@ -24,6 +24,7 @@ import { MatError, MatHint } from '@angular/material/form-field';
 import { MatSliderModule } from '@angular/material/slider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { IntervalRangeModel, Nullable } from '@shared/models';
+import { StorageService } from '@shared/services';
 
 /** Hours the slider spans. Covering all of it means the subscription is polled around the clock. */
 const DAY_START = 0;
@@ -53,6 +54,7 @@ const formatHour = (hour: number): string => `${hour.toString().padStart(2, '0')
 })
 export class IntervalRange implements ControlValueAccessor, Validator {
   private readonly _destroyRef = inject(DestroyRef);
+  private readonly _storage = inject(StorageService);
   interval = input<number>(0);
 
   /** Inner form. Bound with `formControlName`, so it must never see the parent's form group. */
@@ -74,9 +76,13 @@ export class IntervalRange implements ControlValueAccessor, Validator {
   protected readonly hint = computed(() => {
     const { start, end } = this._value();
 
-    return this._isAllDay({ start, end })
-      ? 'The full range places no limit: the subscription is polled all day.'
-      : `Polled only between ${formatHour(start)} and ${formatHour(end)}.`;
+    if (this._isAllDay({ start, end })) {
+      return 'The full range places no limit: the subscription is polled all day.';
+    }
+
+    // The hours are read in the zone saved in settings, not the viewer's own.
+    const zone = this._storage.settings().timeZone;
+    return `Polled only between ${formatHour(start)} and ${formatHour(end)}${zone ? ` (${zone})` : ' (server time)'}.`;
   });
 
   count = computed<number>(() => {

@@ -9,6 +9,8 @@ export interface SettingsModel {
   cookiesPath: Nullable<string>;
   ytdlpArgs: Nullable<string>;
   ytdlpConcurrency: number;
+  /** IANA zone poll hours are read in. `null` means the server's own clock. */
+  timeZone: Nullable<string>;
   updatedAt?: Date;
   createdAt?: Date;
 }
@@ -19,6 +21,7 @@ export interface SettingsFormModel {
   cookiesPath: FormControl<Nullable<string>>;
   ytdlpArgs: FormControl<Nullable<string>>;
   ytdlpConcurrency: FormControl<number>;
+  timeZone: FormControl<Nullable<string>>;
 }
 
 /** Folders that already exist inside the downloads root, newest listing wins. */

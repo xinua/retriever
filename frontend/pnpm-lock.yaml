@@ -37,6 +37,9 @@ importers:
       angular-notifier:
         specifier: ^14.0.0
         version: 14.0.0(@angular/common@21.2.1(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2))
+      ngx-device-detector:
+        specifier: ^12.0.0
+        version: 12.0.0(@angular/common@21.2.1(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2))
       ngx-mask:
         specifier: ^22.1.0
         version: 22.1.0(@angular/common@21.2.1(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2))(@angular/forms@21.2.1(@angular/common@21.2.1(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2))(@angular/platform-browser@21.2.1(@angular/animations@21.2.1(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2)))(@angular/common@21.2.1(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2)))(rxjs@7.8.2))
@@ -3220,6 +3223,13 @@ packages:
     resolution:
       { integrity: sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg== }
     engines: { node: '>= 0.6' }
+
+  ngx-device-detector@12.0.0:
+    resolution:
+      { integrity: sha512-n9mlKvClPP3El+pj7+v6/C+ywm4iq+xz2Jh5GRV3TH9dEc1yycvzh6lRCjd/d1ymLmGRHAD5cBlDIo5jfs1F7w== }
+    peerDependencies:
+      '@angular/common': ^22.0.0
+      '@angular/core': ^22.0.0
 
   ngx-mask@22.1.0:
     resolution:
@@ -6688,6 +6698,12 @@ snapshots:
   natural-compare@1.4.0: {}
 
   negotiator@1.0.0: {}
+
+  ngx-device-detector@12.0.0(@angular/common@21.2.1(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2)):
+    dependencies:
+      '@angular/common': 21.2.1(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2))(rxjs@7.8.2)
+      '@angular/core': 21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2)
+      tslib: 2.8.1
 
   ngx-mask@22.1.0(@angular/common@21.2.1(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2))(@angular/forms@21.2.1(@angular/common@21.2.1(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2))(@angular/platform-browser@21.2.1(@angular/animations@21.2.1(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2)))(@angular/common@21.2.1(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.1(@angular/compiler@21.2.1)(rxjs@7.8.2)))(rxjs@7.8.2)):
     dependencies:

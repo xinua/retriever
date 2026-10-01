@@ -15,6 +15,7 @@ import {
 } from "../../utils/schedule.helper.js";
 import { broadcast } from "../ws/websockets.js";
 import { getLastCheck } from "../../utils/last-check.helper.js";
+import { getSavedTimeZone } from "../../utils/time-zone.helper.js";
 
 function isRssUrl(url: string) {
   return url.includes("feeds/videos.xml");
@@ -178,7 +179,11 @@ export function channelsRoutes(app: FastifyInstance) {
         .returning();
 
       const created = result[0];
-      const nextCheckAt = calculateNextCheck(created, new Date());
+      const nextCheckAt = calculateNextCheck(
+        created,
+        new Date(),
+        await getSavedTimeZone()
+      );
 
       await db.update(channel)
         .set({ nextCheckAt })
@@ -236,7 +241,8 @@ export function channelsRoutes(app: FastifyInstance) {
   
     const nextCheckAt = calculateNextCheck(
       updatedChannel,
-      new Date()
+      new Date(),
+      await getSavedTimeZone()
     );
   
     await db.update(channel)

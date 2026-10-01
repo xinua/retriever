@@ -2,7 +2,9 @@
   <div class="flex items-center gap-2">
     <rt-progress-bar
       [value]="download().progress"
-      label="Downloading..."
+      [label]="
+        download().phase === 'converting' ? 'Converting to ' + (download().codec | uppercase) + '...' : 'Downloading...'
+      "
       [indeterminate]="download().progress === 100"
     />
 

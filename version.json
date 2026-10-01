@@ -1,7 +1,40 @@
 {
-  "version": "1.1.7",
-  "releaseDate": "2026-09-18",
+  "version": "1.1.8",
+  "releaseDate": "2026-10-01",
   "changelog": [
+    {
+      "version": "1.1.8",
+      "releaseDate": "2026-10-01",
+      "changelog": {
+        "bugfixes": [
+          "Fix time discrepancies in Subscription poll range and poll time (resolved by the new timezone setting)",
+          "Fix file size",
+          "Fix file conversion: added an extra post-processing step to force conversion",
+          "Fix \"Stop all\" amount (it was limited by the paginator limit)",
+          "Fix extra yt-dlp arguments"
+        ],
+        "features": [
+          "Add timezone setting",
+          "Add swipe navigation on mobile when the paginator limit is set to 1",
+          "Added support for browser extensions"
+        ],
+        "improvements": [
+          "Update provider/source type avatars",
+          "Reduce the number of animations",
+          "Update widget overlay",
+          "Remove useless paginator tooltip",
+          "Replace outdated iOS pseudo-format with MKV"
+        ],
+        "other": [
+          "Other UI fixes and improvements"
+        ],
+        "images": [
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.1.8/1.webp",
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.1.8/2.webp",
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.1.8/3.webp"
+        ]
+      }
+    },
     {
       "version": "1.1.7",
       "releaseDate": "2026-09-18",

@@ -16,6 +16,7 @@ import * as Ffmpeg from "./ffmpeg.js";
 import * as Poster from "./poster.js";
 import * as CoverArt from "./cover-art.js";
 import * as MediaQuality from "./media-quality.js";
+import * as Transcode from "./transcode.js";
 import { isFfmpegFailure, isPermanent } from "./retry-policy.js";
 
 const PROGRESS_BROADCAST_MS = 1000;
@@ -425,6 +426,20 @@ async function start(id: number) {
   child.on("close", async (code, signal) => {
     release(id);
 
+    // Held again until the handler is done: a conversion can run for longer
+    // than the download did, and it is the CPU-heavy part.
+    active.add(id);
+
+    try {
+      await onClose(code, signal);
+    } finally {
+      active.delete(id);
+      running.delete(id);
+      void pump();
+    }
+  });
+
+  const onClose = async (code: number | null, signal: NodeJS.Signals | null) => {
     const current = await getRow(id);
 
     if (current?.status === "canceled" || signal === "SIGTERM") {
@@ -436,7 +451,7 @@ async function start(id: number) {
       ytdlp.cleanupTemp(appSettings, id);
       autoRetries.delete(id);
 
-      const output = resolveOutputPath(opts, filePath);
+      let output = resolveOutputPath(opts, filePath);
 
       // yt-dlp exits 0 without transferring anything when it decides the video
       // needs no work — an archive hit is the way that happens here. Nothing
@@ -455,17 +470,41 @@ async function start(id: number) {
           message: error
         });
 
-        void pump();
         return;
       }
 
-      const media = await MediaQuality.probe(output, opts.type);
+      let media = await MediaQuality.probe(output, opts.type);
+
+      if (opts.type === "video" && Transcode.needed(opts.codec, media.codec)) {
+        const converted = await convert(id, output, opts.codec!, media.duration ?? current?.duration ?? null);
+
+        if (converted.canceled) {
+          await discardFile(output);
+          await finish(id, "canceled", { error: null });
+          return;
+        }
+
+        if (converted.filePath) {
+          output = converted.filePath;
+          media = await MediaQuality.probe(output, opts.type);
+        } else {
+          // The download itself is fine, so it is kept — but the codec on the
+          // row is the probed one, and the reason it differs is said out loud.
+          broadcast("notification", {
+            type: "warning",
+            title: `Kept ${Transcode.LABELS[media.codec ?? ""] ?? media.codec}, not ${Transcode.LABELS[opts.codec!]}`,
+            subtitle: subtitleFor(current, ch),
+            message: converted.error
+          });
+        }
+      }
 
       await finish(id, "done", {
         filePath: output,
         progress: 100,
         mediaQuality: media.quality,
-        mediaCodec: media.codec
+        mediaCodec: media.codec,
+        mediaFormat: media.format
       });
       await onSuccess(ch, current);
 
@@ -481,7 +520,6 @@ async function start(id: number) {
       if (isFfmpegFailure(error)) {
         autoRetries.delete(id);
         await failFfmpeg(id, error, opts, appSettings, current, ch);
-        void pump();
         return;
       }
 
@@ -493,7 +531,6 @@ async function start(id: number) {
       if (usedInfo) {
         await InfoCache.drop(id);
         await requeueTransient(id, 0, `${error} (retrying without cached info)`);
-        void pump();
         return;
       }
 
@@ -502,7 +539,6 @@ async function start(id: number) {
       if (!isPermanent(error) && spent < MAX_AUTO_RETRIES) {
         autoRetries.set(id, spent + 1);
         await requeueTransient(id, spent + 1, error);
-        void pump();
         return;
       }
 
@@ -515,9 +551,56 @@ async function start(id: number) {
         message: error
       });
     }
+  };
+}
 
-    void pump();
-  });
+/**
+ * Re-encodes a finished download into the codec it asked for. The ffmpeg
+ * child is registered as the job's process, so cancel() and cancelAll() stop
+ * it like yt-dlp.
+ *
+ * Progress stays at 100 throughout, which the UI shows as post-processing —
+ * the same state yt-dlp's own merge and fixup steps sit in. Transcode reports
+ * a percentage, but a bar counting up from 0 again is indistinguishable from
+ * the download starting over, so it is not put on the row.
+ */
+async function convert(
+  id: number,
+  filePath: string,
+  codec: string,
+  duration: number | null
+): Promise<{ filePath?: string; canceled?: boolean; error?: string }> {
+  await db
+    .update(download)
+    .set({ phase: "converting", progress: 100, speed: null, eta: null })
+    .where(eq(download.id, id));
+  await emit(id);
+
+  const result = await Transcode.run(
+    filePath,
+    codec,
+    duration,
+    (child) => running.set(id, child),
+    () => {}
+  );
+
+  running.delete(id);
+
+  const current = await getRow(id);
+
+  if (current?.status === "canceled" || (!result.ok && result.canceled)) {
+    return { canceled: true };
+  }
+
+  return result.ok ? { filePath: result.filePath } : { error: result.error };
+}
+
+async function discardFile(target: string): Promise<void> {
+  try {
+    await fsp.rm(target, { force: true });
+  } catch {
+    // Already gone.
+  }
 }
 
 /**
@@ -567,7 +650,8 @@ async function failFfmpeg(
           filePath: rescued,
           progress: 100,
           mediaQuality: media?.quality ?? null,
-          mediaCodec: media?.codec ?? null
+          mediaCodec: media?.codec ?? null,
+          mediaFormat: media?.format ?? null
         }
       : {})
   });
@@ -721,7 +805,21 @@ async function embedCover(row: Download, filePath: string) {
 
   const image = Poster.fileFor(current);
 
-  if (image) await CoverArt.embed(filePath, image);
+  if (!image) return;
+
+  if (!(await CoverArt.embed(filePath, image))) return;
+
+  // The picture now lives inside the file, which finish() already measured.
+  const size = await fileSize(filePath);
+
+  if (size == null) return;
+
+  await db
+    .update(download)
+    .set({ totalBytes: size })
+    .where(and(eq(download.id, row.id), eq(download.filePath, filePath)));
+
+  await emit(row.id);
 }
 
 /**
@@ -963,10 +1061,16 @@ async function finish(
     progress?: number;
     mediaQuality?: string | null;
     mediaCodec?: string | null;
+    mediaFormat?: string | null;
   }
 ) {
   // Terminal either way, so the cached extraction has no further use.
   void InfoCache.drop(id);
+
+  // The size tracked during the transfer is yt-dlp's figure for whichever
+  // stream was downloading last — the audio half of a DASH pair, say — and
+  // says nothing of a merge or a transcode after it. The file is the truth.
+  const totalBytes = patch.filePath ? await fileSize(patch.filePath) : null;
 
   await db
     .update(download)
@@ -975,15 +1079,28 @@ async function finish(
       finishedAt: new Date().toISOString(),
       speed: null,
       eta: null,
+      phase: null,
       ...(patch.error !== undefined ? { error: patch.error } : {}),
       ...(patch.filePath !== undefined ? { filePath: patch.filePath } : {}),
       ...(patch.progress !== undefined ? { progress: patch.progress } : {}),
       ...(patch.mediaQuality !== undefined ? { mediaQuality: patch.mediaQuality } : {}),
-      ...(patch.mediaCodec !== undefined ? { mediaCodec: patch.mediaCodec } : {})
+      ...(patch.mediaCodec !== undefined ? { mediaCodec: patch.mediaCodec } : {}),
+      ...(patch.mediaFormat !== undefined ? { mediaFormat: patch.mediaFormat } : {}),
+      ...(totalBytes != null ? { totalBytes } : {})
     })
     .where(eq(download.id, id));
 
   await emit(id);
+}
+
+async function fileSize(target: string): Promise<number | null> {
+  try {
+    const stat = await fsp.stat(target);
+
+    return stat.isFile() ? stat.size : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function cancel(id: number): Promise<boolean> {
@@ -1072,6 +1189,7 @@ async function requeueTransient(
       filePath: null,
       mediaQuality: null,
       mediaCodec: null,
+      mediaFormat: null,
       startedAt: null
     })
     .where(eq(download.id, id));
@@ -1098,6 +1216,7 @@ export async function retry(id: number): Promise<Download | null> {
       filePath: null,
       mediaQuality: null,
       mediaCodec: null,
+      mediaFormat: null,
       startedAt: null,
       finishedAt: null,
       createdAt: new Date().toISOString()
@@ -1123,8 +1242,8 @@ export function resume() {
 }
 
 /**
- * Probes the finished downloads that predate the mediaQuality and mediaCodec
- * columns, one at a time so a long history does not start a burst of ffprobes
+ * Probes the finished downloads that predate the mediaQuality, mediaCodec and
+ * mediaFormat columns, one at a time so a long history does not start a burst of ffprobes
  * at boot. Rows whose file has gone are skipped without a probe, and simply
  * stay unlabelled.
  */
@@ -1139,6 +1258,7 @@ async function backfillMediaQuality(): Promise<void> {
         // is finished rather than pending.
         or(
           isNull(download.mediaQuality),
+          isNull(download.mediaFormat),
           and(eq(download.type, "video"), isNull(download.mediaCodec))
         ),
         isNotNull(download.filePath),
@@ -1151,14 +1271,15 @@ async function backfillMediaQuality(): Promise<void> {
   for (const row of rows) {
     const media = await MediaQuality.probe(row.filePath, row.type);
 
-    if (!media.quality && !media.codec) continue;
+    if (!media.quality && !media.codec && !media.format) continue;
 
     // Only if nothing re-queued the row while the probe ran.
     const [updated] = await db
       .update(download)
       .set({
         ...(media.quality ? { mediaQuality: media.quality } : {}),
-        ...(media.codec ? { mediaCodec: media.codec } : {})
+        ...(media.codec ? { mediaCodec: media.codec } : {}),
+        ...(media.format ? { mediaFormat: media.format } : {})
       })
       .where(and(eq(download.id, row.id), eq(download.status, "done")))
       .returning({ id: download.id });

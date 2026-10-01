@@ -21,12 +21,14 @@ import { NgTemplateOutlet } from '@angular/common';
 import { AudioPlayer } from '@shared/components';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NotifierService } from 'angular-notifier';
+import { DeviceDetectorService } from 'ngx-device-detector';
+import { ClickOutside } from '@shared/directives';
 
 @Component({
   selector: 'rt-widget-page',
   templateUrl: './widget-page.html',
   styleUrl: './widget-page.css',
-  imports: [MatCardModule, MatTooltip, MatIcon, NgTemplateOutlet, AudioPlayer],
+  imports: [MatCardModule, MatTooltip, MatIcon, NgTemplateOutlet, AudioPlayer, ClickOutside],
 })
 export class WidgetPage implements OnInit {
   private readonly _http = inject(HttpService);
@@ -37,8 +39,10 @@ export class WidgetPage implements OnInit {
   readonly _notifier = inject(NotifierService);
   readonly _cdr = inject(ChangeDetectorRef);
   readonly _destroyRef = inject(DestroyRef);
+  readonly _deviceService = inject(DeviceDetectorService);
 
   isPlaying = signal(false);
+  isOverlayVisible = signal(false);
   download = signal<DownloadModel | null>(null);
   channel = computed(() => this._storage.subscriptions().find((c) => c.id === +this._id));
   videoUrl = computed(() => this._http.streamFileUrl(this.download()?.id));
@@ -64,9 +68,15 @@ export class WidgetPage implements OnInit {
       .subscribe((download) => this.download.set(download));
   }
 
+  showOverlay() {
+    if (!this._deviceService.isMobile()) return;
+    this.isOverlayVisible.update((value) => !value);
+  }
+
   togglePlay(event?: MouseEvent) {
     if (!this.canPlay()) return;
     event?.preventDefault();
+    event?.stopPropagation();
     this.isPlaying.set(!this.isPlaying());
     if (this.isPlaying()) this._trackVideoFinished();
 

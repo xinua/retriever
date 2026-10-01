@@ -100,14 +100,10 @@
           </div>
         </div>
 
-        <div
-          class="grid grid-cols-2 gap-10 py-4 border-b border-gray-700"
-          [matTooltip]="(sub().pollOnce ? 'Stop' : 'Continue') + ' polling after today\'s first capture'"
-          matTooltipPosition="above"
-        >
+        <div class="grid grid-cols-2 gap-10 py-4 border-b border-gray-700">
           <span>Polling:</span>
           <span>
-            <span>{{ sub().pollOnce ? 'One-time' : 'Ongoing' }}</span>
+            <span>{{ sub().pollOnce ? 'Self-pausing' : 'Continuous' }}</span>
           </span>
         </div>
 

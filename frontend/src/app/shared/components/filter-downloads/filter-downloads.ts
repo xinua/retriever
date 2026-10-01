@@ -29,10 +29,10 @@ export class FilterDownloads implements OnInit {
   ngOnInit(): void {
     this._trigger$
       .pipe(
-        takeUntilDestroyed(this._destroyRef),
         debounceTime(200),
         distinctUntilChanged((prev, curr) => JSON.stringify(prev) === JSON.stringify(curr)),
         tap(() => this.startFiltering.emit(this.filters())),
+        takeUntilDestroyed(this._destroyRef),
       )
       .subscribe();
   }

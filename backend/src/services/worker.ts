@@ -212,7 +212,7 @@ export async function processChannel(
   // Nothing new, nothing this subscription wants, or a feed that carried no
   // usable entry at all: the scan still happened, so it books the next one.
   if (!latest?.videoId) {
-    const nextCheckAt = scheduled ? calculateNextCheck(ch, now) : ch.nextCheckAt;
+    const nextCheckAt = scheduled ? calculateNextCheck(ch, now, appSettings.timeZone) : ch.nextCheckAt;
     await db.update(channel)
       .set({
         lastCheckedAt: nowIso,
@@ -239,7 +239,7 @@ export async function processChannel(
     // on the row it read - otherwise a `pollOnce` subscription books another
     // check for today and only holds off from the tick after that.
     const nextCheckAt = scheduled
-      ? calculateNextCheck({ ...ch, lastCaptureAt: nowIso }, now)
+      ? calculateNextCheck({ ...ch, lastCaptureAt: nowIso }, now, appSettings.timeZone)
       : ch.nextCheckAt;
 
     await db.update(channel)
@@ -295,7 +295,7 @@ export async function processChannel(
   }
 
   const nextCheckAt = scheduled
-    ? calculateNextCheck({ ...ch, lastCaptureAt: nowIso }, now)
+    ? calculateNextCheck({ ...ch, lastCaptureAt: nowIso }, now, appSettings.timeZone)
     : ch.nextCheckAt;
 
   await db.update(channel)
@@ -379,10 +379,10 @@ export async function runWorkerTick() {
     // until tomorrow, whatever its row says is due: `nextCheckAt` can still
     // point at today after a manual run, or after the flag was turned on with
     // a check already booked.
-    if (isHeldForToday(ch, now)) {
+    if (isHeldForToday(ch, now, appSettings.timeZone)) {
 
       await db.update(channel)
-        .set({ nextCheckAt: calculateNextCheck(ch, now) })
+        .set({ nextCheckAt: calculateNextCheck(ch, now, appSettings.timeZone) })
         .where(eq(channel.id, ch.id));
 
       broadcast('next-check', await getLastCheck());
@@ -397,7 +397,7 @@ export async function runWorkerTick() {
     } catch (e) {
 
       console.error("Channel error:", ch.id, e);
-      const nextCheckAt = calculateNextCheck(ch, now);
+      const nextCheckAt = calculateNextCheck(ch, now, appSettings.timeZone);
 
       await db.update(channel)
         .set({

@@ -26,6 +26,7 @@ const ASSETS = "/assets/images";
  * URL people paste on purpose, and it says what the row actually is.
  */
 const M3U8_URL = /\.m3u8(\?|#|$)/i;
+const MPD_URL = /\.mpd(\?|#|$)/i;
 
 const SITE_MARK: Partial<Record<Download["platform"], string>> = {
   tiktok: `${ASSETS}/tiktok.webp`,
@@ -64,5 +65,5 @@ export function avatarFor(row: Download): string | null {
 
   if (mark) return mark;
 
-  return M3U8_URL.test(row.url) ? `${ASSETS}/m3u8.webp` : `${ASSETS}/unknown.webp`;
+  return M3U8_URL.test(row.url) ? `${ASSETS}/stream.webp` : MPD_URL.test(row.url) ? `${ASSETS}/stream.webp` : `${ASSETS}/unknown.webp`;
 }

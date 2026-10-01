@@ -78,6 +78,7 @@ export const DefaultSettings: SettingsModel = {
   cookiesPath: null,
   ytdlpArgs: null,
   ytdlpConcurrency: 2,
+  timeZone: null,
 };
 
 export const DefaultUiConfig: UiConfig = {

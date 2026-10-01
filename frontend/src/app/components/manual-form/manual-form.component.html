@@ -8,9 +8,11 @@
     <form [formGroup]="form">
       <mat-form-field appearance="outline" class="w-full" #urlMatInput>
         <input
+          #urlInput
+          type="url"
+          name="url"
           matInput
           formControlName="url"
-          #urlInput
           (click)="pasteUrl()"
           (keydown.enter)="download(); $event.stopPropagation()"
         />
@@ -88,17 +90,19 @@
         </mat-form-field>
 
         @if (isVideo || isAudio) {
+          @let formatClass = form.controls.format.value === 'auto' ? 'capitalize' : 'uppercase';
           <mat-form-field appearance="outline" class="w-full col-span-1">
             <mat-label>Format</mat-label>
 
             <mat-select formControlName="format">
-              <mat-select-trigger class="flex items-end gap-2 w-fit h-full">
+              <mat-select-trigger class="flex items-end gap-2 w-fit h-full" [class]="formatClass">
                 <mat-icon matSuffix [svgIcon]="formatIcons[form.controls.format.value]" class="hidden! md:inline!" />
-                {{ form.controls.format.value | titlecase }}
+                {{ form.controls.format.value }}
               </mat-select-trigger>
 
               @for (format of formats(); track format) {
-                <mat-option [value]="format">{{ format | titlecase }}</mat-option>
+                @let optionClass = format === 'auto' ? 'capitalize' : 'uppercase';
+                <mat-option [value]="format" [class]="optionClass">{{ format }}</mat-option>
               }
             </mat-select>
           </mat-form-field>

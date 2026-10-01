@@ -26,7 +26,7 @@ export const CODEC_ICONS = {
 export const VIDEO_FORMAT_ICONS = {
   [VideoFormats.AUTO]: 'auto',
   [VideoFormats.MP4]: 'mp4',
-  [VideoFormats.IOS]: 'ios',
+  [VideoFormats.MKV]: 'mkv',
 };
 
 export const AUDIO_FORMAT_ICONS = {

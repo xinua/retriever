@@ -7,6 +7,7 @@ import {
   DefaultUiConfig,
 } from '../constants/defaults.const';
 import {
+  DownloadInfoModel,
   DownloadModel,
   FilterModel,
   ManualDownloadModel,
@@ -28,6 +29,8 @@ export class StorageService {
   showForm = signal<boolean>(false);
   nextCheck = signal<Nullable<NextCheckModel>>(null);
   downloads = signal<DownloadModel[]>([]);
+  /** Whole-table counts from /api/downloads/info — `downloads` is only the current page. */
+  downloadInfo = signal<Nullable<DownloadInfoModel>>(null);
   uiConfig = signal<UiConfig>(DefaultUiConfig);
   filters = signal<FilterModel>(DefaultFilters);
   paginator = signal<PaginatorModel>(DefaultPaginator);

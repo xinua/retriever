@@ -4,7 +4,7 @@ import { StorageService } from '@shared/services';
 import { delay, filter, map, merge, take } from 'rxjs';
 import { HEIGHT_CHANGE_TOKEN, SCROLL_TOKEN } from '../constants/scroll-token';
 
-type AnimationNames = 'none' | 'rise' | 'reveal' | 'unblur' | 'move-right' | 'move-left' | 'fly-up';
+type AnimationNames = 'none' | 'rise' | 'reveal' | 'unblur' | 'move-right' | 'move-left' | 'fly-up' | 'fade';
 
 @Directive({
   selector: '[rtAppear]',

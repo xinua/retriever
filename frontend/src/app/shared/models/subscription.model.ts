@@ -15,7 +15,7 @@ export enum Types {
 export enum VideoFormats {
   AUTO = 'auto',
   MP4 = 'mp4',
-  IOS = 'ios',
+  MKV = 'mkv',
 }
 
 export enum AudioFormats {

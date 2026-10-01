@@ -490,56 +490,60 @@ function buildFormatArgs(opts: JobOptions): string[] {
     ];
   }
 
-  // An explicit choice is honoured as-is; "auto" only avoids HEVC.
-  const explicit = VCODEC_FILTERS[opts.codec ?? "auto"];
-  const preferred = explicit ?? NO_HEVC;
-  const codec = explicit ?? "";
+  // An explicit choice is preferred, "auto" only avoids HEVC. Neither is a
+  // requirement: YouTube never offers H.265, so a selector that insisted on
+  // it failed with "Requested format is not available". The tiers below fall
+  // back to the best stream in any codec, and download-queue re-encodes it
+  // into an explicit choice afterwards (see transcode.ts).
+  const preferred = VCODEC_FILTERS[opts.codec ?? "auto"] ?? NO_HEVC;
 
-  const isMp4 = opts.format === "mp4" || opts.format === "ios";
+  const isMp4 = opts.format === "mp4";
+
+  // Matroska holds any codec, so it needs no say in which streams are picked:
+  // a merge is written straight into it, and a site's single ready-made file
+  // (an mp4, usually) is remuxed — a copy, never a re-encode.
+  const container = isMp4
+    ? ["--merge-output-format", "mp4"]
+    : opts.format === "mkv"
+      ? ["--merge-output-format", "mkv", "--remux-video", "mkv"]
+      : [];
 
   if (opts.quality === "worst") {
     // A codec filter would fight the "smallest possible" intent, so drop it.
     return isMp4
-      ? [
-          "-f", "wv*[ext=mp4]+wa[ext=m4a]/wv*+wa/w[ext=mp4]/w",
-          "--merge-output-format", "mp4"
-        ]
-      : ["-f", "wv*+wa/w"];
+      ? ["-f", "wv*[ext=mp4]+wa[ext=m4a]/wv*+wa/w[ext=mp4]/w", ...container]
+      : ["-f", "wv*+wa/w", ...container];
   }
 
   const height = QUALITY_HEIGHTS[opts.quality ?? ""];
   const cap = height ? `[height<=${height}]` : "";
-  const filter = `${codec}${cap}`;
   const wanted = `${preferred}${cap}`;
 
-  // iOS uses the same mp4-friendly selector; the client switch happens below.
   // The preferred tiers come first and the plain ones behind them, so the
   // codec preference never costs a download that could otherwise happen.
   const selectors = isMp4
     ? [
         `bv*${wanted}[ext=mp4]+ba[ext=m4a]`,
         `bv*${wanted}+ba`,
-        `bv*${filter}[ext=mp4]+ba[ext=m4a]`,
-        `bv*${filter}+ba`,
+        `bv*${cap}[ext=mp4]+ba[ext=m4a]`,
+        `bv*${cap}+ba`,
         `b${wanted}[ext=mp4]`,
         `b${cap}[ext=mp4]`,
         `b${cap}`
       ]
-    : [`bv*${wanted}+ba`, `bv*${filter}+ba`, `b${wanted}`, `b${cap}`];
+    : [`bv*${wanted}+ba`, `bv*${cap}+ba`, `b${wanted}`, `b${cap}`];
 
   // Last resort when the height cap matches nothing — a vertical TikTok is
   // 1024 tall, so "720p or below" excludes every format it has. Drop the cap
   // rather than fail, but keep the codec preference one tier longer: going
   // straight to a bare "b" here was enough to hand back the HEVC copy the
   // preference exists to avoid.
-  if (cap) selectors.push(`b${preferred}`, "b");
+  if (cap) selectors.push(`b${preferred}`, "b", "bv*+ba");
 
-  // An explicit codec makes the preferred and plain tiers identical.
+  // Without a cap the preferred and plain tiers can coincide.
   const chain = [...new Set(selectors)].join("/");
 
-  return isMp4
-    ? ["-f", chain, "--merge-output-format", "mp4"]
-    : ["-f", chain];
+  return ["-f", chain, ...container];
 }
 
 /**
@@ -1002,10 +1006,6 @@ export async function buildArgs(
 
   if (opts.splitChapters && opts.type !== "thumbnail") {
     args.push("--split-chapters");
-  }
-
-  if (opts.format === "ios" && opts.type === "video") {
-    args.push("--extractor-args", "youtube:player_client=ios");
   }
 
   if (settings.cookiesPath?.trim()) {

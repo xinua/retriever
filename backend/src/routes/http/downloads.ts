@@ -6,6 +6,7 @@ import { db } from "../../db/index.js";
 import { channel, download, settings } from "../../db/schema.js";
 import * as DownloadQueue from "../../services/download-queue.js";
 import { startManualDownload } from "../../services/manual-download.js";
+import { lookupDownloads, lookupKey } from "../../services/download-lookup.js";
 import * as Poster from "../../services/poster.js";
 import * as MediaQuality from "../../services/media-quality.js";
 import {
@@ -26,7 +27,7 @@ import {
 } from "../../models/download.model.js";
 import type { Download, Settings } from "../../db/types.js";
 
-const VIDEO_FORMATS = new Set(["auto", "mp4", "ios"]);
+const VIDEO_FORMATS = new Set(["auto", "mp4", "mkv"]);
 const AUDIO_FORMATS = new Set(["m4a", "mp3", "opus", "wav", "flac"]);
 const CODECS = new Set(["auto", "h264", "h265", "av1", "vp9"]);
 
@@ -427,6 +428,38 @@ export async function downloadsRoutes(app: FastifyInstance) {
   });
 
   /**
+   * What became of a URL: the latest row for every item it stands for, split
+   * into video and audio. The browser extension asks this when its popup
+   * opens, so a card can show "downloading" or "downloaded" for something
+   * queued earlier — live changes after that arrive over the websocket.
+   *
+   * Empty lists are the answer for a URL never downloaded, not a 404: most
+   * URLs the extension asks about are exactly that.
+   */
+  app.get("/api/downloads/lookup", async (req, reply) => {
+    const { url } = req.query as { url?: string };
+
+    const key = typeof url === "string" ? lookupKey(url) : null;
+
+    if (!key) {
+      return reply.code(400).send({ error: "A valid url is required" });
+    }
+
+    const appSettings = await loadSettings();
+
+    if (!appSettings) {
+      return reply.code(500).send({ error: "Settings unavailable" });
+    }
+
+    const { video, audio } = await lookupDownloads(key);
+
+    return {
+      video: await withFileExists(Poster.decorateAll(video), appSettings),
+      audio: await withFileExists(Poster.decorateAll(audio), appSettings)
+    };
+  });
+
+  /**
    * The download behind a watcher's last video — what the widget shows for a
    * channel. One row rather than a list because the widget has room for one
    * card, and asking for it by watcher saves paging through the whole history
@@ -632,7 +665,8 @@ export async function downloadsRoutes(app: FastifyInstance) {
       .set({
         filePath: file.path,
         mediaQuality: media.quality,
-        mediaCodec: media.codec
+        mediaCodec: media.codec,
+        mediaFormat: media.format
       })
       .where(eq(download.id, rowId))
       .returning();

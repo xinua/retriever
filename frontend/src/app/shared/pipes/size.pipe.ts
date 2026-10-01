@@ -13,8 +13,8 @@ export class SizePipe implements PipeTransform {
     let value = bytes;
     let unit = 0;
 
-    while (value >= 1024 && unit < units.length - 1) {
-      value /= 1024;
+    while (value >= 1000 && unit < units.length - 1) {
+      value /= 1000;
       unit += 1;
     }
 

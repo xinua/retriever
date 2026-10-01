@@ -2,11 +2,10 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { MatButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
-import { AppVersion, SettingsDialog } from '@shared/components';
+import { AppVersion } from '@shared/components';
 import { HttpService, StorageService } from '@shared/services';
 import { NotifierService } from 'angular-notifier';
 import { catchError, of } from 'rxjs';
-import { ThemeDialog } from '../../shared/components/theme-dialog/theme-dialog';
 
 @Component({
   selector: 'rt-header',
@@ -28,11 +27,15 @@ export class Header implements OnInit {
     this._loadVersion();
   }
 
-  openSettingsDialog(): void {
+  // Dialogs are imported on click so their form-field/select code stays out
+  // of the header chunk until someone actually opens one.
+  async openSettingsDialog(): Promise<void> {
+    const { SettingsDialog } = await import('../../shared/components/settings-dialog/settings-dialog');
     this._dialog.open(SettingsDialog, { maxWidth: '500px' });
   }
 
-  openThemeDialog(): void {
+  async openThemeDialog(): Promise<void> {
+    const { ThemeDialog } = await import('../../shared/components/theme-dialog/theme-dialog');
     this._dialog.open(ThemeDialog, { maxWidth: '500px' });
   }
 

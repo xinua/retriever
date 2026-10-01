@@ -54,3 +54,18 @@ export const clearTextEffect = (text: string): Observable<string> => {
 export function hasFile(download: Nullable<DownloadModel>): boolean {
   return download?.fileExists ?? !!download?.filePath;
 }
+
+/** The browser's IANA time zone, such as `Europe/Kyiv`. */
+export function browserTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+/** Every IANA zone the browser knows, for pickers. Falls back to just the browser's own. */
+export function supportedTimeZones(): string[] {
+  const intl = Intl as typeof Intl & { supportedValuesOf?: (key: 'timeZone') => string[] };
+  const zones = intl.supportedValuesOf?.('timeZone') ?? [];
+  const own = browserTimeZone();
+
+  // UTC is missing from some engines' list, and it is the server default.
+  return [...new Set([own, 'UTC', ...zones])].sort();
+}

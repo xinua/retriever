@@ -60,6 +60,16 @@ export class HttpService {
       .pipe(tap((settings) => this._storage.settings.set(settings)));
   }
 
+  /**
+   * Saves `timeZone` only if the server has none yet, and returns the settings
+   * either way. Safe to call on every load.
+   */
+  fillTimeZone(timeZone: string): Observable<SettingsModel> {
+    return this._http
+      .post<SettingsModel>('/api/settings/time-zone', { timeZone })
+      .pipe(tap((settings) => this._storage.settings.set(settings)));
+  }
+
   getUiConfig(): Observable<UiConfig> {
     return this._http.get<UiConfig>('/api/ui-config').pipe(
       tap((uiConfig) => this._storage.uiConfig.set(uiConfig)),

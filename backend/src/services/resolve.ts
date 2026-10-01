@@ -259,7 +259,13 @@ function parentInfo(data: any): ParentInfo {
  */
 export async function resolveTarget(
   rawUrl: string,
-  settings: Settings
+  settings: Settings,
+  /**
+   * The request's own yt-dlp arguments. Resolving reads the page just like a
+   * download does, so flags such as --referer or --cookies must apply here
+   * too — without them a site that needs them fails before a row is queued.
+   */
+  requestArgs: string | null = null
 ): Promise<ResolvedTarget> {
   const target = normalizeTarget(rawUrl);
 
@@ -282,6 +288,7 @@ export async function resolveTarget(
   args.push(...ytdlp.jsRuntimeArgs());
   args.push(...ytdlp.potArgs());
   args.push(...ytdlp.tokenizeArgs(settings.ytdlpArgs));
+  args.push(...ytdlp.tokenizeArgs(requestArgs));
   args.push("--", target);
 
   let data: any = null;

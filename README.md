@@ -56,7 +56,7 @@ Perfect if you:
 
 - 🔗 **Paste anything** — single video, playlist, or a whole channel (expanded into one job per video)
 - 🌍 **YouTube, TikTok, Instagram**, and everything else `yt-dlp` handles
-- 🎬 **Video** — MP4 or iOS-friendly, up to 4K, codec-pinned to H.264 / H.265 / AV1 / VP9
+- 🎬 **Video** — MP4, MKV or best available, up to 4K, codec-pinned to H.264 / H.265 / AV1 / VP9
 - 🎵 **Audio** — MP3, M4A, OPUS, WAV, FLAC at 128 / 192 / 320 kbps or best available
 - 🖼 **Thumbnail-only** downloads
 - ✂️ **Clip** a time range without fetching the whole video
@@ -71,7 +71,7 @@ Perfect if you:
 
 - 📡 **RSS-based tracking** — no API key, no quota
 - ⏱ **Flexible polling** — every N minutes within an optional active time range, or at one or more fixed times each day
-- 1️⃣ **One-time polling** — stop polling for the day once a new video has been downloaded
+- 1️⃣ **Intermittent polling** — stop polling for the day once a new video has been downloaded
 - 🎯 **Per-channel settings** — type, format, codec, folder, prefix, extra args, webhook, SponsorBlock, split by chapters
 - 👯 **Same channel, many subscriptions** — e.g. grab a channel as video and as audio; each keeps its own history
 - 🩳 **Shorts** included or skipped, your call

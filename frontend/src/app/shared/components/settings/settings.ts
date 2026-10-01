@@ -1,5 +1,14 @@
-import { Component, inject, OnInit, output, signal } from '@angular/core';
-import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Component, computed, inject, OnInit, output, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import {
+  AbstractControl,
+  FormBuilder,
+  FormsModule,
+  ReactiveFormsModule,
+  ValidationErrors,
+  Validators,
+} from '@angular/forms';
+import { MatAutocomplete, MatAutocompleteTrigger, MatOption } from '@angular/material/autocomplete';
 import { MatButton } from '@angular/material/button';
 import { MatCard, MatCardContent, MatCardHeader, MatCardSubtitle, MatCardTitle } from '@angular/material/card';
 import { MatIcon } from '@angular/material/icon';
@@ -8,7 +17,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { NotifierService } from 'angular-notifier';
 import { catchError, of, tap } from 'rxjs';
 import { YtdlpValidatorDirective } from '../../directives';
-import { equal } from '../../helpers';
+import { browserTimeZone, equal, supportedTimeZones } from '../../helpers';
 import { PotStatusModel, SettingsFormModel, SettingsModel } from '../../models/settings.model';
 import { HttpService, SnackbarService, SnackbarType, StorageService } from '../../services';
 import { RtValidators } from '../../validators';
@@ -33,6 +42,9 @@ import { RtValidators } from '../../validators';
     MatError,
     MatSuffix,
     MatTooltip,
+    MatAutocomplete,
+    MatAutocompleteTrigger,
+    MatOption,
   ],
   templateUrl: './settings.html',
   styleUrl: './settings.css',
@@ -56,6 +68,10 @@ export class Settings implements OnInit {
    */
   potStatus = signal<PotStatusModel | null>(null);
 
+  readonly browserTimeZone = browserTimeZone();
+  private readonly _timeZones = supportedTimeZones();
+  private readonly _knownTimeZones = new Set(this._timeZones);
+
   form = this._fb.group<SettingsFormModel>({
     webhookUrl: this._fb.control('', { validators: [RtValidators.url] }),
     downloadsDir: this._fb.control('./'),
@@ -65,6 +81,19 @@ export class Settings implements OnInit {
       nonNullable: true,
       validators: [Validators.min(1), Validators.max(10)],
     }),
+    timeZone: this._fb.control<string | null>(null, {
+      validators: [(control) => this._validateTimeZone(control)],
+    }),
+  });
+
+  private readonly _timeZoneQuery = toSignal(this.form.controls.timeZone.valueChanges, { initialValue: null });
+
+  /** Zones matching what has been typed, capped so the panel stays quick to render. */
+  readonly timeZoneOptions = computed(() => {
+    const query = (this._timeZoneQuery() ?? '').trim().toLowerCase().replace(/\s+/g, '_');
+    const matches = query ? this._timeZones.filter((zone) => zone.toLowerCase().includes(query)) : this._timeZones;
+
+    return matches.slice(0, 50);
   });
 
   ngOnInit() {
@@ -80,9 +109,17 @@ export class Settings implements OnInit {
     this._loadPotStatus();
   }
 
+  useBrowserTimeZone() {
+    this.form.controls.timeZone.setValue(this.browserTimeZone);
+    this.form.controls.timeZone.markAsDirty();
+  }
+
   saveSettings() {
+    // Empty means "no zone saved": the server then falls back to its own clock.
+    const timeZone = this.form.value.timeZone?.trim() || null;
+
     this._httpService
-      .saveSettings({ ...this._storage.settings(), ...this.form.value } as SettingsModel)
+      .saveSettings({ ...this._storage.settings(), ...this.form.value, timeZone } as SettingsModel)
       .pipe(
         tap((settings: SettingsModel) => this._storage.settings.set(settings)),
         tap(() => this.closeDialog.emit()),
@@ -138,6 +175,11 @@ export class Settings implements OnInit {
         }),
       )
       .subscribe();
+  }
+
+  private _validateTimeZone(control: AbstractControl<string | null>): ValidationErrors | null {
+    const value = control.value?.trim();
+    return !value || this._knownTimeZones.has(value) ? null : { unknownTimeZone: true };
   }
 
   private _loadVersion() {

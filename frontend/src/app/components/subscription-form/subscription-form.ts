@@ -49,7 +49,7 @@ import {
 import { HttpService, SnackbarType, StorageService } from '@shared/services';
 import { RtValidators } from '@shared/validators';
 import { NotifierService } from 'angular-notifier';
-import { NgxMaskDirective } from 'ngx-mask';
+import { NgxMaskDirective, provideNgxMask } from 'ngx-mask';
 import { catchError, combineLatest, map, Observable, of, startWith, tap } from 'rxjs';
 import { TimePipe } from '../../shared/pipes/time.pipe';
 import { IntervalRange } from './components/interval-range/interval-range';
@@ -92,6 +92,7 @@ import { SubscriptionFlagKey } from './subscription-form.model';
     LowerCasePipe,
     IntervalRange,
   ],
+  providers: [provideNgxMask()],
   templateUrl: './subscription-form.html',
   styleUrl: './subscription-form.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -107,6 +108,8 @@ export class SubscriptionForm implements OnInit {
 
   protected readonly defaultChannel = DefaultSubscription;
   globalWebhookURL = computed((): string => this._storage.settings().webhookUrl);
+  /** The zone poll hours are read in - see the time zone field in settings. */
+  timeZoneLabel = computed((): string => this._storage.settings().timeZone ?? 'server time');
   globalWebhookURL$ = toObservable(this.globalWebhookURL);
 
   form!: FormGroup<ChannelFormModel>;
@@ -226,6 +229,10 @@ export class SubscriptionForm implements OnInit {
   }
 
   resetForm(): void {
+    if (this.isEditing()) {
+      this.closeForm();
+      return;
+    }
     this._storage.editingSubscription.set(null);
     this.form.clearValidators();
     this._formDirective()?.resetForm(DefaultSubscription);
@@ -306,7 +313,6 @@ export class SubscriptionForm implements OnInit {
       });
   }
 
-  // todo - update to track other tabs
   private _trackChannel() {
     effect((): void => {
       // If the channel was deleted while editing, close the form

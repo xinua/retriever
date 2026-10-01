@@ -18,7 +18,7 @@
 
   <mat-card-content class="max-h-[80vh] overflow-y-auto">
     @if (!!latestChangelog()) {
-      @for (type of changeTypes(); track $index) {
+      @for (type of changeTypes().filter((type) => latestChangelog()?.[type]?.length > 0); track $index) {
         <h3 class="text-lg font-medium mt-4">{{ type | titlecase }}</h3>
         <ul>
           @for (change of latestChangelog()?.[type]; track $index) {

@@ -11,7 +11,7 @@ export const CodecLabels: Record<Codecs, string> = {
 export const VideoFormatLabels: Record<VideoFormats, string> = {
   [VideoFormats.AUTO]: 'Auto',
   [VideoFormats.MP4]: 'MP4',
-  [VideoFormats.IOS]: 'iOS',
+  [VideoFormats.MKV]: 'MKV',
 };
 
 export const AudioFormatLabels: Record<AudioFormats, string> = {

@@ -14,6 +14,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatCheckbox } from '@angular/material/checkbox';
 import {
@@ -27,16 +28,18 @@ import { MatIcon } from '@angular/material/icon';
 import { MatFormField, MatInput, MatLabel, MatSuffix } from '@angular/material/input';
 import { MatOption, MatSelect, MatSelectTrigger } from '@angular/material/select';
 import { MatTooltip } from '@angular/material/tooltip';
+import { ActivatedRoute } from '@angular/router';
+import { DefaultManualForm } from '@shared/constants';
 import {
   AudioFormats,
+  AudioQuality,
   Codecs,
   HomeSection,
-  ManualFormModel,
   ManualDownloadRequest,
-  VideoQuality,
+  ManualFormModel,
   Types,
   VideoFormats,
-  AudioQuality,
+  VideoQuality,
 } from '@shared/models';
 import { HttpService, LayoutService, ScrollToService, StorageService } from '@shared/services';
 import { RtValidators } from '@shared/validators';
@@ -44,8 +47,6 @@ import { NotifierService } from 'angular-notifier';
 import { catchError, filter, from, map, Observable, of, skip, tap } from 'rxjs';
 import { finalize, startWith, take } from 'rxjs/operators';
 import { CODEC_ICONS, FORMAT_ICONS, QUALITY_ICONS, TYPE_ICONS } from './manual-form.constants';
-import { DefaultManualForm } from '@shared/constants';
-import { MatButtonModule } from '@angular/material/button';
 
 @Component({
   selector: 'rt-manual-form',
@@ -84,6 +85,7 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _scrollTo = inject(ScrollToService);
   private readonly _layout = inject(LayoutService);
+  private readonly _route = inject(ActivatedRoute);
 
   readonly typesEnum = Types;
   readonly types = Object.values(Types);
@@ -137,6 +139,7 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     this.form.patchValue(this._storage.manualDownloadForm());
+    this._patchFormFromQueryParams();
   }
 
   ngAfterViewInit(): void {
@@ -304,5 +307,28 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
     const capped = truncated ? ` (capped at ${limit})` : '';
 
     return `Queued ${queued} video${queued === 1 ? '' : 's'} from this ${kind}${capped}`;
+  }
+
+  private _patchFormFromQueryParams(): void {
+    const controls = this.form.controls;
+    const paramsMap: Record<string, FormControl> = {
+      url: controls.url,
+      type: controls.type,
+      format: controls.format,
+      quality: controls.quality,
+      codec: controls.codec,
+      removeSponsor: controls.removeSponsor,
+      prefix: controls.prefix,
+      destinationFolder: controls.destinationFolder,
+    };
+
+    this._route.queryParams.pipe(take(1)).subscribe((params) => {
+      if (params['url'] && RtValidators.validateUrl(params['url'])) {
+        Object.entries(paramsMap).forEach(([key, control]) => {
+          control.setValue(params[key]);
+        });
+      }
+      if (params['download'] === 'true') this.download();
+    });
   }
 }

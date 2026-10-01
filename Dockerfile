@@ -5,8 +5,8 @@
 
   WORKDIR /frontend
   
-  COPY frontend/package.json frontend/pnpm-lock.yaml* ./
-  RUN corepack enable && pnpm install
+  COPY frontend/package.json frontend/pnpm-lock.yaml ./
+  RUN corepack enable && pnpm install --frozen-lockfile
   
   COPY frontend .
   RUN pnpm build
@@ -93,7 +93,7 @@
   CMD ["node", "dist/server.js"]
 
   LABEL org.opencontainers.image.source="https://github.com/xinua/retriever"
-  LABEL org.opencontainers.image.version="1.1.7"
+  LABEL org.opencontainers.image.version="1.1.8"
   LABEL org.opencontainers.image.title="Retriever"
   LABEL org.opencontainers.image.description="yt-dlp Web UI"
   LABEL org.opencontainers.image.documentation="https://github.com/xinua/retriever/blob/main/README.md"

@@ -40,7 +40,7 @@ export async function startManualDownload(
   req: ManualDownloadRequest,
   settings: Settings
 ): Promise<ManualDownloadResult> {
-  const target = await resolveTarget(req.url, settings);
+  const target = await resolveTarget(req.url, settings, req.options.ytdlpArgs);
 
   if (!target.entries.length) {
     throw new Error("No downloadable videos found at that URL");
