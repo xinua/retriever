@@ -60,14 +60,8 @@
               (remove)="remove($event.download, $event.elementRef, downloadsContainer)"
               (saveAs)="saveAs($event)"
               (copyFilePath)="copyFilePath($event)"
-              rtAppear
-              [animationName]="
-                paginator().page === 0 && paginator().limit !== 1
-                  ? $index % 2 === 0
-                    ? 'move-left'
-                    : 'move-right'
-                  : 'reveal'
-              "
+              [swipeDisabled]="paginator().limit !== 1"
+              (rtSwipe)="onSwipe($event)"
             />
           }
         </div>

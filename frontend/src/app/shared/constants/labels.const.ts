@@ -1,4 +1,6 @@
-import { AudioFormats, Codecs, DownloadStatus, HomeSection, VideoFormats } from '@shared/models';
+import { AudioFormats, Codecs, VideoFormats } from '../models/subscription.model';
+import { DownloadStatus } from '../models/download.model';
+import { HomeSection } from '../models/layout.model';
 
 export const CodecLabels: Record<Codecs, string> = {
   [Codecs.AUTO]: 'Auto',
@@ -11,10 +13,11 @@ export const CodecLabels: Record<Codecs, string> = {
 export const VideoFormatLabels: Record<VideoFormats, string> = {
   [VideoFormats.AUTO]: 'Auto',
   [VideoFormats.MP4]: 'MP4',
-  [VideoFormats.IOS]: 'iOS',
+  [VideoFormats.MKV]: 'MKV',
 };
 
 export const AudioFormatLabels: Record<AudioFormats, string> = {
+  [AudioFormats.AUTO]: 'Auto',
   [AudioFormats.M4A]: 'M4A',
   [AudioFormats.MP3]: 'MP3',
   [AudioFormats.OPUS]: 'OPUS',

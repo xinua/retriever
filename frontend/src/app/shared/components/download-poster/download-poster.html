@@ -1,56 +1,88 @@
 @let isFailed = download().status === downloadStatus.FAILED;
 @let hasError = isFailed && download().error;
+<!-- A failure that kept its file (ffmpeg fell over after the transfer) still has something to play. -->
+@let hideOnMobile = hasError && !hasFile();
 @let isPending = download().status === downloadStatus.QUEUED || download().status === downloadStatus.RUNNING;
 
-@if (activeMedia() !== download().id) {
-  @let isAbleToOpen = download().type !== 'thumbnail' && hasFile();
+<div class="relative rounded-md overflow-hidden">
+  @if (activeMedia() !== download().id) {
+    @let isAbleToOpen = download().type !== 'thumbnail' && hasFile();
 
-  <rt-steam-card
-    [imageSourceUrl]="download().thumbnailPath"
-    [retry]="!!download().thumbnailPath"
-    [pending]="isPending"
-    (cardClick)="togglePlay(download(), isAbleToOpen)"
-    imgSize="204x116"
-    alt="Video poster"
-    mockMessage="Poster%20not%20found"
-    [imageClass]="isAbleToOpen ? 'cursor-pointer aspect-video' : 'aspect-video'"
-    [customClass]="'w-full h-auto rounded-md overflow-hidden no-shadow ' + (hasError ? 'hidden lg:block' : '')"
-  />
-} @else {
-  <div
-    class="relative rounded-md overflow-hidden no-shadow flex items-end justify-center lg:w-[90%] lg:mx-auto h-auto w-full"
-  >
-    @if (download()?.type === 'video') {
-      <video
-        #previewVideo
-        [src]="mediaUrl()"
-        (click)="togglePlay(download(), true, $event)"
-        controls
-        autoplay
-        preload="metadata"
-        type="video/mp4"
-        class="w-full h-auto no-shadow aspect-video object-cover relative z-1"
-        (error)="handleError()"
-      ></video>
-    } @else if (download()?.type === 'audio') {
-      @if (!!download()?.thumbnailPath) {
+    <rt-steam-card
+      [imageSourceUrl]="download().thumbnailPath"
+      [retry]="!!download().thumbnailPath"
+      [pending]="isPending"
+      (cardClick)="togglePlay(download(), isAbleToOpen)"
+      imgSize="257x145"
+      alt="Video poster"
+      mockMessage="Poster%20not%20found"
+      [imageClass]="isAbleToOpen ? 'cursor-pointer aspect-video' : 'aspect-video'"
+      [customClass]="
+        'select-none w-full h-auto rounded-md overflow-hidden no-shadow ' + (hideOnMobile ? 'hidden lg:block' : '')
+      "
+    />
+
+    <ng-container *ngTemplateOutlet="indicator"></ng-container>
+  } @else {
+    <div class="relative rounded-md overflow-hidden no-shadow flex items-end justify-center h-auto w-full">
+      @if (download()?.type === 'video') {
+        <video
+          #previewVideo
+          [src]="mediaUrl()"
+          (click)="togglePlay(download(), true, $event)"
+          controls
+          autoplay
+          preload="metadata"
+          type="video/mp4"
+          class="w-full h-auto no-shadow aspect-video object-cover relative z-1"
+          (error)="handleError()"
+        ></video>
+        <ng-container *ngTemplateOutlet="indicator"></ng-container>
+      } @else if (download()?.type === 'audio') {
         <img
+          #posterImage
           [src]="download()?.thumbnailPath"
           (click)="togglePlay(download(), true, $event)"
+          (error)="posterImage.src = 'https://mockimage.tw/photo/257x145/1f1f1f/ff8800/Poster%20not%20found'"
           alt="Poster"
           class="w-full h-full aspect-video object-cover cursor-pointer"
         />
+        <div class="w-full absolute bottom-0 left-0 z-1">
+          <rt-audio-player
+            #previewAudio
+            playerSize="xs"
+            [audioUrl]="mediaUrl()"
+            [duration]="download().duration"
+            (click)="$event.stopPropagation()"
+            (gotError)="handleError()"
+          ></rt-audio-player>
+        </div>
+
+        <ng-container *ngTemplateOutlet="indicator"></ng-container>
       }
-      <div class="w-full absolute bottom-0 left-0 z-1">
-        <rt-audio-player
-          #previewAudio
-          playerSize="xs"
-          [audioUrl]="mediaUrl()"
-          [duration]="download().duration"
-          (click)="$event.stopPropagation()"
-          (gotError)="handleError()"
-        ></rt-audio-player>
+    </div>
+  }
+
+  <!-- The server refuses a new poster for thumbnail jobs and for downloads still in progress. -->
+  @if (download().type !== 'thumbnail' && !isPending) {
+    <rt-drop-area
+      label="Replace poster"
+      customClass="rounded-md"
+      [dialogData]="dialogData()"
+      (onFileDrop)="updatePoster($event)"
+    />
+  }
+
+  <ng-template #indicator>
+    @if (isUpdatingPoster()) {
+      <div
+        class="indicator absolute top-2 right-2 bg-amber-500 rounded-full z-1"
+        animate.enter="fadeIn"
+        animate.leave="fadeOut"
+        matTooltip="Updating thumbnail..."
+      >
+        <div class="indicator w-3 h-3 bg-amber-500/50 rounded-full animate-ping"></div>
       </div>
     }
-  </div>
-}
+  </ng-template>
+</div>

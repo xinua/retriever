@@ -1,4 +1,4 @@
-import { FastifyInstance } from "fastify";
+import { FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import fs from "node:fs";
 
@@ -6,8 +6,10 @@ import { db } from "../../db/index.js";
 import { channel, download, settings } from "../../db/schema.js";
 import * as DownloadQueue from "../../services/download-queue.js";
 import { startManualDownload } from "../../services/manual-download.js";
+import { lookupDownloads, lookupKey } from "../../services/download-lookup.js";
 import * as Poster from "../../services/poster.js";
 import * as MediaQuality from "../../services/media-quality.js";
+import * as ArtworkReplace from "../../services/artwork-replace.js";
 import {
   contentDisposition,
   contentTypeFor,
@@ -24,22 +26,14 @@ import {
   type DownloadStatus,
   type DownloadType
 } from "../../models/download.model.js";
+import * as MediaOptions from "../../models/media-options.js";
 import type { Download, Settings } from "../../db/types.js";
 
-const VIDEO_FORMATS = new Set(["auto", "mp4", "ios"]);
-const AUDIO_FORMATS = new Set(["m4a", "mp3", "opus", "wav", "flac"]);
-const CODECS = new Set(["auto", "h264", "h265", "av1", "vp9"]);
-
-/**
- * Video quality is a resolution ceiling, audio quality a target bitrate. The
- * two vocabularies overlap only on "best", so which one a request is checked
- * against depends on its type.
- */
-const VIDEO_QUALITIES = new Set([
-  "best", "2160p", "1440p", "1080p", "720p", "480p", "360p", "240p", "worst"
-]);
-
-const AUDIO_QUALITIES = new Set(["best", "320kbps", "192kbps", "128kbps"]);
+const VIDEO_FORMATS = new Set<string>(MediaOptions.VIDEO_FORMATS);
+const AUDIO_FORMATS = new Set<string>(MediaOptions.AUDIO_FORMATS);
+const CODECS = new Set<string>(MediaOptions.CODECS);
+const VIDEO_QUALITIES = new Set<string>(MediaOptions.VIDEO_QUALITIES);
+const AUDIO_QUALITIES = new Set<string>(MediaOptions.AUDIO_QUALITIES);
 
 // hh:mm:ss, mm:ss or plain seconds — what --download-sections accepts.
 const TIMESTAMP = /^(\d{1,2}:){0,2}\d{1,2}(\.\d+)?$/;
@@ -264,6 +258,33 @@ async function newestForWatcher(
   return row;
 }
 
+/**
+ * The download an image upload is for, or null once the reply has been sent —
+ * a body that is not an image, an id that is not a number, a row that is gone.
+ */
+async function uploadTarget(req: FastifyRequest, reply: FastifyReply): Promise<Download | null> {
+  if (!Buffer.isBuffer(req.body)) {
+    reply.code(415).send({ error: "Send the image as the request body" });
+    return null;
+  }
+
+  const rowId = Number((req.params as { id: string }).id);
+
+  if (!Number.isInteger(rowId)) {
+    reply.code(400).send({ error: "id must be a number" });
+    return null;
+  }
+
+  const [row] = await db.select().from(download).where(eq(download.id, rowId));
+
+  if (!row) {
+    reply.code(404).send({ error: "Not found" });
+    return null;
+  }
+
+  return row;
+}
+
 async function loadSettings(): Promise<Settings | undefined> {
   const [row] = await db
     .select()
@@ -332,6 +353,12 @@ function parseManualBody(body: any):
   const clipStart = normalize(body?.clipStart);
   const clipEnd = normalize(body?.clipEnd);
 
+  const watcherId = body?.watcherId ?? null;
+
+  if (watcherId !== null && !Number.isInteger(watcherId)) {
+    return { ok: false, error: "watcherId must be a number" };
+  }
+
   for (const [label, value] of [["Clip start", clipStart], ["Clip end", clipEnd]] as const) {
     if (value && !TIMESTAMP.test(value)) {
       return { ok: false, error: `${label} must look like 00:01:15` };
@@ -356,7 +383,8 @@ function parseManualBody(body: any):
       // across an upgrade does not quietly stop cutting sponsor segments.
       removeSponsors:
         body?.removeSponsors === true || body?.removeSponsor === true,
-      splitChapters: body?.splitChapters === true
+      splitChapters: body?.splitChapters === true,
+      watcherId
     }
   };
 }
@@ -427,6 +455,38 @@ export async function downloadsRoutes(app: FastifyInstance) {
   });
 
   /**
+   * What became of a URL: the latest row for every item it stands for, split
+   * into video and audio. The browser extension asks this when its popup
+   * opens, so a card can show "downloading" or "downloaded" for something
+   * queued earlier — live changes after that arrive over the websocket.
+   *
+   * Empty lists are the answer for a URL never downloaded, not a 404: most
+   * URLs the extension asks about are exactly that.
+   */
+  app.get("/api/downloads/lookup", async (req, reply) => {
+    const { url } = req.query as { url?: string };
+
+    const key = typeof url === "string" ? lookupKey(url) : null;
+
+    if (!key) {
+      return reply.code(400).send({ error: "A valid url is required" });
+    }
+
+    const appSettings = await loadSettings();
+
+    if (!appSettings) {
+      return reply.code(500).send({ error: "Settings unavailable" });
+    }
+
+    const { video, audio } = await lookupDownloads(key);
+
+    return {
+      video: await withFileExists(Poster.decorateAll(video), appSettings),
+      audio: await withFileExists(Poster.decorateAll(audio), appSettings)
+    };
+  });
+
+  /**
    * The download behind a watcher's last video — what the widget shows for a
    * channel. One row rather than a list because the widget has room for one
    * card, and asking for it by watcher saves paging through the whole history
@@ -476,6 +536,15 @@ export async function downloadsRoutes(app: FastifyInstance) {
 
     if (!parsed.ok) {
       return reply.code(400).send({ error: parsed.error });
+    }
+
+    if (parsed.options.watcherId !== null) {
+      const [watcher] = await db
+        .select({ id: channel.id })
+        .from(channel)
+        .where(eq(channel.id, parsed.options.watcherId));
+
+      if (!watcher) return reply.code(404).send({ error: "Subscription not found" });
     }
 
     const [appSettings] = await db
@@ -632,7 +701,8 @@ export async function downloadsRoutes(app: FastifyInstance) {
       .set({
         filePath: file.path,
         mediaQuality: media.quality,
-        mediaCodec: media.codec
+        mediaCodec: media.codec,
+        mediaFormat: media.format
       })
       .where(eq(download.id, rowId))
       .returning();
@@ -643,6 +713,43 @@ export async function downloadsRoutes(app: FastifyInstance) {
     broadcast("download-updated", decorated);
 
     return decorated;
+  });
+
+  /**
+   * Replaces the avatar of the YouTube channel behind this download with the
+   * uploaded picture (the request body is the image itself). Shared per
+   * channel, so every row and subscription of that channel changes with it.
+   */
+  app.put("/api/downloads/:id/avatar", async (req, reply) => {
+    const row = await uploadTarget(req, reply);
+
+    if (!row) return;
+
+    const result = await ArtworkReplace.replaceDownloadAvatar(row, req.body as Buffer);
+
+    if (!result.ok) return reply.code(result.status).send({ error: result.error });
+
+    return result.download;
+  });
+
+  /**
+   * Replaces this download's poster with the uploaded picture. With
+   * `?embed=true` it also goes into the file as cover art, which for a video
+   * means rewriting the file once — the response waits for that, and says in
+   * `coverEmbedded` whether it worked.
+   */
+  app.put("/api/downloads/:id/poster", async (req, reply) => {
+    const row = await uploadTarget(req, reply);
+
+    if (!row) return;
+
+    const { embed } = (req.query ?? {}) as { embed?: string };
+
+    const result = await ArtworkReplace.replacePoster(row, req.body as Buffer, embed === "true");
+
+    if (!result.ok) return reply.code(result.status).send({ error: result.error });
+
+    return { ...result.download, coverEmbedded: result.coverEmbedded };
   });
 
   app.post("/api/downloads/:id/retry", async (req, reply) => {

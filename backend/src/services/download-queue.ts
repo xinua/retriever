@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { EventEmitter } from "node:events";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
@@ -16,7 +17,9 @@ import * as Ffmpeg from "./ffmpeg.js";
 import * as Poster from "./poster.js";
 import * as CoverArt from "./cover-art.js";
 import * as MediaQuality from "./media-quality.js";
+import * as Transcode from "./transcode.js";
 import { isFfmpegFailure, isPermanent } from "./retry-policy.js";
+import { withFileExists } from "./download-file.js";
 
 const PROGRESS_BROADCAST_MS = 1000;
 
@@ -65,6 +68,20 @@ const active = new Set<number>();
 
 let pumping = false;
 
+/**
+ * Lifecycle of a job for code outside the queue that has to follow one -
+ * the Telegram bot, which edits its status message as the job moves on and
+ * sends the file at the end, and the failure notifications.
+ *
+ * - "started" (row): the job left the queue and is about to spawn.
+ * - "finished" (row, media): the row reached done, failed or canceled. `media`
+ *   is the probe of the finished file on a successful download, null otherwise.
+ */
+export const events = new EventEmitter<{
+  started: [row: Download];
+  finished: [row: Download, media: MediaQuality.MediaInfo | null];
+}>();
+
 export type DownloadRequest = {
   channel: Channel;
   settings: Settings;
@@ -82,7 +99,30 @@ async function getRow(id: number): Promise<Download | undefined> {
 
 async function emit(id: number) {
   const row = await getRow(id);
-  if (row) broadcast("download-updated", Poster.decorate(row));
+  if (!row) return;
+
+  const [decorated] = await decorateWithFile([row]);
+  broadcast("download-updated", decorated);
+}
+
+/**
+ * Decorates rows the way the listing does, `fileExists` included. A pushed
+ * row replaces the client's copy wholesale, and without the flag the client
+ * falls back to "has a path, so has a file" — which turned every re-announced
+ * row whose file had since been deleted back into a playable card.
+ *
+ * Queued and running rows are never checked (see withFileExists), so the
+ * per-progress emits cost nothing but the settings read, and skip even that.
+ */
+async function decorateWithFile(rows: Download[]) {
+  const decorated = Poster.decorateAll(rows);
+
+  const settled = rows.some((r) => r.status !== "queued" && r.status !== "running");
+  const appSettings = settled ? await getSettings() : undefined;
+
+  return appSettings
+    ? withFileExists(decorated, appSettings)
+    : decorated.map((row) => ({ ...row, fileExists: false }));
 }
 
 /**
@@ -105,7 +145,7 @@ export async function republish(ids: number[]): Promise<void> {
 
   // One message for however many rows share the picture that just landed —
   // an avatar is per channel, so a playlist expansion is a single event.
-  if (rows.length) broadcast("downloads-batch", Poster.decorateAll(rows));
+  if (rows.length) broadcast("downloads-batch", await decorateWithFile(rows));
 }
 
 async function getSettings(): Promise<Settings | undefined> {
@@ -163,6 +203,16 @@ export type ManualOptions = {
   clipEnd: string | null;
   removeSponsors: boolean;
   splitChapters: boolean;
+  // Set when a subscription re-downloads its last video ("Download again"):
+  // the row stays manual, but the subscription's player finds it as its own.
+  watcherId: number | null;
+  // Set when the Telegram bot queued the download: the row is then a
+  // "telegram" one, and is sent to this chat once it is done.
+  telegram?: {
+    chatId: string;
+    messageId: number;
+    delivery: "video" | "audio";
+  } | null;
 };
 
 /**
@@ -179,7 +229,7 @@ export async function enqueueManual(
 
   const values: NewDownload[] = usable
     .map((entry) => ({
-      watcherId: null,
+      watcherId: options.watcherId,
       channelId: entry.channelId,
       channelName: entry.channelName,
       videoId: entry.videoId,
@@ -188,7 +238,10 @@ export async function enqueueManual(
       duration: entry.duration,
       status: "queued",
       platform: entry.platform,
-      source: "manual",
+      source: options.telegram ? "telegram" : "manual",
+      telegramChatId: options.telegram?.chatId ?? null,
+      telegramMessageId: options.telegram?.messageId ?? null,
+      telegramDelivery: options.telegram?.delivery ?? null,
       type: options.type,
       format: options.format,
       codec: options.codec,
@@ -228,7 +281,8 @@ export async function enqueueManual(
 }
 
 /**
- * Manual rows have no channel to read options from, so they carry their own.
+ * Manual and Telegram rows have no channel to read options from, so they
+ * carry their own.
  * Watcher rows still read the live channel, which means editing a channel
  * keeps affecting the downloads it has already queued.
  */
@@ -327,7 +381,7 @@ async function start(id: number) {
   }
 
   const opts =
-    row.source === "manual"
+    row.source !== "watcher"
       ? optionsFromRow(row)
       : ch
         ? ytdlp.optionsFromChannel(ch)
@@ -374,6 +428,8 @@ async function start(id: number) {
   // have one, so they are unaffected.
   const infoJsonPath = await InfoCache.pathIfFresh(id);
   const usedInfo = infoJsonPath !== null;
+
+  events.emit("started", row);
 
   const args = await ytdlp.buildArgs(
     opts,
@@ -425,6 +481,20 @@ async function start(id: number) {
   child.on("close", async (code, signal) => {
     release(id);
 
+    // Held again until the handler is done: a conversion can run for longer
+    // than the download did, and it is the CPU-heavy part.
+    active.add(id);
+
+    try {
+      await onClose(code, signal);
+    } finally {
+      active.delete(id);
+      running.delete(id);
+      void pump();
+    }
+  });
+
+  const onClose = async (code: number | null, signal: NodeJS.Signals | null) => {
     const current = await getRow(id);
 
     if (current?.status === "canceled" || signal === "SIGTERM") {
@@ -436,7 +506,7 @@ async function start(id: number) {
       ytdlp.cleanupTemp(appSettings, id);
       autoRetries.delete(id);
 
-      const output = resolveOutputPath(opts, filePath);
+      let output = resolveOutputPath(opts, filePath);
 
       // yt-dlp exits 0 without transferring anything when it decides the video
       // needs no work — an archive hit is the way that happens here. Nothing
@@ -455,22 +525,69 @@ async function start(id: number) {
           message: error
         });
 
-        void pump();
         return;
       }
 
-      const media = await MediaQuality.probe(output, opts.type);
+      let media = await MediaQuality.probe(output, opts.type);
+
+      if (opts.type === "video" && Transcode.needed(opts.codec, media.codec)) {
+        const converted = await convert(id, output, opts.codec!, media.duration ?? current?.duration ?? null);
+
+        if (converted.canceled) {
+          await discardFile(output);
+          await finish(id, "canceled", { error: null });
+          return;
+        }
+
+        if (converted.filePath) {
+          output = converted.filePath;
+          media = await MediaQuality.probe(output, opts.type);
+        } else {
+          // The download itself is fine, so it is kept — but the codec on the
+          // row is the probed one, and the reason it differs is said out loud.
+          broadcast("notification", {
+            type: "warning",
+            title: `Kept ${Transcode.LABELS[media.codec ?? ""] ?? media.codec}, not ${Transcode.LABELS[opts.codec!]}`,
+            subtitle: subtitleFor(current, ch),
+            message: converted.error
+          });
+        }
+      }
+
+      // Audio gets its poster and cover before the row is done and before the
+      // file is visible — see finishArtworkOffstage(). So does a video whose
+      // cover goes into the file, for the same reason.
+      const coverInFile = opts.type === "audio" || wantsVideoCover(output, appSettings);
+
+      if (coverInFile) {
+        await finishArtworkOffstage(current, output, homeBefore, opts, appSettings);
+
+        if ((await getRow(id))?.status === "canceled") {
+          await discardFile(output);
+          return;
+        }
+      }
 
       await finish(id, "done", {
         filePath: output,
         progress: 100,
         mediaQuality: media.quality,
-        mediaCodec: media.codec
-      });
+        mediaCodec: media.codec,
+        mediaFormat: media.format,
+        // yt-dlp's --print is the usual source, but a bare manifest (a DASH
+        // .mpd above all) reaches the generic extractor with no duration in
+        // it. The file has one, and it was just probed.
+        ...(current?.duration == null && media.duration
+          ? { duration: Math.round(media.duration) }
+          : {})
+      }, media);
       await onSuccess(ch, current);
 
-      // Cosmetic and slower than the notification deserves to wait for.
-      void finishArtwork(current, output, homeBefore);
+      // Cosmetic and slower than the notification deserves to wait for — this
+      // video's poster lives beside it, not in it.
+      if (!coverInFile) {
+        void finishArtwork(current, output, homeBefore, opts, appSettings);
+      }
     } else {
       const error = extractError(stderrTail) || `yt-dlp exited with code ${code}`;
 
@@ -481,7 +598,6 @@ async function start(id: number) {
       if (isFfmpegFailure(error)) {
         autoRetries.delete(id);
         await failFfmpeg(id, error, opts, appSettings, current, ch);
-        void pump();
         return;
       }
 
@@ -493,7 +609,6 @@ async function start(id: number) {
       if (usedInfo) {
         await InfoCache.drop(id);
         await requeueTransient(id, 0, `${error} (retrying without cached info)`);
-        void pump();
         return;
       }
 
@@ -502,7 +617,6 @@ async function start(id: number) {
       if (!isPermanent(error) && spent < MAX_AUTO_RETRIES) {
         autoRetries.set(id, spent + 1);
         await requeueTransient(id, spent + 1, error);
-        void pump();
         return;
       }
 
@@ -515,9 +629,56 @@ async function start(id: number) {
         message: error
       });
     }
+  };
+}
 
-    void pump();
-  });
+/**
+ * Re-encodes a finished download into the codec it asked for. The ffmpeg
+ * child is registered as the job's process, so cancel() and cancelAll() stop
+ * it like yt-dlp.
+ *
+ * Progress stays at 100 throughout, which the UI shows as post-processing —
+ * the same state yt-dlp's own merge and fixup steps sit in. Transcode reports
+ * a percentage, but a bar counting up from 0 again is indistinguishable from
+ * the download starting over, so it is not put on the row.
+ */
+async function convert(
+  id: number,
+  filePath: string,
+  codec: string,
+  duration: number | null
+): Promise<{ filePath?: string; canceled?: boolean; error?: string }> {
+  await db
+    .update(download)
+    .set({ phase: "converting", progress: 100, speed: null, eta: null })
+    .where(eq(download.id, id));
+  await emit(id);
+
+  const result = await Transcode.run(
+    filePath,
+    codec,
+    duration,
+    (child) => running.set(id, child),
+    () => {}
+  );
+
+  running.delete(id);
+
+  const current = await getRow(id);
+
+  if (current?.status === "canceled" || (!result.ok && result.canceled)) {
+    return { canceled: true };
+  }
+
+  return result.ok ? { filePath: result.filePath } : { error: result.error };
+}
+
+async function discardFile(target: string): Promise<void> {
+  try {
+    await fsp.rm(target, { force: true });
+  } catch {
+    // Already gone.
+  }
 }
 
 /**
@@ -567,7 +728,8 @@ async function failFfmpeg(
           filePath: rescued,
           progress: 100,
           mediaQuality: media?.quality ?? null,
-          mediaCodec: media?.codec ?? null
+          mediaCodec: media?.codec ?? null,
+          mediaFormat: media?.format ?? null
         }
       : {})
   });
@@ -658,9 +820,16 @@ async function finishArtwork(
   row: Download | undefined,
   filePath: string | null,
   /** Names that were in the destination folder before this job ran. */
-  before: Set<string>
+  before: Set<string>,
+  opts: ytdlp.JobOptions,
+  appSettings: Settings,
+  /**
+   * The folder yt-dlp wrote into, which is where a kept video sits. Differs
+   * from the file's own folder while an audio file is staged out of sight.
+   */
+  homeDir: string | null = filePath && path.dirname(filePath)
 ) {
-  if (!row || !filePath) return;
+  if (!row || !filePath || !homeDir) return;
 
   // A thumbnail job's own download is the picture.
   if (row.type === "thumbnail") return;
@@ -668,18 +837,107 @@ async function finishArtwork(
   // Audio has no frames of its own; the video it was extracted from was kept
   // for exactly this, and is ours to remove once the frame is out of it.
   const source =
-    row.type === "audio" ? await keptSource(filePath, before) : filePath;
+    row.type === "audio" ? await keptSource(homeDir, filePath, before) : filePath;
 
-  if (source) await capturePoster(row, source);
+  let captured = source ? await capturePoster(row, source) : false;
 
   if (source !== filePath) await discardKept(source);
 
-  await embedCover(row, filePath);
+  // What was kept can be the audio track alone — a DASH manifest serves video
+  // and audio separately, and the audio job only ever fetched the one — so
+  // there was nothing to grab a frame from. Go back for a moment of video.
+  if (!captured && row.type === "audio" && needsPosterSource(row)) {
+    captured = await captureFromClip(row, opts, appSettings);
+  }
+
+  await embedCover(row, filePath, appSettings);
 }
 
-async function capturePoster(row: Download, filePath: string) {
+/**
+ * Whether this video's poster goes into the file. Opt-in (see
+ * `settings.embedVideoCover`), and only for a container that can hold one.
+ */
+function wantsVideoCover(filePath: string, appSettings: Settings): boolean {
+  return appSettings.embedVideoCover && CoverArt.supports(filePath);
+}
+
+/**
+ * finishArtwork for a file that gets a cover, done where nobody is looking.
+ *
+ * yt-dlp has already moved the file into the destination folder, and the
+ * cover only goes in afterwards — after a frame grab, and for a DASH source
+ * after fetching a clip to grab it from, which together take seconds. A file
+ * manager with that folder open thumbnails the file the moment it appears,
+ * finds no cover, and caches the failure; the cover landing later never
+ * replaces it. So the file steps out into scratch space for the duration and
+ * comes back finished, under the name it already had.
+ *
+ * Falls back to working in place if it cannot be moved — the cover is still
+ * worth having even where a file manager may have seen the file without it.
+ */
+async function finishArtworkOffstage(
+  row: Download | undefined,
+  output: string,
+  before: Set<string>,
+  opts: ytdlp.JobOptions,
+  appSettings: Settings
+): Promise<void> {
+  if (!row) return;
+
+  const homeDir = path.dirname(output);
+  const stageDir = ytdlp.artworkStageDir(appSettings, row.id);
+  const staged = path.join(stageDir, path.basename(output));
+
+  try {
+    await fsp.mkdir(stageDir, { recursive: true });
+    await fsp.rename(output, staged);
+  } catch {
+    await finishArtwork(row, output, before, opts, appSettings, homeDir);
+    return;
+  }
+
+  try {
+    await finishArtwork(row, staged, before, opts, appSettings, homeDir);
+  } catch (e) {
+    // Cosmetic: the download is done either way, and must still be marked so.
+    console.warn("Artwork failed:", e);
+  } finally {
+    // The download itself, not a by-product: it has to make it back.
+    try {
+      await fsp.rename(staged, output);
+    } catch {
+      await fsp.copyFile(staged, output);
+    }
+
+    await fsp.rm(stageDir, { recursive: true, force: true, maxRetries: 2 }).catch(() => {});
+  }
+}
+
+/** See ytdlp.fetchFrameClip. Best effort, like the rest of the artwork. */
+async function captureFromClip(
+  row: Download,
+  opts: ytdlp.JobOptions,
+  appSettings: Settings
+): Promise<boolean> {
+  try {
+    const clip = await ytdlp.fetchFrameClip(
+      opts,
+      appSettings,
+      row.url,
+      row.id,
+      Poster.seekFor(row.duration)
+    );
+
+    return clip ? await capturePoster(row, clip) : false;
+  } finally {
+    await ytdlp.cleanupFrameClip(appSettings, row.id);
+  }
+}
+
+/** Whether the row now has a poster it did not have before. */
+async function capturePoster(row: Download, filePath: string): Promise<boolean> {
   // Whatever is already there was a better source than a frame grab.
-  if (!needsPosterSource(row)) return;
+  if (!needsPosterSource(row)) return false;
 
   const poster = await Poster.capture({
     id: row.id,
@@ -687,7 +945,7 @@ async function capturePoster(row: Download, filePath: string) {
     duration: row.duration
   });
 
-  if (!poster) return;
+  if (!poster) return false;
 
   // The artwork fetch runs alongside the download (see manual-download.ts),
   // so a real thumbnail can land while ffmpeg is still decoding. It is the
@@ -695,7 +953,7 @@ async function capturePoster(row: Download, filePath: string) {
   // lost the race, throw the frame away rather than override it.
   if (Poster.hasCachedArtwork(row)) {
     Poster.remove(row.id);
-    return;
+    return false;
   }
 
   await db
@@ -704,16 +962,30 @@ async function capturePoster(row: Download, filePath: string) {
     .where(eq(download.id, row.id));
 
   await emit(row.id);
+
+  return true;
 }
 
 /**
- * Writes the row's poster into the finished audio file as its cover art, so
- * a music player shows what the Downloads list shows. Read back from the
- * database rather than taken from `row`, because the frame grab above may
- * have just given this download its first picture.
+ * Writes the row's poster into the finished file as its cover art, so a
+ * music player or a file manager shows what the Downloads list shows —
+ * always for audio, and for video when the setting asks for it. Read back
+ * from the database rather than taken from `row`, because the frame grab
+ * above may have just given this download its first picture.
  */
-async function embedCover(row: Download, filePath: string) {
-  if (row.type !== "audio" || !CoverArt.supports(filePath)) return;
+async function embedCover(row: Download, filePath: string, appSettings: Settings) {
+  const wanted =
+    row.type === "audio"
+      ? CoverArt.supports(filePath)
+      : row.type === "video" && wantsVideoCover(filePath, appSettings);
+
+  if (!wanted) return;
+
+  // A cover that is already there was put there on purpose — yt-dlp's own
+  // --embed-thumbnail in the user's args — and rewriting a multi-GB video
+  // only to swap it for the same thumbnail is a whole copy for nothing.
+  // Replacing the poster by hand still overwrites it (artwork-replace.ts).
+  if (await CoverArt.hasCover(filePath)) return;
 
   const current = await getRow(row.id);
 
@@ -721,7 +993,21 @@ async function embedCover(row: Download, filePath: string) {
 
   const image = Poster.fileFor(current);
 
-  if (image) await CoverArt.embed(filePath, image);
+  if (!image) return;
+
+  if (!(await CoverArt.embed(filePath, image))) return;
+
+  // The picture now lives inside the file, which finish() already measured.
+  const size = await fileSize(filePath);
+
+  if (size == null) return;
+
+  await db
+    .update(download)
+    .set({ totalBytes: size })
+    .where(and(eq(download.id, row.id), eq(download.filePath, filePath)));
+
+  await emit(row.id);
 }
 
 /**
@@ -741,10 +1027,10 @@ const SIDECAR_FILE = /\.(jpe?g|png|webp|gif|srt|vtt|ass|lrc|json|nfo|description
  * delete, and a file this download did not write is not ours to remove.
  */
 async function keptSource(
+  dir: string,
   audioPath: string,
   before: Set<string>
 ): Promise<string | null> {
-  const dir = path.dirname(audioPath);
   const audio = path.basename(audioPath);
   const stem = audio.slice(0, audio.length - path.extname(audio).length);
 
@@ -963,10 +1249,18 @@ async function finish(
     progress?: number;
     mediaQuality?: string | null;
     mediaCodec?: string | null;
-  }
+    mediaFormat?: string | null;
+    duration?: number | null;
+  },
+  media: MediaQuality.MediaInfo | null = null
 ) {
   // Terminal either way, so the cached extraction has no further use.
   void InfoCache.drop(id);
+
+  // The size tracked during the transfer is yt-dlp's figure for whichever
+  // stream was downloading last — the audio half of a DASH pair, say — and
+  // says nothing of a merge or a transcode after it. The file is the truth.
+  const totalBytes = patch.filePath ? await fileSize(patch.filePath) : null;
 
   await db
     .update(download)
@@ -975,15 +1269,33 @@ async function finish(
       finishedAt: new Date().toISOString(),
       speed: null,
       eta: null,
+      phase: null,
       ...(patch.error !== undefined ? { error: patch.error } : {}),
       ...(patch.filePath !== undefined ? { filePath: patch.filePath } : {}),
       ...(patch.progress !== undefined ? { progress: patch.progress } : {}),
       ...(patch.mediaQuality !== undefined ? { mediaQuality: patch.mediaQuality } : {}),
-      ...(patch.mediaCodec !== undefined ? { mediaCodec: patch.mediaCodec } : {})
+      ...(patch.mediaCodec !== undefined ? { mediaCodec: patch.mediaCodec } : {}),
+      ...(patch.mediaFormat !== undefined ? { mediaFormat: patch.mediaFormat } : {}),
+      ...(patch.duration !== undefined ? { duration: patch.duration } : {}),
+      ...(totalBytes != null ? { totalBytes } : {})
     })
     .where(eq(download.id, id));
 
   await emit(id);
+
+  const row = await getRow(id);
+
+  if (row) events.emit("finished", row, media);
+}
+
+async function fileSize(target: string): Promise<number | null> {
+  try {
+    const stat = await fsp.stat(target);
+
+    return stat.isFile() ? stat.size : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function cancel(id: number): Promise<boolean> {
@@ -1033,11 +1345,17 @@ export async function cancelAll(): Promise<Download[]> {
     .where(inArray(download.status, ["queued", "running"]))
     .returning();
 
+  // Running jobs report through finish() once their child has exited; the
+  // queued ones never reach it, so they are announced here.
+  const queued = rows.filter((row) => !running.has(row.id));
+
   for (const child of running.values()) {
     child.kill("SIGTERM");
   }
 
   if (rows.length) broadcast("downloads-batch", Poster.decorateAll(rows));
+
+  for (const row of queued) events.emit("finished", row, null);
 
   return rows;
 }
@@ -1072,6 +1390,7 @@ async function requeueTransient(
       filePath: null,
       mediaQuality: null,
       mediaCodec: null,
+      mediaFormat: null,
       startedAt: null
     })
     .where(eq(download.id, id));
@@ -1098,6 +1417,7 @@ export async function retry(id: number): Promise<Download | null> {
       filePath: null,
       mediaQuality: null,
       mediaCodec: null,
+      mediaFormat: null,
       startedAt: null,
       finishedAt: null,
       createdAt: new Date().toISOString()
@@ -1123,8 +1443,8 @@ export function resume() {
 }
 
 /**
- * Probes the finished downloads that predate the mediaQuality and mediaCodec
- * columns, one at a time so a long history does not start a burst of ffprobes
+ * Probes the finished downloads that predate the mediaQuality, mediaCodec and
+ * mediaFormat columns, one at a time so a long history does not start a burst of ffprobes
  * at boot. Rows whose file has gone are skipped without a probe, and simply
  * stay unlabelled.
  */
@@ -1139,6 +1459,7 @@ async function backfillMediaQuality(): Promise<void> {
         // is finished rather than pending.
         or(
           isNull(download.mediaQuality),
+          isNull(download.mediaFormat),
           and(eq(download.type, "video"), isNull(download.mediaCodec))
         ),
         isNotNull(download.filePath),
@@ -1151,14 +1472,15 @@ async function backfillMediaQuality(): Promise<void> {
   for (const row of rows) {
     const media = await MediaQuality.probe(row.filePath, row.type);
 
-    if (!media.quality && !media.codec) continue;
+    if (!media.quality && !media.codec && !media.format) continue;
 
     // Only if nothing re-queued the row while the probe ran.
     const [updated] = await db
       .update(download)
       .set({
         ...(media.quality ? { mediaQuality: media.quality } : {}),
-        ...(media.codec ? { mediaCodec: media.codec } : {})
+        ...(media.codec ? { mediaCodec: media.codec } : {}),
+        ...(media.format ? { mediaFormat: media.format } : {})
       })
       .where(and(eq(download.id, row.id), eq(download.status, "done")))
       .returning({ id: download.id });

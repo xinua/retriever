@@ -11,6 +11,13 @@ export function initSchema() {
       cookiesPath TEXT,
       ytdlpArgs TEXT,
       ytdlpConcurrency INTEGER NOT NULL DEFAULT 2,
+      timeZone TEXT,
+      embedVideoCover INTEGER NOT NULL DEFAULT 0,
+      telegramEnabled INTEGER NOT NULL DEFAULT 0,
+      telegramBotToken TEXT,
+      telegramApiUrl TEXT,
+      telegramKeepFiles INTEGER NOT NULL DEFAULT 0,
+      notifyDownloadFailed INTEGER NOT NULL DEFAULT 0,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -83,6 +90,7 @@ export function initSchema() {
       startFromLast INTEGER NOT NULL DEFAULT 1,
       downloadShorts INTEGER NOT NULL DEFAULT 0,
       notifyHA INTEGER NOT NULL DEFAULT 0,
+      notifyTelegram INTEGER NOT NULL DEFAULT 0,
       splitChapters INTEGER NOT NULL DEFAULT 0,
       removeSponsors INTEGER NOT NULL DEFAULT 0,
       pollType TEXT NOT NULL DEFAULT 'interval',
@@ -129,6 +137,7 @@ export function initSchema() {
       quality TEXT,
       mediaQuality TEXT,
       mediaCodec TEXT,
+      mediaFormat TEXT,
       folder TEXT,
       prefix TEXT,
       ytdlpArgs TEXT,
@@ -144,12 +153,29 @@ export function initSchema() {
       speed TEXT,
       eta TEXT,
       totalBytes INTEGER,
+      phase TEXT,
       filePath TEXT,
       thumbnailPath TEXT,
       error TEXT,
+      telegramChatId TEXT,
+      telegramMessageId INTEGER,
+      telegramDelivery TEXT,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       startedAt TEXT,
       finishedAt TEXT
+    );
+  `);
+
+  db.run(sql`
+    CREATE TABLE IF NOT EXISTS telegram_chat (
+      chatId TEXT PRIMARY KEY,
+      type TEXT,
+      name TEXT,
+      username TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      notify INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
 
@@ -199,13 +225,31 @@ function runColumnMigrations() {
   ensureColumn("settings", "ytdlpArgs", "TEXT");
   ensureColumn("settings", "ytdlpConcurrency", "INTEGER NOT NULL DEFAULT 2");
 
+  // Null until a browser fills it in, and null is how every existing install
+  // already schedules - against the server's clock - so nothing to backfill.
+  ensureColumn("settings", "timeZone", "TEXT");
+
+  ensureColumn("settings", "embedVideoCover", "INTEGER NOT NULL DEFAULT 0");
+
+  // Telegram is off until a token is saved, so nothing to backfill.
+  ensureColumn("settings", "telegramEnabled", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn("settings", "telegramBotToken", "TEXT");
+  ensureColumn("settings", "telegramApiUrl", "TEXT");
+  ensureColumn("settings", "telegramKeepFiles", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn("settings", "notifyDownloadFailed", "INTEGER NOT NULL DEFAULT 0");
+
   ensureColumn("channel", "ytdlpArgs", "TEXT");
+
+  // Off is how every subscription behaved before Telegram existed.
+  ensureColumn("channel", "notifyTelegram", "INTEGER NOT NULL DEFAULT 0");
 
   migrateChannelPollColumns();
 
   migrateDownloadChannelColumns();
 
   dropMeTubeColumns();
+
+  retireIosFormat();
 }
 
 /**
@@ -301,6 +345,8 @@ function migrateDownloadChannelColumns() {
   ensureColumn("download", "quality", "TEXT");
   ensureColumn("download", "mediaQuality", "TEXT");
   ensureColumn("download", "mediaCodec", "TEXT");
+  ensureColumn("download", "mediaFormat", "TEXT");
+  ensureColumn("download", "phase", "TEXT");
   ensureColumn("download", "folder", "TEXT");
   ensureColumn("download", "prefix", "TEXT");
   ensureColumn("download", "ytdlpArgs", "TEXT");
@@ -317,6 +363,10 @@ function migrateDownloadChannelColumns() {
   // Per-row poster; rows that predate it fall back to the shared artwork
   // cache in the UI, so there is nothing to backfill.
   ensureColumn("download", "thumbnailPath", "TEXT");
+
+  ensureColumn("download", "telegramChatId", "TEXT");
+  ensureColumn("download", "telegramMessageId", "INTEGER");
+  ensureColumn("download", "telegramDelivery", "TEXT");
 
   backfillDownloadPlatform();
 
@@ -384,13 +434,39 @@ function normalizeDownloadTimestamps() {
 }
 
 /**
+ * "ios" was never a container: it was the mp4 selector plus yt-dlp posing as
+ * YouTube's iPhone client, which says nothing about whether the file plays on
+ * one. Every "ios" file is an mp4, so the rows say so. What the choice was
+ * after — something an iPhone plays — is H.264, so anything still to be
+ * downloaded that left the codec on auto asks for that instead. Finished rows
+ * keep their codec: it is the history of what was asked for.
+ */
+function retireIosFormat() {
+  db.run(sql`
+    UPDATE channel
+    SET codec = 'h264'
+    WHERE format = 'ios' AND (codec IS NULL OR codec = 'auto')
+  `);
+  db.run(sql`UPDATE channel SET format = 'mp4' WHERE format = 'ios'`);
+
+  db.run(sql`
+    UPDATE download
+    SET codec = 'h264'
+    WHERE format = 'ios'
+      AND status IN ('queued', 'running')
+      AND (codec IS NULL OR codec = 'auto')
+  `);
+  db.run(sql`UPDATE download SET format = 'mp4' WHERE format = 'ios'`);
+}
+
+/**
  * Downloads that were running when the process died can never resume,
  * so put them back in the queue on boot.
  */
 export function requeueStaleDownloads() {
   db.run(sql`
     UPDATE download
-    SET status = 'queued', progress = 0, speed = NULL, eta = NULL, startedAt = NULL
+    SET status = 'queued', progress = 0, speed = NULL, eta = NULL, phase = NULL, startedAt = NULL
     WHERE status = 'running'
   `);
 }

@@ -1,6 +1,6 @@
 import { DestroyRef, Directive, effect, ElementRef, HostBinding, inject } from '@angular/core';
-import { StorageService } from '../services';
-import { BgType } from '../models';
+import { StorageService } from '../services/storage.service';
+import { BgType } from '../models/ui-config.model';
 import { BgAnimation } from './bg-animation.model';
 import { FireBgAnimation } from './fire-bg.animation';
 import { RainBgAnimation } from './rain-bg.animation';

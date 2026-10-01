@@ -8,9 +8,10 @@
     <form [formGroup]="form">
       <mat-form-field appearance="outline" class="w-full" #urlMatInput>
         <input
+          #urlInput
+          type="url"
           matInput
           formControlName="url"
-          #urlInput
           (click)="pasteUrl()"
           (keydown.enter)="download(); $event.stopPropagation()"
         />
@@ -18,8 +19,14 @@
 
         <div matSuffix class="flex items-center">
           @if (form.controls.url.value) {
-            <button mat-icon-button (click)="clearUrl()" class="hover:bg-gray-100/10!" matTooltip="Clear">
-              <mat-icon fontIcon="close" class="text-white! animate-cicle-once" />
+            <button
+              mat-icon-button
+              (click)="clearUrl()"
+              class="hover:bg-gray-100/10!"
+              matTooltip="Clear"
+              [disabled]="isPending()"
+            >
+              <mat-icon fontIcon="close" class="text-white animate-cicle-once" />
             </button>
           }
 
@@ -34,7 +41,7 @@
               [fontIcon]="isPending() ? 'radar' : 'download'"
               [class]="
                 isPending()
-                  ? 'text-yellow-500! animate-spin'
+                  ? 'text-white! animate-spin'
                   : form.controls.url.value && form.controls.url.valid
                     ? `text-(--rt-accent)! animate-bounce`
                     : ''
@@ -88,17 +95,38 @@
         </mat-form-field>
 
         @if (isVideo || isAudio) {
+          @let formatClass = form.controls.format.value === 'auto' ? 'capitalize' : 'uppercase';
+          @let unsupportedFormats = ['opus', 'wav'];
+          @let isUnsupportedFormat = unsupportedFormats.includes(form.controls.format.value);
+          @let isTooltipDisabled = form.controls.format.value === 'auto';
+          @let audioFormatTooltip = isUnsupportedFormat ? 'Embedded image not supported' : 'Image supported';
+
           <mat-form-field appearance="outline" class="w-full col-span-1">
             <mat-label>Format</mat-label>
 
             <mat-select formControlName="format">
-              <mat-select-trigger class="flex items-end gap-2 w-fit h-full">
-                <mat-icon matSuffix [svgIcon]="formatIcons[form.controls.format.value]" class="hidden! md:inline!" />
-                {{ form.controls.format.value | titlecase }}
+              <mat-select-trigger class="flex items-end gap-2 w-fit h-full" [class]="formatClass">
+                @if (isAudio) {
+                  @if (form.controls.format.value === 'auto') {
+                    <mat-icon matSuffix svgIcon="auto" class="hidden! md:inline!" />
+                  } @else {
+                    <mat-icon
+                      matSuffix
+                      [fontIcon]="formatIcons[form.controls.format.value]"
+                      class="hidden! md:inline!"
+                      [matTooltip]="audioFormatTooltip"
+                      [matTooltipDisabled]="isTooltipDisabled"
+                    />
+                  }
+                } @else if (isVideo) {
+                  <mat-icon matSuffix [svgIcon]="formatIcons[form.controls.format.value]" class="hidden! md:inline!" />
+                }
+                {{ form.controls.format.value }}
               </mat-select-trigger>
 
               @for (format of formats(); track format) {
-                <mat-option [value]="format">{{ format | titlecase }}</mat-option>
+                @let optionClass = format === 'auto' ? 'capitalize' : 'uppercase';
+                <mat-option [value]="format" [class]="optionClass">{{ format }}</mat-option>
               }
             </mat-select>
           </mat-form-field>
@@ -161,7 +189,7 @@
           <div class="grid grid-cols-2 gap-6">
             <mat-form-field class="col-span-2 lg:col-span-1 order-1" appearance="outline">
               <mat-label>File name prefix</mat-label>
-              <input matInput formControlName="prefix" />
+              <input matInput formControlName="prefix" name="prefix" />
               <mat-icon matIconSuffix fontIcon="label" />
             </mat-form-field>
 

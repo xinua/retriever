@@ -1,5 +1,4 @@
-export * from './settings/settings';
-export * from './settings-dialog/settings-dialog';
+export * from './telegram-chats/telegram-chats';
 export * from './confirmation-dialog/confirmation-dialog';
 export * from './progress-bar/progress-bar.component';
 export * from './steam-card/steam-card';
@@ -16,3 +15,5 @@ export * from './status-indicator/status-indicator';
 export * from './app-version/app-version';
 export * from './release-notes-dialog/release-notes-dialog';
 export * from './filter-downloads/filter-downloads';
+export * from './decision-dialog/decision-dialog';
+export * from './app-settings/app-settings';

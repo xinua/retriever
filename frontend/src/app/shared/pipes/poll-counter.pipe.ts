@@ -1,5 +1,5 @@
 import { Pipe, PipeTransform } from '@angular/core';
-import { IntervalRangeModel } from '@shared/models';
+import { IntervalRangeModel } from '../models/subscription.model';
 
 @Pipe({
   name: 'pollCounter',

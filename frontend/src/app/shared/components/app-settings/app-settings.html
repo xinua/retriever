@@ -1,0 +1,368 @@
+@let pot = potStatus();
+@let ytdlpControl = form.get('downloadsDir');
+
+<mat-card class="p-4 shadow-xl!">
+  <mat-card-header>
+    <button mat-icon-button type="button" class="absolute! top-2 right-2" (click)="closeDialog.emit()">
+      <mat-icon class="text-white!" fontIcon="close" />
+    </button>
+
+    <mat-card-title>Settings</mat-card-title>
+    <mat-card-subtitle class="font-thin!">Configure app, yt-dlp, Telegram, HA Webhook URL</mat-card-subtitle>
+  </mat-card-header>
+
+  <mat-card-content class="max-h-[70vh] lg:max-h-[80vh] overflow-y-auto">
+    <!-- One form for every step: each extra [formGroup] on the same group
+         re-runs its validators when it appears, mid change detection. -->
+    <form [formGroup]="form">
+      <mat-stepper
+        [rtDisableStep]="steps()"
+        aria-label="App settings"
+        class="bg-transparent!"
+        orientation="vertical"
+        [linear]="false"
+        #stepper
+      >
+        <!-- Override the 'Edit' icon -->
+        <ng-template matStepperIcon="edit" let-index="index" let-name="name">
+          @if (index === 0) {
+            <mat-icon fontIcon="settings" />
+          } @else if (index === 1) {
+            <span class="select-none text-xs!">>_</span>
+          } @else if (index === 2) {
+            <mat-icon fontIcon="token" />
+          } @else if (index === 3) {
+            <mat-icon svgIcon="telegram" class="-ml-0.5" />
+          } @else if (index === 4) {
+            <mat-icon svgIcon="homeassistant" />
+          }
+        </ng-template>
+
+        <!-- Override the 'Done' icon -->
+        <ng-template matStepperIcon="done" let-index="index">
+          @if (index === 0) {
+            <mat-icon fontIcon="settings" />
+          } @else if (index === 1) {
+            <span class="select-none text-xs!">>_</span>
+          } @else if (index === 2) {
+            <mat-icon fontIcon="token" />
+          } @else if (index === 3) {
+            <mat-icon svgIcon="telegram" class="-ml-0.5" />
+          } @else if (index === 4) {
+            <mat-icon svgIcon="homeassistant" />
+          }
+        </ng-template>
+
+        <!-- Override the default 'Number' indicator -->
+        <ng-template matStepperIcon="number" let-index="index">
+          @if (index === 0) {
+            <mat-icon fontIcon="settings" />
+          } @else if (index === 1) {
+            <span class="select-none text-xs!">>_</span>
+          } @else if (index === 2) {
+            <mat-icon fontIcon="token" />
+          } @else if (index === 3) {
+            <mat-icon svgIcon="telegram" class="-ml-0.5" />
+          } @else if (index === 4) {
+            <mat-icon svgIcon="homeassistant" />
+          }
+        </ng-template>
+
+        <!-- Steps -->
+
+        <!-- App settings step -->
+        <mat-step state="edit">
+          <ng-template matStepLabel>App settings</ng-template>
+
+          <div class="flex flex-col gap-4 rounded-xl border border-gray-800 p-4">
+            <mat-form-field appearance="outline">
+              <mat-label>Downloads folder</mat-label>
+              <input matInput formControlName="downloadsDir" rtYtdlpValidator placeholder="./" />
+
+              @if (ytdlpControl.pending) {
+                <mat-icon matSuffix fontIcon="radar" class="animated-loading" />
+              } @else if (!ytdlpControl.pending && ytdlpControl.valid) {
+                <mat-icon matSuffix fontIcon="check" class="text-green-500!" />
+              } @else if (!ytdlpControl.pending && ytdlpControl.invalid) {
+                <mat-icon matSuffix fontIcon="close" class="text-red-500!" />
+              }
+
+              @if (ytdlpControl?.errors?.['invalidYtdlp']) {
+                <mat-error>{{ ytdlpControl.errors['message'] }}</mat-error>
+              }
+
+              <mat-hint>Must be a writable path inside the container</mat-hint>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Parallel downloads</mat-label>
+              <input matInput type="number" min="1" max="10" formControlName="ytdlpConcurrency" />
+
+              @if (form.get('ytdlpConcurrency')?.invalid) {
+                <mat-error>Must be between 1 and 10</mat-error>
+              }
+            </mat-form-field>
+
+            @let timeZoneControl = form.controls.timeZone;
+
+            <mat-form-field appearance="outline">
+              <mat-label>Time zone</mat-label>
+              <input matInput formControlName="timeZone" placeholder="Server clock" [matAutocomplete]="zones" />
+              <mat-icon
+                matSuffix
+                fontIcon="my_location"
+                [matTooltip]="'Use this browser\'s zone (' + browserTimeZone + ')'"
+                class="relative z-10 cursor-pointer"
+                (click)="useBrowserTimeZone()"
+              />
+
+              <mat-autocomplete #zones="matAutocomplete">
+                @for (zone of timeZoneOptions(); track zone) {
+                  <mat-option [value]="zone">{{ zone }}</mat-option>
+                }
+              </mat-autocomplete>
+
+              @if (timeZoneControl.errors?.['unknownTimeZone']) {
+                <mat-error>Pick a zone from the list, such as Europe/Kyiv</mat-error>
+              } @else if (timeZoneControl.value && timeZoneControl.value !== browserTimeZone) {
+                <mat-hint>This browser is in {{ browserTimeZone }}</mat-hint>
+              }
+            </mat-form-field>
+
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <mat-slide-toggle
+                formControlName="telegramEnabled"
+                labelPosition="before"
+                class="justify-self-start whitespace-nowrap"
+              >
+                <span class="mx-2">Telegram bot</span>
+              </mat-slide-toggle>
+
+              <mat-slide-toggle
+                formControlName="embedVideoCover"
+                labelPosition="before"
+                class="justify-self-start whitespace-nowrap"
+              >
+                <span class="mx-2">Embed video cover</span>
+              </mat-slide-toggle>
+            </div>
+
+            @if (form.value.embedVideoCover) {
+              <mat-hint class="bg-(--rt-accent)/20 py-2 px-4 rounded-md"
+                >Embed image into every <span class="font-bold">mp4, m4v, mkv</span> video.
+                <br />
+                This can be useful for Plex but increases post-processing time, especially for large videos.
+                <br />
+                <span class="text-gray-500">Always enabled for mp3, m4a, flac.</span>
+              </mat-hint>
+            }
+
+            <ng-container *ngTemplateOutlet="saveButton"></ng-container>
+          </div>
+        </mat-step>
+
+        <!-- yt-dlp step -->
+        <mat-step state="edit">
+          <ng-template matStepLabel>yt-dlp</ng-template>
+
+          <div class="rounded-xl border border-gray-800 p-4">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-sm text-gray-400">
+                yt-dlp version:
+                <span class="text-gray-200">{{ ytdlpVersion() ?? 'not detected' }}</span>
+              </span>
+
+              <button
+                mat-stroked-button
+                type="button"
+                class="border-transparent! bg-[#0f0f0f]!"
+                [disabled]="isUpdating()"
+                (click)="updateYtdlp()"
+              >
+                <mat-icon class="text-base" [class.animated-loading]="isUpdating()">
+                  {{ isUpdating() ? 'radar' : 'system_update_alt' }}
+                </mat-icon>
+                {{ isUpdating() ? 'Updating…' : 'Update yt-dlp' }}
+              </button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-6 mt-6">
+              <input #cookiesInput type="file" accept=".txt,text/plain" hidden (change)="uploadCookies(cookiesInput)" />
+
+              <mat-form-field appearance="outline" class="col-span-2">
+                <mat-label>Cookies file</mat-label>
+                <input
+                  matInput
+                  readonly
+                  class="cursor-pointer"
+                  placeholder="Click to upload cookies.txt"
+                  [value]="cookiesFileName()"
+                  [matTooltip]="cookiesPath() ?? ''"
+                  [disabled]="isUploadingCookies()"
+                  (click)="cookiesInput.click()"
+                />
+
+                @if (cookiesPath() && !isUploadingCookies()) {
+                  <mat-icon
+                    matSuffix
+                    fontIcon="delete"
+                    matTooltip="Remove cookies file"
+                    class="relative z-10 cursor-pointer"
+                    (click)="removeCookies()"
+                  />
+                }
+                <mat-icon
+                  matSuffix
+                  matTooltip="Upload a Netscape-format cookies.txt — fixes most 403 errors"
+                  class="relative z-10 cursor-pointer"
+                  [class.animated-loading]="isUploadingCookies()"
+                  [fontIcon]="isUploadingCookies() ? 'radar' : 'upload_file'"
+                  (click)="!isUploadingCookies() && cookiesInput.click()"
+                />
+                <mat-hint class="whitespace-nowrap">Optional. Exported from a logged-in browser session</mat-hint>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="col-span-2">
+                <mat-label>Extra yt-dlp arguments</mat-label>
+                <input
+                  matInput
+                  formControlName="ytdlpArgs"
+                  placeholder='--extractor-args "youtube:player_client=web_safari"'
+                />
+                <mat-hint>Applied to every download</mat-hint>
+              </mat-form-field>
+            </div>
+
+            <ng-container *ngTemplateOutlet="saveButton"></ng-container>
+          </div>
+        </mat-step>
+
+        <!-- POT Provider step -->
+        <mat-step state="edit">
+          <ng-template matStepLabel>POT Provider</ng-template>
+
+          @if (pot?.configured) {
+            <div class="rounded-xl border border-gray-800 p-4">
+              <div class="flex items-center gap-2 text-sm text-gray-400">
+                <mat-icon class="text-base!" [class]="pot?.ok ? 'text-green-500!' : 'text-red-400!'">
+                  {{ pot?.ok ? 'verified_user' : 'gpp_bad' }}
+                </mat-icon>
+
+                <span
+                  >POT provider:
+                  <span [class]="pot!.ok ? 'text-gray-200' : 'text-red-400'">
+                    {{ pot!.ok ? 'connected' + (pot!.version ? ' (' + pot!.version + ')' : '') : pot!.error }}
+                  </span>
+                  <span class="text-gray-500">— {{ pot!.baseUrl }}</span>
+                </span>
+              </div>
+            </div>
+          }
+        </mat-step>
+
+        <!-- Telegram step -->
+        <mat-step state="edit">
+          <ng-template matStepLabel
+            >Telegram
+            @if (isUpdated()) {
+              <span class="text-xs text-green-600 font-bold ml-1" animate.enter="fadeIn" animate.leave="fadeOut"
+                >(updated)</span
+              >
+            }
+          </ng-template>
+
+          <div>
+            <div class="rounded-xl border border-gray-800 p-4">
+              <rt-telegram-chats (saved)="showUpdated()">
+                <div class="grid grid-cols-1 gap-4 mt-4 bot-settings">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Bot token</mat-label>
+                    <input
+                      matInput
+                      formControlName="telegramBotToken"
+                      autocomplete="off"
+                      [type]="showToken() ? 'text' : 'password'"
+                      placeholder="123456:ABC-DEF..."
+                    />
+                    <mat-icon
+                      matSuffix
+                      class="relative z-10 cursor-pointer"
+                      [fontIcon]="showToken() ? 'visibility_off' : 'visibility'"
+                      (click)="showToken.set(!showToken())"
+                    />
+                    @if (!form.value.telegramBotToken) {
+                      <mat-hint
+                        >From
+                        <a href="https://t.me/BotFather" target="_blank" class="text-blue-500 hover:text-blue-600"
+                          >&#64;BotFather</a
+                        >.
+                      </mat-hint>
+                    }
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline">
+                    <mat-label>Bot API URL</mat-label>
+                    <input matInput formControlName="telegramApiUrl" placeholder="https://api.telegram.org" />
+                    <mat-icon
+                      matSuffix
+                      fontIcon="dns"
+                      matTooltip="A local telegram-bot-api server raises the upload limit from 50MB to 2GB."
+                      class="relative z-10"
+                    />
+                    <mat-hint>Leave empty to use api.telegram.org</mat-hint>
+                  </mat-form-field>
+                </div>
+
+                <div class="flex w-full justify-end mb-4 keep-files">
+                  <mat-slide-toggle formControlName="telegramKeepFiles" labelPosition="before">
+                    <span class="mx-2 text-sm">Keep downloaded files after sending</span>
+                  </mat-slide-toggle>
+                </div>
+
+                <mat-slide-toggle
+                  formControlName="notifyDownloadFailed"
+                  labelPosition="before"
+                  class="justify-self-start notify-failed"
+                >
+                  <span class="mx-2 text-sm">Include notifications about subscription's download failures</span>
+                </mat-slide-toggle>
+              </rt-telegram-chats>
+
+              <ng-container *ngTemplateOutlet="saveButton"></ng-container>
+            </div>
+          </div>
+        </mat-step>
+
+        <!-- Home Assistant step -->
+        <mat-step state="edit">
+          <ng-template matStepLabel>Home Assistant</ng-template>
+
+          <div class="rounded-xl border border-gray-800 p-4">
+            <mat-form-field class="w-full" appearance="outline">
+              <mat-label>Address</mat-label>
+              <input matInput formControlName="webhookUrl" placeholder="Ex. 1 Main St, New York, NY" required />
+            </mat-form-field>
+
+            <div class="bg-(--rt-accent)/20 py-2 px-4 rounded-md">
+              Webhook URL is used to send notifications when a download is complete by subscription.
+              <br />
+              You can override the default URL in the every subscription's advanced settings.
+              <br />
+            </div>
+
+            <ng-container *ngTemplateOutlet="saveButton"></ng-container>
+          </div>
+        </mat-step>
+      </mat-stepper>
+    </form>
+  </mat-card-content>
+</mat-card>
+
+<ng-template #saveButton>
+  <div class="flex w-full justify-end mt-4">
+    <button mat-flat-button color="primary" (click)="saveSettings()" [disabled]="!form.valid">
+      <mat-icon class="text-base">save</mat-icon>
+      Save
+    </button>
+  </div>
+</ng-template>

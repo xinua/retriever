@@ -1,6 +1,6 @@
 import { ImagesService } from "./images.service.js";
 
-import type { Download } from "../db/types.js";
+import type { Channel, Download } from "../db/types.js";
 
 /**
  * Which picture stands for the uploader of a download row.
@@ -26,6 +26,7 @@ const ASSETS = "/assets/images";
  * URL people paste on purpose, and it says what the row actually is.
  */
 const M3U8_URL = /\.m3u8(\?|#|$)/i;
+const MPD_URL = /\.mpd(\?|#|$)/i;
 
 const SITE_MARK: Partial<Record<Download["platform"], string>> = {
   tiktok: `${ASSETS}/tiktok.webp`,
@@ -55,14 +56,21 @@ export function avatarFor(row: Download): string | null {
   if (row.platform === "youtube") {
     if (!row.channelId) return null;
 
-    const name = avatarName(row.channelId);
-
-    return ImagesService.exists(name) ? `/images/${name}` : null;
+    return ImagesService.urlFor(avatarName(row.channelId));
   }
 
   const mark = SITE_MARK[row.platform];
 
   if (mark) return mark;
 
-  return M3U8_URL.test(row.url) ? `${ASSETS}/m3u8.webp` : `${ASSETS}/unknown.webp`;
+  return M3U8_URL.test(row.url) ? `${ASSETS}/default.webp` : MPD_URL.test(row.url) ? `${ASSETS}/default.webp` : `${ASSETS}/default.webp`;
+}
+
+/**
+ * A subscription as a client sees it: the stored avatar path with its
+ * version attached, so a replaced avatar reaches every open tab (see
+ * ImagesService.urlFor). The column itself keeps the bare path.
+ */
+export function decorateChannel<T extends Pick<Channel, "channelAvatarPath">>(row: T): T {
+  return { ...row, channelAvatarPath: ImagesService.versioned(row.channelAvatarPath) };
 }

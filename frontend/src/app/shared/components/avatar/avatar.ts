@@ -3,7 +3,6 @@ import { Nullable } from '../../models/common.model';
 
 @Component({
   selector: 'rt-avatar',
-  imports: [],
   templateUrl: './avatar.html',
   styleUrl: './avatar.css',
 })

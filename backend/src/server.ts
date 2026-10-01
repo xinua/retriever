@@ -23,6 +23,10 @@ import { actionsRoutes } from "./routes/http/actions.js";
 import { ytdlpRoutes } from "./routes/http/ytdlp.js";
 import { downloadsRoutes } from "./routes/http/downloads.js";
 import { foldersRoutes } from "./routes/http/folders.js";
+import { telegramRoutes } from "./routes/http/telegram.js";
+import * as Telegram from "./services/telegram/bot.js";
+import * as TelegramDownload from "./services/telegram/download.js";
+import * as Notify from "./services/notify.js";
 import { initWebsockets } from "./routes/ws/websockets.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -51,6 +55,19 @@ const WEB_ROOT = path.resolve(
 const app = Fastify({ logger: true });
 
 await app.register(cors, { origin: true });
+
+// Avatar and poster uploads arrive as the image itself, with its type as the
+// Content-Type — one picture per request needs nothing more elaborate. Added
+// before the routes so every plugin inherits it; any other image type gets a
+// 415 from Fastify. The limit is a safety net only: the client is the one
+// that checks size and dimensions, and the default 1 MB is too small for a
+// photo.
+app.addContentTypeParser(
+  /^image\/(jpeg|jpg|png|webp)$/,
+  { parseAs: "buffer", bodyLimit: 10 * 1024 * 1024 },
+  (_req, body, done) => done(null, body)
+);
+
 await app.register(healthRoutes);
 await app.register(versionRoutes);
 await app.register(settingsRoutes);
@@ -60,6 +77,7 @@ await app.register(actionsRoutes);
 await app.register(ytdlpRoutes);
 await app.register(downloadsRoutes);
 await app.register(foldersRoutes);
+await app.register(telegramRoutes);
 
 initSchema();
 requeueStaleDownloads();
@@ -104,16 +122,24 @@ app.setNotFoundHandler((req, reply) => {
   return reply.sendFile("index.html");
 });
 
+// Before resume(), so jobs requeued after a restart are still followed.
+Notify.start();
+TelegramDownload.start();
+
 startWorker();
 startVersionCheck();
 DownloadQueue.resume();
 
+void Telegram.start().catch((e) => console.warn("telegram: start failed:", e));
+
 process.on('SIGTERM', async () => {
+  await Telegram.stop();
   await app.close();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
+  await Telegram.stop();
   await app.close();
   process.exit(0);
 });

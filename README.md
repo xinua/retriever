@@ -37,16 +37,8 @@ Perfect if you:
 ![Demo 2](demo/2.webp)
 ![Demo 3](demo/3.webp)
 
-<details>
-  <summary>📸 Expand more screenshots</summary>
-  <br>
-  <img src="demo/theme/static.gif" alt="Step 1" width="100%">
-  <img src="demo/theme/animations/fire.gif" alt="Step 2" width="100%">
-  <img src="demo/theme/animations/rain.gif" alt="Step 3" width="100%">
-  <img src="demo/theme/animations/snow.gif" alt="Step 4" width="100%">
-  <img src="demo/theme/animations/stars.gif" alt="Step 5" width="100%">
-  <img src="demo/theme/animations/matrix.gif" alt="Step 6" width="100%">
-</details>
+📸 Expand more screenshots  
+![Step 1](demo/theme/static.gif)![Step 2](demo/theme/animations/fire.gif)![Step 3](demo/theme/animations/rain.gif)![Step 4](demo/theme/animations/snow.gif)![Step 5](demo/theme/animations/stars.gif)![Step 6](demo/theme/animations/matrix.gif)
 
 ## ✨ Features
 
@@ -56,7 +48,7 @@ Perfect if you:
 
 - 🔗 **Paste anything** — single video, playlist, or a whole channel (expanded into one job per video)
 - 🌍 **YouTube, TikTok, Instagram**, and everything else `yt-dlp` handles
-- 🎬 **Video** — MP4 or iOS-friendly, up to 4K, codec-pinned to H.264 / H.265 / AV1 / VP9
+- 🎬 **Video** — MP4, MKV or best available, up to 4K, codec-pinned to H.264 / H.265 / AV1 / VP9
 - 🎵 **Audio** — MP3, M4A, OPUS, WAV, FLAC at 128 / 192 / 320 kbps or best available
 - 🖼 **Thumbnail-only** downloads
 - ✂️ **Clip** a time range without fetching the whole video
@@ -71,7 +63,7 @@ Perfect if you:
 
 - 📡 **RSS-based tracking** — no API key, no quota
 - ⏱ **Flexible polling** — every N minutes within an optional active time range, or at one or more fixed times each day
-- 1️⃣ **One-time polling** — stop polling for the day once a new video has been downloaded
+- 1️⃣ **Intermittent polling** — stop polling for the day once a new video has been downloaded
 - 🎯 **Per-channel settings** — type, format, codec, folder, prefix, extra args, webhook, SponsorBlock, split by chapters
 - 👯 **Same channel, many subscriptions** — e.g. grab a channel as video and as audio; each keeps its own history
 - 🩳 **Shorts** included or skipped, your call
@@ -96,6 +88,7 @@ Perfect if you:
 ### Integrations & interface
 
 - 🔔 **Webhooks** — global or per-channel, with a test-send button that shows you the exact payload
+- ✈️ **Telegram bot** — new-video and failed-download notifications, and a download bot: send it a link, get the video or MP3 back
 - 🖼️ **Widget page** — for Home Assistant iframe cards, with the latest video playable in place
 - 📄 **Copy-ready Home Assistant YAML** — card and automation snippets, per subscription, one click each
 - 🎨 **Seven theme colors** — ten section backgrounds, optional animations
@@ -220,26 +213,28 @@ Two volumes matter:
 Most settings live in the UI (⚙️ in the header). These environment variables are read at boot:
 
 
-| Variable           | Default                 | What it does                                              |
-| ------------------ | ----------------------- | --------------------------------------------------------- |
-| `PORT`             | `8000`                  | Port inside the container                                 |
-| `HOST`             | `0.0.0.0`               | Bind address                                              |
-| `DATA_DIR`         | `/data`                 | Database, images, archive                                 |
-| `DOWNLOADS_DIR`    | `/downloads`            | Default download root                                     |
-| `YTDLP_BIN`        | `/usr/local/bin/yt-dlp` | The bundled binary to stage from                          |
-| `MAX_MANUAL_ITEMS` | `500`                   | Cap on how many videos one pasted channel/playlist queues |
-| `POT_BASE_URL`     | *(unset)*               | POT provider server to use — see below. Unset = disabled  |
-| `POT_PLUGIN_DIR`   | `/app/pot-plugin`       | Where the bundled POT plugin lives                        |
-| `VERSION_CHECK_ENABLED` | `true`             | Set to `false` to never look for a new release            |
-| `VERSION_CHECK_WINDOW`  | `00:00-02:00`      | UTC window the daily check picks its random time from     |
-| `VERSION_CHECK_URL`     | *(the manifest on GitHub)* | Where to read the published version from          |
+| Variable                | Default                    | What it does                                              |
+| ----------------------- | -------------------------- | --------------------------------------------------------- |
+| `PORT`                  | `8000`                     | Port inside the container                                 |
+| `HOST`                  | `0.0.0.0`                  | Bind address                                              |
+| `DATA_DIR`              | `/data`                    | Database, images, archive                                 |
+| `DOWNLOADS_DIR`         | `/downloads`               | Default download root                                     |
+| `YTDLP_BIN`             | `/usr/local/bin/yt-dlp`    | The bundled binary to stage from                          |
+| `MAX_MANUAL_ITEMS`      | `500`                      | Cap on how many videos one pasted channel/playlist queues |
+| `POT_BASE_URL`          | *(unset)*                  | POT provider server to use — see below. Unset = disabled  |
+| `POT_PLUGIN_DIR`        | `/app/pot-plugin`          | Where the bundled POT plugin lives                        |
+| `VERSION_CHECK_ENABLED` | `true`                     | Set to `false` to never look for a new release            |
+| `VERSION_CHECK_WINDOW`  | `00:00-02:00`              | UTC window the daily check picks its random time from     |
+| `VERSION_CHECK_URL`     | *(the manifest on GitHub)* | Where to read the published version from                  |
+
+
 
 
 ### Update check
 
 Once a day Retriever reads its published `version.json` from GitHub to see whether a newer release exists, and serves the answer from `/api/version`. The check runs at a random moment inside `VERSION_CHECK_WINDOW` — a different one per install, so every Retriever in the world does not knock at the same second — and the result is cached in the database on your `/data` volume. Restarting the container replays that schedule rather than starting a new day, so restarts never cost a request; a failed check keeps yesterday's answer and retries in an hour. Nothing is sent: it is a plain GET of a public file. Set `VERSION_CHECK_ENABLED=false` to turn it off entirely.
 
-In the **Settings** dialog you can set the downloads folder, a cookies file, global `yt-dlp` arguments, how many downloads run at once, and your webhook URL — plus update `yt-dlp` itself with one click.
+In the **Settings** dialog you can set the downloads folder, a cookies file, global `yt-dlp` arguments, how many downloads run at once, your webhook URL and the Telegram bot — plus update `yt-dlp` itself with one click.
 
 ---
 
@@ -328,6 +323,123 @@ aspect_ratio: 50%
 - **Open widget** — the page on its own, to check it
 - **HA Card** — Copy the YAML above, with this watcher's id filled in
 - **HA Automation** — Copy the automation YAML, with the id and your webhook already in place
+
+---
+
+
+
+## ⌯⌲ Telegram
+
+
+
+### Setup
+
+1. Create a bot with [@BotFather](https://t.me/BotFather) and copy its token
+2. **Settings → Telegram bot**: switch it on, paste the token, **Save**. The status line should read *connected as @yourbot*
+3. Send `/start` to the bot. The chat appears in Settings as **pending approval**. Until you approve it the bot ignores that chat completely, so a stranger who finds your bot gets no reply
+4. Press ✓ to approve. The bot greets the chat, and it can now send links
+
+Any number of chats can use the bot. You can rename each chat in the list, block it, or remove it.
+
+### Notifications
+
+Turn on **Notify** for every chat that should get them, then press **Test**. A chat doesn't have to be approved to receive notifications, because they only go out. To notify a group or channel where nobody can send `/start`, add the bot to it and use **Add chat** with its ID (for example `-1001234567890`).
+
+- **New video**: sent for subscriptions with the **Telegram** flag turned on (under *Additional flags*). It's separate from the **Webhook** flag, so a subscription can notify Home Assistant, Telegram, both or neither.
+- **Download failed**: a global toggle in Settings. Only downloads queued by subscriptions with the **Telegram** flag on are reported; manual and bot downloads never are.
+
+
+
+### Downloading through the bot
+
+Send a link to a single video (playlists and channels are refused). The bot replies with the title, the thumbnail, every resolution the video is actually available in with its estimated size, and an **MP3** button. Tap one, and the same message then shows the job's progress: *queued → downloading → uploading to Telegram*, or the error. When the file arrives, that message is removed.
+
+- **Video** is always mp4 + H.264, sent as a playable video with its real size, duration and thumbnail. If a site has no H.264 stream at that size, the file is converted after the download (the reply marks those resolutions).
+- **Audio** is always MP3.
+
+Want other formats, codecs, clips or folders? Use the web UI. The bot is just another client of the same queue, so its jobs show up in **Downloads** like any other.
+
+By default a file the bot downloaded is deleted once Telegram has it. Switch on **Keep downloaded files after sending** to leave it in `/downloads`, where Plex and similar apps will find it. A file is never deleted before it has been sent successfully.
+
+### Size limit and the local Bot API server
+
+`api.telegram.org` only accepts uploads of up to **50 MB**. The bot leaves out resolutions whose estimate is over the limit. If the finished file still turns out larger, the bot says so in the chat.
+
+For files up to **2 GB**, run your own [telegram-bot-api](https://github.com/tdlib/telegram-bot-api) server next to Retriever. It is optional. It needs an `api_id` and `api_hash` from [my.telegram.org](https://my.telegram.org). You can use [this guide](https://my.telegram.org/apps). In local mode Retriever doesn't upload the file at all: it passes the server a path. So **the downloads folder must be mounted into both containers at the same path.**
+
+```bash
+docker network create retriever-net
+
+docker run -d \
+  --name pot \
+  --network retriever-net \
+  --init \
+  brainicism/bgutil-ytdlp-pot-provider:1.3.2
+
+docker run -d \
+  --name tg-api \
+  --network retriever-net \
+  -e TELEGRAM_API_ID=123456 \
+  -e TELEGRAM_API_HASH=0123456789abcdef0123456789abcdef \
+  -e TELEGRAM_LOCAL=1 \
+  -v /your-directory/tg-api:/var/lib/telegram-bot-api \
+  -v /your-media/youtube:/downloads:ro \
+  aiogram/telegram-bot-api:latest
+
+docker run -d \
+  --name retriever \
+  --network retriever-net \
+  -p 31080:8000 \
+  -e POT_BASE_URL=http://pot:4416 \
+  -v /your-directory/data:/data \
+  -v /your-media/youtube:/downloads \
+  ghcr.io/xinua/retriever:latest
+```
+
+The same with Compose:
+
+```yaml
+services:
+  retriever:
+    image: ghcr.io/xinua/retriever:latest
+    container_name: retriever
+    ports:
+      - "31080:8000"
+    volumes:
+      - /mnt/tank/apps/retriever/data:/data
+      - /mnt/tank/media/youtube:/downloads
+    environment:
+      POT_BASE_URL: http://pot:4416
+    restart: unless-stopped
+
+  pot:
+    image: brainicism/bgutil-ytdlp-pot-provider:1.3.2
+    container_name: retriever-pot
+    init: true
+    restart: unless-stopped
+
+  tg-api:
+    image: aiogram/telegram-bot-api:latest
+    container_name: retriever-tg-api
+    environment:
+      TELEGRAM_API_ID: "123456"
+      TELEGRAM_API_HASH: 0123456789abcdef0123456789abcdef
+      TELEGRAM_LOCAL: "1"
+    volumes:
+      - /mnt/tank/apps/retriever/tg-api:/var/lib/telegram-bot-api
+      # Same path as in the retriever service. Read-only is enough.
+      - /mnt/tank/media/youtube:/downloads
+    restart: unless-stopped
+```
+
+The `pot` service is optional here too. Then, in **Settings → Telegram bot**, set **Bot API URL** to `http://tg-api:8081` and save. The status line should switch to *local server, 2000 MB limit*.
+
+> **Already used the bot with api.telegram.org?** Before the same token works with a local server, the bot has to be logged out of the cloud API once. Use **Log out from cloud API** in Settings, then save the local URL. After a log-out, Telegram doesn't let the bot back onto the cloud API for about 10 minutes.
+
+A few more things to know:
+
+- The server's user has to be able to read your media files.
+- Only one Retriever may poll a given bot token at a time. A second instance makes Telegram answer `409 Conflict`, which shows up in the status line.
 
 ---
 

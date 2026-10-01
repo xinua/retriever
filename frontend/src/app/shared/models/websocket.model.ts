@@ -1,4 +1,4 @@
-import { SnackbarType } from '@shared/services';
+import { SnackbarType } from './snackbar.model';
 import { SubscriptionModel, NextCheckModel } from './subscription.model';
 import { DownloadModel } from './download.model';
 
@@ -23,7 +23,9 @@ export type WebSocketMessageType =
   | 'download-updated'
   | 'downloads-batch'
   | 'download-removed'
-  | 'downloads-cleared';
+  | 'downloads-cleared'
+  | 'telegram-status'
+  | 'telegram-chats';
 
 export interface NotificationPayload {
   title?: 'notification';

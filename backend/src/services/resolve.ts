@@ -259,7 +259,18 @@ function parentInfo(data: any): ParentInfo {
  */
 export async function resolveTarget(
   rawUrl: string,
-  settings: Settings
+  settings: Settings,
+  /**
+   * The request's own yt-dlp arguments. Resolving reads the page just like a
+   * download does, so flags such as --referer or --cookies must apply here
+   * too — without them a site that needs them fails before a row is queued.
+   */
+  requestArgs: string | null = null,
+  /**
+   * How many entries of a playlist to read. A subscription scan only cares
+   * about the newest handful, and every hundred more is another page fetch.
+   */
+  limit: number = MAX_ITEMS
 ): Promise<ResolvedTarget> {
   const target = normalizeTarget(rawUrl);
 
@@ -270,7 +281,7 @@ export async function resolveTarget(
     "--ignore-no-formats-error",
     // One unavailable video in a playlist must not fail the whole resolve.
     "--ignore-errors",
-    "--playlist-end", String(MAX_ITEMS + 1)
+    "--playlist-end", String(Math.min(limit, MAX_ITEMS) + 1)
   ];
 
   if (settings.cookiesPath?.trim()) {
@@ -282,6 +293,7 @@ export async function resolveTarget(
   args.push(...ytdlp.jsRuntimeArgs());
   args.push(...ytdlp.potArgs());
   args.push(...ytdlp.tokenizeArgs(settings.ytdlpArgs));
+  args.push(...ytdlp.tokenizeArgs(requestArgs));
   args.push("--", target);
 
   let data: any = null;

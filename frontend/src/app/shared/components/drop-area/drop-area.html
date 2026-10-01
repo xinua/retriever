@@ -1,0 +1,26 @@
+@let containerClass =
+  'flex flex-col gap-2 items-center justify-center h-full w-full bg-black/70 backdrop-blur-sm border-2 border-dashed border-white/70 transition-colors duration-300';
+
+@if (isDragStarted()) {
+  <section class="absolute top-0 left-0 z-1 w-full h-full">
+    <div [class]="containerClass + ' ' + customClass() + ' ' + (isDragOver() ? 'bg-black/90!' : '')">
+      <ng-content>
+        <mat-icon svgIcon="upload_image" class="text-2xl! h-10! w-10!" />
+
+        @if (isDragOver()) {
+          <h2 class="font-calculator text-xl">{{ dragOverlabel() }}</h2>
+        } @else {
+          <h2 class="font-calculator text-xl">{{ label() }}</h2>
+        }
+      </ng-content>
+    </div>
+
+    <input
+      #fileInput
+      type="file"
+      (change)="uploadFile($event.target['files'])"
+      [accept]="allowedFileTypes"
+      class="opacity-0 left-0 top-0 right-0 bottom-0 absolute z-0"
+    />
+  </section>
+}

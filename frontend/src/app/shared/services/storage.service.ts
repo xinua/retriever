@@ -6,17 +6,12 @@ import {
   DefaultSettings,
   DefaultUiConfig,
 } from '../constants/defaults.const';
-import {
-  DownloadModel,
-  FilterModel,
-  ManualDownloadModel,
-  NextCheckModel,
-  Nullable,
-  PaginatorModel,
-  SettingsModel,
-  SubscriptionModel,
-  UiConfig,
-} from '../models';
+import { DownloadInfoModel, DownloadModel } from '../models/download.model';
+import { FilterModel, Nullable, PaginatorModel } from '../models/common.model';
+import { ManualDownloadModel } from '../models/main-form.model';
+import { NextCheckModel, SubscriptionModel } from '../models/subscription.model';
+import { SettingsModel } from '../models/settings.model';
+import { UiConfig } from '../models/ui-config.model';
 
 @Injectable({
   providedIn: 'root',
@@ -28,6 +23,8 @@ export class StorageService {
   showForm = signal<boolean>(false);
   nextCheck = signal<Nullable<NextCheckModel>>(null);
   downloads = signal<DownloadModel[]>([]);
+  /** Whole-table counts from /api/downloads/info — `downloads` is only the current page. */
+  downloadInfo = signal<Nullable<DownloadInfoModel>>(null);
   uiConfig = signal<UiConfig>(DefaultUiConfig);
   filters = signal<FilterModel>(DefaultFilters);
   paginator = signal<PaginatorModel>(DefaultPaginator);

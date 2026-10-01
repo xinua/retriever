@@ -1,10 +1,11 @@
 import { AbstractControl, FormGroup, ValidationErrors, ValidatorFn } from '@angular/forms';
+import { equalJson } from '../helpers/common.helpers';
 
 export class RtValidators {
-  static formChanged<T>(sourceValue: T, compareFn: (source: T, formValue: T) => boolean): ValidatorFn {
+  static formChanged<T extends object>(sourceValue: T, compareRaw = false): ValidatorFn {
     const compareWith: T = window.structuredClone(sourceValue);
-    return ((form: FormGroup): ValidationErrors =>
-      compareFn(form.value, compareWith) ? { unchanged: true } : null) as ValidatorFn;
+    return (form: AbstractControl | FormGroup): ValidationErrors | null =>
+      equalJson(compareRaw ? form.getRawValue() : form.value, compareWith) ? { unchanged: true } : null;
   }
 
   static url(control: AbstractControl): ValidationErrors | null {

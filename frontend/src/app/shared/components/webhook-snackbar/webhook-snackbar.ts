@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, Inject } from '@angular/core';
 import { MatButton } from '@angular/material/button';
 import { MAT_SNACK_BAR_DATA, MatSnackBarRef } from '@angular/material/snack-bar';
-import { SnackbarType } from '@shared/services';
+import { SnackbarType } from '../../models/snackbar.model';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { WEBHOOK_SNACKBAR_DATA } from './webhook-snackbar.constants';

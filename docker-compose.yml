@@ -11,11 +11,9 @@ services:
       HOST: 0.0.0.0
       DATA_DIR: /data
       DOWNLOADS_DIR: ./downloads
-      # The clock a subscription's poll hours are read against: the times a
-      # "time" subscription polls at, and the hours an interval is restricted
-      # to, are wall-clock and mean whatever this says they mean. Left unset
-      # the container is UTC, so set it to your own zone or a 09:00 poll will
-      # not happen at 09:00 for you.
+      # Poll hours are read in the time zone saved in Settings, which the app
+      # fills in from your browser the first time you open it. This is only
+      # the fallback used until then, and the clock the logs are stamped in.
       TZ: Etc/UTC
       # Uncomment together with the `pot` service below to route YouTube
       # extraction through a proof-of-origin token provider. Left unset, the

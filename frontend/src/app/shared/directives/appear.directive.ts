@@ -1,10 +1,10 @@
 import { AfterViewInit, DestroyRef, Directive, ElementRef, inject, input } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { StorageService } from '@shared/services';
+import { StorageService } from '../services/storage.service';
 import { delay, filter, map, merge, take } from 'rxjs';
 import { HEIGHT_CHANGE_TOKEN, SCROLL_TOKEN } from '../constants/scroll-token';
 
-type AnimationNames = 'none' | 'rise' | 'reveal' | 'unblur' | 'move-right' | 'move-left' | 'fly-up';
+type AnimationNames = 'none' | 'rise' | 'reveal' | 'unblur' | 'move-right' | 'move-left' | 'fly-up' | 'fade';
 
 @Directive({
   selector: '[rtAppear]',

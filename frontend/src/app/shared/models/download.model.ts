@@ -23,9 +23,8 @@ export enum Platform {
 }
 
 export enum DownloadSource {
-  /** Queued by an RSS scan of a watched channel. */
   WATCHER = 'watcher',
-  /** Queued by hand from the Download-now form. */
+  TELEGRAM = 'telegram',
   MANUAL = 'manual',
 }
 
@@ -51,6 +50,8 @@ export interface DownloadModel {
   mediaQuality: Nullable<string>;
   /** The video codec the file really carries — "h265"; video only, null until probed. */
   mediaCodec: Nullable<string>;
+  /** The container the file really landed in — "mkv"; null until probed. */
+  mediaFormat: Nullable<string>;
   folder: Nullable<string>;
   prefix: Nullable<string>;
   ytdlpArgs: Nullable<string>;
@@ -68,6 +69,8 @@ export interface DownloadModel {
   speed: Nullable<string>;
   eta: Nullable<string>;
   totalBytes: Nullable<number>;
+  /** "converting" while ffmpeg re-encodes into the requested codec; null otherwise. */
+  phase: Nullable<'converting'>;
   filePath: Nullable<string>;
   /**
    * Whether the server can serve `filePath` right now. Checked on disk when
@@ -99,6 +102,8 @@ export interface ManualDownloadRequest {
   clipEnd: Nullable<string>;
   removeSponsor: boolean;
   splitChapters: boolean;
+  /** Links the new row to a subscription, so its player picks the download up. */
+  watcherId?: number;
 }
 
 export interface ManualDownloadResult {
@@ -134,3 +139,6 @@ export interface DownloadsPageModel {
  * therefore the only change a new status needs on this side.
  */
 export type DownloadInfoModel = Record<DownloadStatus, number> & { total: number };
+
+/** The server spreads the updated download and adds whether the cover made it into the file. */
+export type UpdatePosterResponse = DownloadModel & { coverEmbedded: boolean | null };

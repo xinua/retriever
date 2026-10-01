@@ -1,6 +1,7 @@
 import { DOCUMENT, effect, inject, Injectable } from '@angular/core';
-import { UiConfig } from '../models';
+import { UiConfig } from '../models/ui-config.model';
 import { StorageService } from './storage.service';
+import { THEME_COLORS } from '../constants/theme.const';
 
 /**
  * Mirrors the UI config onto the <html> element, where the stylesheets can see
@@ -20,6 +21,7 @@ export class UiConfigService {
   private readonly _root = inject(DOCUMENT).documentElement;
 
   readonly config = this._storage.uiConfig.asReadonly();
+  readonly themeColors = THEME_COLORS;
 
   constructor() {
     // Applied once up front as well as on change: an effect first flushes
@@ -38,6 +40,9 @@ export class UiConfigService {
     this._root.setAttribute('data-theme', config.themeColor);
     this._root.setAttribute('data-animations', config.enableAnimations ? 'on' : 'off');
     this._root.querySelector('link[rel="icon"]')?.setAttribute('href', `favicon-${config.themeColor}.ico`);
+    this._root
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute('content', `${this.themeColors[config.themeColor]}`);
     this._root.querySelector('link[rel="shortcut icon"]')?.setAttribute('href', `favicon-${config.themeColor}.ico`);
   }
 }

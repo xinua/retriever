@@ -1,19 +1,10 @@
-import {
-  BgType,
-  Codecs,
-  DownloadStatus,
-  FilterGroupModel,
-  FilterModel,
-  ManualDownloadModel,
-  PaginatorModel,
-  SettingsModel,
-  ThemeColors,
-  Types,
-  UiConfig,
-  VideoFormats,
-  VideoQuality,
-} from '@shared/models';
-import { PollType, SubscriptionModel } from '../models';
+import { BgType, ThemeColors, UiConfig } from '../models/ui-config.model';
+import { Codecs, Types, VideoFormats, VideoQuality } from '../models/subscription.model';
+import { DownloadStatus } from '../models/download.model';
+import { FilterGroupModel, FilterModel, PaginatorModel } from '../models/common.model';
+import { ManualDownloadModel } from '../models/main-form.model';
+import { SettingsModel } from '../models/settings.model';
+import { PollType, SubscriptionModel } from '../models/subscription.model';
 
 export const DefaultSubscription: SubscriptionModel = {
   id: null,
@@ -31,6 +22,7 @@ export const DefaultSubscription: SubscriptionModel = {
   startFromLast: false,
   downloadShorts: false,
   notifyHA: false,
+  notifyTelegram: false,
   webhookOverride: '',
   prefix: '',
   tag: '',
@@ -57,6 +49,7 @@ export const MockSubscription: SubscriptionModel = {
   startFromLast: true,
   downloadShorts: false,
   notifyHA: true,
+  notifyTelegram: false,
   pollType: PollType.INTERVAL,
   pollInterval: 30,
   pollTime: null,
@@ -78,6 +71,12 @@ export const DefaultSettings: SettingsModel = {
   cookiesPath: null,
   ytdlpArgs: null,
   ytdlpConcurrency: 2,
+  timeZone: null,
+  telegramEnabled: false,
+  telegramBotToken: null,
+  telegramApiUrl: null,
+  telegramKeepFiles: false,
+  notifyDownloadFailed: false,
 };
 
 export const DefaultUiConfig: UiConfig = {

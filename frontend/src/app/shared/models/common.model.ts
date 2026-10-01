@@ -1,5 +1,5 @@
-import { DownloadStatus } from './download.model';
-import { Types } from './subscription.model';
+import type { DownloadStatus } from './download.model';
+import type { Types } from './subscription.model';
 
 export type Nullable<T> = T | null;
 

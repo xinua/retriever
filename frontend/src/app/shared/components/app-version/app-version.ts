@@ -2,9 +2,9 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
-import { APP_VERSION } from '@shared/constants';
-import { VersionModel } from '@shared/models';
-import { HttpService } from '@shared/services';
+import { APP_VERSION } from '../../constants/version.const';
+import { VersionModel } from '../../models/version.model';
+import { HttpService } from '../../services/http.service';
 import { NotifierService } from 'angular-notifier';
 import { filter, tap } from 'rxjs';
 import { ReleaseNotesDialog } from '../release-notes-dialog/release-notes-dialog';
@@ -55,9 +55,12 @@ export class AppVersion implements OnInit {
   }
 
   showReleaseNotes() {
-    this._dialog.open(ReleaseNotesDialog, {
+    const ref = this._dialog.open(ReleaseNotesDialog, {
       maxWidth: '1000px',
       data: this.versionInfo(),
     });
+
+    // Completes with the dialog, so nothing to unsubscribe.
+    ref.componentInstance.versionChecked.subscribe((info) => this.versionInfo.set(info));
   }
 }

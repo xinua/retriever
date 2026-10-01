@@ -1,0 +1,13 @@
+:host::ng-deep form {
+  margin-top: 20px;
+}
+
+:host::ng-deep .mat-step-icon {
+  --mat-stepper-header-selected-state-icon-background-color: white;
+  --mat-stepper-header-edit-state-icon-background-color: white;
+}
+
+:host::ng-deep .mat-step-icon mat-icon,
+:host::ng-deep .mat-step-icon span {
+  color: black !important;
+}

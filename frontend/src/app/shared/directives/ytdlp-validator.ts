@@ -1,11 +1,11 @@
 import { Directive, inject } from '@angular/core';
 import { AbstractControl, AsyncValidator, NG_ASYNC_VALIDATORS, ValidationErrors } from '@angular/forms';
 import { catchError, debounceTime, map, Observable, of, startWith, switchMap, take } from 'rxjs';
-import { HttpService } from '../services';
+import { HttpService } from '../services/http.service';
 
 /**
- * Checks the yt-dlp binary, downloads directory and cookies file against the
- * values currently in the form, not the ones already saved.
+ * Checks the yt-dlp binary and the downloads directory currently in the form,
+ * plus the saved cookies file.
  */
 @Directive({
   selector: '[rtYtdlpValidator]',
@@ -20,9 +20,7 @@ export class YtdlpValidatorDirective implements AsyncValidator {
     return control.valueChanges.pipe(
       startWith(control.value),
       debounceTime(600),
-      switchMap(() =>
-        this._httpService.validateYtdlp(form?.get('downloadsDir')?.value, form?.get('cookiesPath')?.value),
-      ),
+      switchMap(() => this._httpService.validateYtdlp(form?.get('downloadsDir')?.value)),
       map((response) =>
         response.status ? null : { invalidYtdlp: true, message: response.error ?? 'yt-dlp not ready' },
       ),

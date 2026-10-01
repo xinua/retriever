@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { catchError, filter, map, Observable, of } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
 import { DownloadModel } from '../models/download.model';
+import { TelegramChatModel, TelegramStatusModel } from '../models/settings.model';
 import {
   SubscriptionPayload,
   DownloaderStatusPayload,
@@ -72,6 +73,15 @@ export class WsService {
 
   subscriptionUpdated$(): Observable<SubscriptionPayload> {
     return this.wsMessage$<SubscriptionPayload>('channel-updated');
+  }
+
+  telegramStatus$(): Observable<TelegramStatusModel> {
+    return this.wsMessage$<TelegramStatusModel>('telegram-status');
+  }
+
+  /** The whole chat list, pushed whenever it changes — a /start adds a pending row. */
+  telegramChats$(): Observable<TelegramChatModel[]> {
+    return this.wsMessage$<TelegramChatModel[]>('telegram-chats');
   }
 
   closeConnection() {

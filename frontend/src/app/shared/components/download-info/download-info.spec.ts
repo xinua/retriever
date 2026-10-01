@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DownloadInfo } from './download-info';
-import { Codecs, DownloadModel, DownloadStatus, Types, VideoQuality } from '@shared/models';
+import { Codecs, DownloadModel, DownloadStatus, Types, VideoFormats, VideoQuality } from '@shared/models';
 import { DownloadRecordMock } from '@shared/constants';
 
 describe('DownloadInfo', () => {
@@ -41,7 +41,7 @@ describe('DownloadInfo', () => {
   it('renders the download details in the table', async () => {
     await render({ totalBytes: 10240000, type: Types.VIDEO, format: 'mp4', duration: 1200 } as Partial<DownloadModel>);
 
-    expect(cell('size')).toBe('9.8 MB');
+    expect(cell('size')).toBe('10.2 MB');
     expect(cell('type')).toBe('Video');
     expect(cell('format')).toBe('Mp4');
     expect(cell('duration')).toBe('20:00');
@@ -52,6 +52,14 @@ describe('DownloadInfo', () => {
 
     expect(cell('size')).toBe('—');
     expect(cell('codec')).toBe('—');
+  });
+
+  it('shows the probed file format over the requested one', async () => {
+    await render({ format: VideoFormats.AUTO, mediaFormat: 'mkv' });
+    expect(cell('format')).toBe('Mkv');
+
+    await render({ format: VideoFormats.MP4, mediaFormat: null });
+    expect(cell('format')).toBe('Mp4');
   });
 
   it('shows the probed file quality over the requested one', async () => {

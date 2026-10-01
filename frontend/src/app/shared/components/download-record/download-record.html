@@ -11,33 +11,53 @@
       <rt-progress-info [download]="download()" (cancel)="cancel.emit(download())" />
     }
 
-    <div class="grid grid-cols-1 lg:grid-cols-[80%_20%] xl:grid-cols-[70%_20%] justify-between gap-2 w-full">
-      <div class="flex gap-4 col-span-1">
-        <rt-avatar
-          [sourceImg]="download().avatarPath"
-          [url]="download().authorUrl"
-          [pending]="isActive"
-          [imgSize]="'80x80'"
-          [customClass]="'w-10 lg:w-20 h-auto'"
-        />
+    <div
+      class="grid grid-cols-1 lg:grid-cols-[calc(100%-238px)_230px] xl:grid-cols-[75%_25%] justify-between gap-2 w-full"
+    >
+      <div class="flex lg:grid lg:grid-cols-[auto_calc(100%-96px)] gap-4 col-span-1 w-[calc(100%-56px)] sm:w-full">
+        <div class="relative h-min col-span-1">
+          <rt-avatar
+            [sourceImg]="download().avatarPath"
+            [url]="download().authorUrl"
+            [pending]="isActive"
+            [imgSize]="'80x80'"
+            [customClass]="'w-10 lg:w-20 h-auto'"
+          />
 
-        <div
-          class="flex flex-col w-full relative md:overflow-x-hidden"
-          rtAppear
-          [animationName]="paginator().page === 0 && paginator().limit !== 1 ? 'rise' : 'none'"
-          [animationDelay]="0.75"
-        >
+          @if (!defaultImage()) {
+            <rt-drop-area
+              label="Update avatar"
+              [dialogData]="dialogData"
+              customClass="rounded-full"
+              animate.enter="fadeIn"
+              animate.leave="fadeOut"
+              (onFileDrop)="updateAvatar($event)"
+            >
+              <mat-icon svgIcon="upload_image" class="text-2xl" />
+            </rt-drop-area>
+          }
+        </div>
+
+        <div class="flex flex-col relative col-span-1 w-full">
           <div
-            class="grid grid-flow-col grid-rows-1 grid-cols-[calc(100%-108px)_100px] sm:grid-cols-[80%_20%] justify-between items-center gap-2 pl-1 overflow-visible"
+            class="grid grid-flow-col grid-rows-1 grid-cols-[calc(100%-108px)_100px] sm:grid-cols-1 justify-between items-center gap-2 pl-1 overflow-visible"
           >
             <div class="flex items-center col-span-1 gap-2">
-              <rt-status-indicator [download]="download()" />
-              <a class="text-lg truncate w-fit" [href]="download().url" target="_blank">
-                {{ download().prefix }}{{ download().title || download().url }}
+              @let title = (download().prefix ?? '') + ' ' + (download().title || download().url);
+              <rt-status-indicator [download]="download()" class="contents" />
+              <a
+                #titleEl
+                [href]="download().url"
+                target="_blank"
+                class="text-lg truncate w-fit"
+                [matTooltip]="title"
+                [matTooltipDisabled]="!(titleEl.scrollWidth > titleEl.clientWidth)"
+              >
+                {{ title }}
               </a>
             </div>
 
-            <div class="col-span-1 pr-2 lg:hidden">
+            <div class="col-span-1 lg:hidden">
               <rt-download-controls
                 [download]="download()"
                 (retry)="retry.emit(download())"
@@ -49,7 +69,7 @@
           </div>
 
           @if (download().channelName) {
-            <div class="text-gray-500 truncate flex items-start gap-2">
+            <div class="text-gray-500 truncate hidden lg:flex items-start gap-2">
               {{ download().channelName }}
 
               @if (download().source === downloadSource.WATCHER) {
@@ -59,11 +79,18 @@
                   fontIcon="subscriptions"
                 />
               }
+              @if (download().source === downloadSource.TELEGRAM) {
+                <mat-icon
+                  class="text-sm! h-4! w-4! align-middle"
+                  matTooltip="Downloaded from Telegram"
+                  svgIcon="telegram"
+                />
+              }
             </div>
           }
 
           @if (download().playlistTitle) {
-            <div class="text-xs text-gray-600 truncate lg:h-0 lg:overflow-visible">
+            <div class="text-xs text-gray-600 truncate hidden lg:flex lg:h-0 lg:overflow-visible">
               <mat-icon class="text-sm! h-4! w-4! align-middle">playlist_play</mat-icon>
               {{ download().playlistTitle }}
               @if (download().playlistIndex) {
@@ -72,7 +99,7 @@
             </div>
           }
 
-          <rt-download-info [download]="download()" />
+          <rt-download-info [download]="download()" class="my-auto" />
         </div>
       </div>
 
@@ -90,7 +117,7 @@
           />
         </div>
 
-        <rt-download-poster [download]="download()" />
+        <rt-download-poster [download]="download()" rtAppear animationName="reveal" class="mt-auto" />
 
         @if (hasError) {
           <div class="text-red-400 ml-3 border border-red-500 rounded-md px-3 py-2 lg:hidden">

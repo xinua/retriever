@@ -26,15 +26,16 @@ export const CODEC_ICONS = {
 export const VIDEO_FORMAT_ICONS = {
   [VideoFormats.AUTO]: 'auto',
   [VideoFormats.MP4]: 'mp4',
-  [VideoFormats.IOS]: 'ios',
+  [VideoFormats.MKV]: 'mkv',
 };
 
 export const AUDIO_FORMAT_ICONS = {
-  [AudioFormats.M4A]: 'mp4a',
-  [AudioFormats.MP3]: 'mp3',
-  [AudioFormats.OPUS]: 'opus',
-  [AudioFormats.WAV]: 'wav',
-  [AudioFormats.FLAC]: 'flac',
+  [AudioFormats.AUTO]: 'auto',
+  [AudioFormats.M4A]: 'image',
+  [AudioFormats.MP3]: 'image',
+  [AudioFormats.OPUS]: 'image_not_supported',
+  [AudioFormats.WAV]: 'image_not_supported',
+  [AudioFormats.FLAC]: 'image',
 };
 
 export const QUALITY_ICONS = {

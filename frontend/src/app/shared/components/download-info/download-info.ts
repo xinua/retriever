@@ -1,7 +1,8 @@
 import { Component, input } from '@angular/core';
-import { DownloadModel } from '../../models/download.model';
+import { DownloadModel, DownloadStatus } from '../../models/download.model';
 import { MatTableModule } from '@angular/material/table';
-import { DownloadStatus, SizePipe, TimePipe } from '../..';
+import { SizePipe } from '../../pipes/size.pipe';
+import { TimePipe } from '../../pipes/time.pipe';
 import { DatePipe, TitleCasePipe } from '@angular/common';
 
 @Component({

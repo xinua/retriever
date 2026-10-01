@@ -9,7 +9,7 @@ const MINUTE_MS = 60_000;
 type IntervalPeriod = { start: number; end: number };
 
 /**
- * A wall-clock "HH:MM" as minutes past local midnight, or null when the
+ * A wall-clock "HH:MM" as minutes past midnight, or null when the
  * string is not one. The client only offers whole hours, but accept a minute
  * part so a hand-written value is not silently dropped.
  */
@@ -67,31 +67,129 @@ export function normalizePollTimes(value: unknown): string[] {
 }
 
 /**
- * Local midnight `dayOffset` days from `now`, plus `minutes`. Built from the
- * local date parts rather than by adding milliseconds so a day that is not 24
- * hours long - a DST transition - still lands on the requested wall clock.
- *
- * `minutes` of 24 * 60 is deliberately allowed: `Date` rolls it over to
- * midnight the following day, which is what an interval window ending at 24
- * means.
+ * Whether `timeZone` is an IANA zone name this runtime knows, such as
+ * "Europe/Kyiv". Anything else - a typo, an offset like "+03:00" - is
+ * rejected, because Intl would throw on it the first time the scheduler ran.
  */
-function localTimeOn(now: Date, dayOffset: number, minutes: number): Date {
-  return new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() + dayOffset,
-    0,
-    minutes,
-    0,
-    0
-  );
+export function isValidTimeZone(timeZone: unknown): timeZone is string {
+  if (typeof timeZone !== "string" || !timeZone.trim()) return false;
+
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-function isSameLocalDay(a: Date, b: Date): boolean {
+/**
+ * The zone the wall-clock fields are read in: the one saved in settings, or
+ * the process's own (`TZ`) when none is saved or it is no longer valid.
+ */
+export function resolveTimeZone(timeZone?: string | null): string {
+  return isValidTimeZone(timeZone)
+    ? timeZone
+    : Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+function formatterFor(timeZone: string): Intl.DateTimeFormat {
+  let formatter = formatters.get(timeZone);
+
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric"
+    });
+    formatters.set(timeZone, formatter);
+  }
+
+  return formatter;
+}
+
+type WallClock = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+};
+
+/** What a clock in `timeZone` reads at the instant `date`. */
+function wallClockIn(date: Date, timeZone: string): WallClock {
+  const parts: Record<string, number> = {};
+
+  for (const part of formatterFor(timeZone).formatToParts(date)) {
+    if (part.type !== "literal") parts[part.type] = Number(part.value);
+  }
+
+  return {
+    year: parts.year,
+    month: parts.month,
+    day: parts.day,
+    hour: parts.hour,
+    minute: parts.minute,
+    second: parts.second
+  };
+}
+
+/** How far `timeZone` is ahead of UTC at `instantMs`, in milliseconds. */
+function offsetAt(instantMs: number, timeZone: string): number {
+  const { year, month, day, hour, minute, second } = wallClockIn(
+    new Date(instantMs),
+    timeZone
+  );
+  const asUtc = Date.UTC(year, month - 1, day, hour, minute, second);
+
+  return asUtc - Math.floor(instantMs / 1000) * 1000;
+}
+
+/**
+ * Midnight in `timeZone`, `dayOffset` days from the day `now` falls on there,
+ * plus `minutes`. Worked out on the calendar date rather than by adding
+ * milliseconds, so a day that is not 24 hours long - a DST transition - still
+ * lands on the requested wall clock.
+ *
+ * `minutes` of 24 * 60 is deliberately allowed: Date.UTC rolls it over to
+ * midnight the following day, which is what an interval window ending at 24
+ * means.
+ *
+ * The offset is read twice because the guess can sit on the other side of a
+ * DST change from the answer. A wall clock skipped by a spring-forward gap
+ * comes out shifted by the size of the gap, which is still the right hour of
+ * the day to poll.
+ */
+function zonedTimeOn(
+  now: Date,
+  dayOffset: number,
+  minutes: number,
+  timeZone: string
+): Date {
+  const { year, month, day } = wallClockIn(now, timeZone);
+  const wallAsUtc = Date.UTC(year, month - 1, day + dayOffset, 0, minutes);
+
+  const guess = wallAsUtc - offsetAt(wallAsUtc, timeZone);
+  const settled = wallAsUtc - offsetAt(guess, timeZone);
+
+  return new Date(settled);
+}
+
+function isSameZonedDay(a: Date, b: Date, timeZone: string): boolean {
+  const left = wallClockIn(a, timeZone);
+  const right = wallClockIn(b, timeZone);
+
   return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
+    left.year === right.year &&
+    left.month === right.month &&
+    left.day === right.day
   );
 }
 
@@ -101,19 +199,23 @@ function isSameLocalDay(a: Date, b: Date): boolean {
  *
  * `lastCaptureAt` is the whole answer: it is written by the same scan that
  * queues the download, so the hold survives a restart and does not need the
- * worker to remember anything between ticks. The day is the local one, the
- * clock the rest of this file schedules against.
+ * worker to remember anything between ticks. The day is the one in
+ * `timeZone`, the clock the rest of this file schedules against.
  *
  * Off for a subscription without the flag, so nothing else changes.
  */
-export function isHeldForToday(ch: Channel, now: Date): boolean {
+export function isHeldForToday(
+  ch: Channel,
+  now: Date,
+  timeZone?: string | null
+): boolean {
   if (!ch.pollOnce || !ch.lastCaptureAt) return false;
 
   const captured = new Date(ch.lastCaptureAt);
 
   if (Number.isNaN(captured.getTime())) return false;
 
-  return isSameLocalDay(captured, now);
+  return isSameZonedDay(captured, now, resolveTimeZone(timeZone));
 }
 
 /**
@@ -152,14 +254,15 @@ export function parseIntervalPeriod(intervalPeriod: unknown): IntervalPeriod | n
 function nextIntervalCheck(
   now: Date,
   intervalMs: number,
-  period: IntervalPeriod | null
+  period: IntervalPeriod | null,
+  timeZone: string
 ): Date {
   const tick = new Date(now.getTime() + intervalMs);
 
   if (!period) return tick;
 
-  const opensAt = localTimeOn(now, 0, period.start * 60);
-  const closesAt = localTimeOn(now, 0, period.end * 60);
+  const opensAt = zonedTimeOn(now, 0, period.start * 60, timeZone);
+  const closesAt = zonedTimeOn(now, 0, period.end * 60, timeZone);
 
   // Still before today's window: open on the hour.
   if (now < opensAt) return opensAt;
@@ -171,7 +274,7 @@ function nextIntervalCheck(
   if (now < closesAt) return closesAt;
 
   // Past it: tomorrow's opening hour.
-  return localTimeOn(now, 1, period.start * 60);
+  return zonedTimeOn(now, 1, period.start * 60, timeZone);
 }
 
 /**
@@ -179,17 +282,24 @@ function nextIntervalCheck(
  * when it has nothing to schedule - an interval type with no interval, or a
  * time type with no usable times.
  *
- * Wall-clock fields (`pollTime`, `intervalPeriod`) are read against the
- * server's local clock, so the `TZ` the container runs under decides what
- * "09:00" means. It is UTC unless set - see docker-compose.yml.
+ * Wall-clock fields (`pollTime`, `intervalPeriod`) are read in `timeZone`,
+ * the zone saved in settings - the browser's own, filled in by the client
+ * the first time it loads. Without one they fall back to the server's clock,
+ * so the `TZ` the container runs under decides what "09:00" means.
  *
  * `pollOnce` rows that have already captured today are scheduled straight on
  * to tomorrow's first slot - see isHeldForToday.
  */
-export function calculateNextCheck(ch: Channel, now: Date): string | null {
+export function calculateNextCheck(
+  ch: Channel,
+  now: Date,
+  timeZone?: string | null
+): string | null {
+  const zone = resolveTimeZone(timeZone);
+
   // A `pollOnce` row that has already captured today is done for the day: the
   // rest of today's slots are skipped and the search starts on tomorrow.
-  const heldForToday = isHeldForToday(ch, now);
+  const heldForToday = isHeldForToday(ch, now, zone);
 
   if (ch.pollType === "interval") {
     const minutes = ch.pollInterval ?? 0;
@@ -201,10 +311,10 @@ export function calculateNextCheck(ch: Channel, now: Date): string | null {
     // Tomorrow's opening hour, or local midnight when the interval runs all
     // day - the first tick the row would have had anyway.
     if (heldForToday) {
-      return localTimeOn(now, 1, (period?.start ?? DAY_START) * 60).toISOString();
+      return zonedTimeOn(now, 1, (period?.start ?? DAY_START) * 60, zone).toISOString();
     }
 
-    return nextIntervalCheck(now, minutes * MINUTE_MS, period).toISOString();
+    return nextIntervalCheck(now, minutes * MINUTE_MS, period, zone).toISOString();
   }
 
   if (ch.pollType === "time") {
@@ -216,7 +326,7 @@ export function calculateNextCheck(ch: Channel, now: Date): string | null {
     // through to tomorrow takes the first of the list.
     for (const dayOffset of heldForToday ? [1] : [0, 1]) {
       for (const minutes of times) {
-        const target = localTimeOn(now, dayOffset, minutes);
+        const target = zonedTimeOn(now, dayOffset, minutes, zone);
 
         if (target > now) return target.toISOString();
       }

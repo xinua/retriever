@@ -4,6 +4,7 @@ export interface ChangelogModel {
   improvements: string[];
   other: string[];
   images?: string[];
+  developerMessage?: string;
 }
 
 export interface ChangelogHistoryModel {
@@ -16,6 +17,7 @@ export interface VersionModel {
   version: string;
   releaseDate: string;
   changelog: ChangelogHistoryModel[];
+  enabled: boolean;
   current: string;
   latest: string;
   updateAvailable: boolean;

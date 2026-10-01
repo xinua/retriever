@@ -14,7 +14,8 @@ import { NotifierService } from 'angular-notifier';
 import { catchError, debounceTime, distinctUntilChanged, filter, from, Observable, switchMap, take, tap } from 'rxjs';
 import { ThemeConfigFormModel } from '../../models/theme.model';
 import { ThemeColors } from '../../models/ui-config.model';
-import { HttpService, UiConfigService } from '../../services';
+import { HttpService } from '../../services/http.service';
+import { UiConfigService } from '../../services/ui-config.service';
 import { SECTION_OPTIONS } from './theme.constants';
 import { TargetIconPipe } from './target-icon.pipe';
 

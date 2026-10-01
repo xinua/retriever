@@ -42,7 +42,7 @@
 <mat-menu #pathMenu class="pt-0! overflow-visible!">
   <div class="flex flex-col items-end file-name" (click)="$event.stopPropagation()">
     <mat-form-field appearance="fill" class="max-w-full">
-      <small matPrefix class="pl-2">{{ downloadsFolder() }}/</small>
+      <small matPrefix class="pl-2 whitespace-nowrap">{{ downloadsFolder() }}/</small>
 
       <input
         matInput

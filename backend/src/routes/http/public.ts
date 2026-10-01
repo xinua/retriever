@@ -3,6 +3,7 @@ import { FastifyInstance } from "fastify";
 import { db } from "../../db/index.js";
 import { channel } from "../../db/schema.js";
 import { getLastCheck } from "../../utils/last-check.helper.js";
+import { decorateChannel } from "../../services/avatar.js";
 
 export async function healthRoutes(app: FastifyInstance) {
   app.get("/api/health", async () => {
@@ -33,7 +34,7 @@ export async function healthRoutes(app: FastifyInstance) {
         id: row.id,
         name: row.name,
         channelId: row.channelId,
-        avatar: row.channelAvatarPath,
+        avatar: decorateChannel(row).channelAvatarPath,
         rssUrl: row.rssUrl
       }
     };

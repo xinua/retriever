@@ -8,7 +8,7 @@ import { resolveTarget, MAX_ITEMS } from "./resolve.js";
 import * as DownloadQueue from "./download-queue.js";
 
 import type { Download, Settings } from "../db/types.js";
-import type { ResolvedEntry } from "./resolve.js";
+import type { ResolvedEntry, ResolvedTarget } from "./resolve.js";
 
 const DATA_DIR = process.env.DATA_DIR ?? "./data";
 const IMAGES_DIR = process.env.IMAGES_DIR ?? path.join(DATA_DIR, "images");
@@ -38,17 +38,25 @@ export type ManualDownloadResult = {
  */
 export async function startManualDownload(
   req: ManualDownloadRequest,
-  settings: Settings
+  settings: Settings,
+  // A resolve the caller already did - the Telegram bot reads the formats to
+  // offer before anything is queued - so the page is not extracted again.
+  resolved?: ResolvedTarget
 ): Promise<ManualDownloadResult> {
-  const target = await resolveTarget(req.url, settings);
+  const target = resolved ?? await resolveTarget(req.url, settings, req.options.ytdlpArgs);
 
   if (!target.entries.length) {
     throw new Error("No downloadable videos found at that URL");
   }
 
+  // Only a single video can stand in for a subscription's last download; a
+  // playlist linked to it would leave the player picking among its entries.
+  const options =
+    target.kind === "video" ? req.options : { ...req.options, watcherId: null };
+
   const downloads = await DownloadQueue.enqueueManual(
     target.entries,
-    req.options,
+    options,
     { id: target.playlistId, title: target.playlistTitle }
   );
 

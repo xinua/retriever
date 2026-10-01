@@ -12,8 +12,9 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormBuilder, FormControl, FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { FormBuilder, FormControl, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatCheckbox } from '@angular/material/checkbox';
 import {
@@ -27,16 +28,18 @@ import { MatIcon } from '@angular/material/icon';
 import { MatFormField, MatInput, MatLabel, MatSuffix } from '@angular/material/input';
 import { MatOption, MatSelect, MatSelectTrigger } from '@angular/material/select';
 import { MatTooltip } from '@angular/material/tooltip';
+import { ActivatedRoute } from '@angular/router';
+import { DefaultManualForm } from '@shared/constants';
 import {
   AudioFormats,
+  AudioQuality,
   Codecs,
   HomeSection,
-  ManualFormModel,
   ManualDownloadRequest,
-  VideoQuality,
+  ManualFormModel,
   Types,
   VideoFormats,
-  AudioQuality,
+  VideoQuality,
 } from '@shared/models';
 import { HttpService, LayoutService, ScrollToService, StorageService } from '@shared/services';
 import { RtValidators } from '@shared/validators';
@@ -44,8 +47,6 @@ import { NotifierService } from 'angular-notifier';
 import { catchError, filter, from, map, Observable, of, skip, tap } from 'rxjs';
 import { finalize, startWith, take } from 'rxjs/operators';
 import { CODEC_ICONS, FORMAT_ICONS, QUALITY_ICONS, TYPE_ICONS } from './manual-form.constants';
-import { DefaultManualForm } from '@shared/constants';
-import { MatButtonModule } from '@angular/material/button';
 
 @Component({
   selector: 'rt-manual-form',
@@ -84,6 +85,7 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _scrollTo = inject(ScrollToService);
   private readonly _layout = inject(LayoutService);
+  private readonly _route = inject(ActivatedRoute);
 
   readonly typesEnum = Types;
   readonly types = Object.values(Types);
@@ -115,7 +117,7 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
 
   constructor() {
     this.form = this._fb.group<ManualFormModel>({
-      url: new FormControl('', [RtValidators.url]),
+      url: new FormControl('', [Validators.required, RtValidators.url]),
       quality: new FormControl(VideoQuality.BEST),
       type: new FormControl(Types.VIDEO),
       format: new FormControl(this.videoFormats[0]),
@@ -137,6 +139,7 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     this.form.patchValue(this._storage.manualDownloadForm());
+    this._patchFormFromQueryParams();
   }
 
   ngAfterViewInit(): void {
@@ -146,6 +149,7 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
   }
 
   clearUrl(): void {
+    this.isSubmitted.set(false);
     this.form.controls.url.setValue('', { emitEvent: false });
     this.form.controls.url.enable();
     this.form.markAsPristine();
@@ -169,24 +173,52 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
     if (this.isPending()) return;
 
     this.isSubmitted.set(true);
-    this.form.controls.url.disable();
 
     if (this.form.controls.url.value.trim() === '' && this._storage.uiConfig().autoPaste) {
+      this.form.controls.url.disable();
+
       from(navigator.clipboard.readText())
-        .pipe(take(1))
+        .pipe(
+          take(1),
+          catchError(() => of('')),
+        )
         .subscribe((text) => {
+          this.form.controls.url.enable();
           this.form.controls.url.setValue(text);
-          this.download();
+          // Not download(): an empty clipboard would read it again, forever.
+          this._submit();
         });
       return;
     }
 
+    this._submit();
+  }
+
+  pasteUrl(): void {
+    if (this._storage.uiConfig().autoPaste && this.urlInput()?.nativeElement?.value === '') {
+      from(navigator.clipboard.readText())
+        .pipe(
+          take(1),
+          filter((text) => RtValidators.validateUrl(text)),
+          tap((text) => this.form.controls.url.setValue(text)),
+          catchError(() => of(null)),
+        )
+        .subscribe();
+    }
+  }
+
+  /**
+   * Validity is checked before the url is locked: a disabled control does not
+   * count towards form.invalid, so checking afterwards let any url through.
+   */
+  private _submit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
     }
 
     this.isPending.set(true);
+    this.form.controls.url.disable();
 
     this._http
       .createDownload(this._toRequest())
@@ -216,19 +248,6 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
         },
         error: (error) => this._notifier.notify('error', error?.error?.error ?? 'The server rejected the request'),
       });
-  }
-
-  pasteUrl(): void {
-    if (this._storage.uiConfig().autoPaste && this.urlInput()?.nativeElement?.value === '') {
-      from(navigator.clipboard.readText())
-        .pipe(
-          take(1),
-          filter((text) => RtValidators.validateUrl(text)),
-          tap((text) => this.form.controls.url.setValue(text)),
-          catchError(() => of(null)),
-        )
-        .subscribe();
-    }
   }
 
   private _trackTypeChange(): Observable<Types> {
@@ -304,5 +323,32 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
     const capped = truncated ? ` (capped at ${limit})` : '';
 
     return `Queued ${queued} video${queued === 1 ? '' : 's'} from this ${kind}${capped}`;
+  }
+
+  private _patchFormFromQueryParams(): void {
+    const controls = this.form.controls;
+    const paramsMap: Record<string, FormControl> = {
+      url: controls.url,
+      type: controls.type,
+      format: controls.format,
+      quality: controls.quality,
+      codec: controls.codec,
+      removeSponsor: controls.removeSponsor,
+      prefix: controls.prefix,
+      destinationFolder: controls.destinationFolder,
+    };
+
+    this._route.queryParams.pipe(take(1)).subscribe((params) => {
+      if (params['url'] && RtValidators.validateUrl(params['url'])) {
+        // A link may carry only some of the options; the rest keep their values.
+        Object.entries(paramsMap)
+          .filter(([key]) => key in params)
+          .forEach(([key, control]) => {
+            const value = params[key];
+            control.setValue(typeof control.value === 'boolean' ? value === 'true' : value);
+          });
+      }
+      if (params['download'] === 'true') this.download();
+    });
   }
 }

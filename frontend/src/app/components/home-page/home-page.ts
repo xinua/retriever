@@ -92,12 +92,16 @@ export class HomePage implements OnInit {
    * Downloads hides itself while the queue is empty, leaving a zero-height
    * item — so the grip is hidden too rather than offering a drag of nothing.
    */
-  /** Queued or running — what a stop-all would actually affect. */
-  activeCount = computed(
-    () =>
-      this._storage.downloads().filter((d) => d.status === DownloadStatus.QUEUED || d.status === DownloadStatus.RUNNING)
-        .length,
-  );
+  /**
+   * Queued or running — what a stop-all would actually affect. Read from the
+   * whole-table counts, not the loaded rows: those are one page, so they would
+   * cap the number at the paginator's limit.
+   */
+  activeCount = computed(() => {
+    const info = this._storage.downloadInfo();
+
+    return info ? info[DownloadStatus.QUEUED] + info[DownloadStatus.RUNNING] : 0;
+  });
 
   stopping = signal(false);
 
@@ -175,14 +179,20 @@ export class HomePage implements OnInit {
   }
 
   private _updateSubscription(nextCheck: NextCheckModel) {
-    this._storage.subscriptions.update((subscriptions) => {
-      return subscriptions.map((subscription) => {
-        if (subscription.id === nextCheck.channel.id) {
-          subscription.lastCheckedAt = new Date(this._storage.nextCheck().nextCheckAt);
-          subscription.nextCheckAt = new Date(nextCheck.nextCheckAt);
-        }
-        return subscription;
-      });
-    });
+    // The previous next-check is when this check actually ran. It is missing
+    // when a websocket event beats the initial HTTP load, so keep the old date.
+    const previousCheckAt = this._storage.nextCheck()?.nextCheckAt;
+
+    this._storage.subscriptions.update((subscriptions) =>
+      subscriptions.map((subscription) =>
+        subscription.id === nextCheck.channel.id
+          ? {
+              ...subscription,
+              lastCheckedAt: previousCheckAt ? new Date(previousCheckAt) : subscription.lastCheckedAt,
+              nextCheckAt: new Date(nextCheck.nextCheckAt),
+            }
+          : subscription,
+      ),
+    );
   }
 }

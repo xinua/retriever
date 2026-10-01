@@ -23,6 +23,42 @@ export class ImagesService {
     return path.join(IMAGE_DIR, filename);
   }
 
+  /**
+   * The public path of a stored image with its modification time attached,
+   * or null when the file is not there.
+   *
+   * A replaced avatar or poster keeps its name — every row already points at
+   * it — so without the `?v=` a browser holding the old picture under that
+   * URL has no reason to fetch it again. The static route ignores the query.
+   */
+  static urlFor(filename: string): string | null {
+    try {
+      const { mtimeMs } = fs.statSync(path.join(IMAGE_DIR, filename));
+
+      return `/images/${filename}?v=${Math.floor(mtimeMs)}`;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * `urlFor` for a stored `/images/...` path, which is how the columns hold
+   * them. Anything else — a bundled asset, a path whose file is gone — comes
+   * back unchanged.
+   */
+  static versioned(publicPath: string | null): string | null {
+    if (!publicPath?.startsWith("/images/")) return publicPath;
+
+    return ImagesService.urlFor(ImagesService.nameOf(publicPath)) ?? publicPath;
+  }
+
+  /** The bare filename behind a public path, query and folders dropped. */
+  static nameOf(publicPath: string): string {
+    const bare = publicPath.split("?")[0];
+
+    return bare.split("/").pop() ?? bare;
+  }
+
   static exists(filename: string): boolean {
     try {
       return fs.existsSync(path.join(IMAGE_DIR, filename));
@@ -73,7 +109,7 @@ export class ImagesService {
   }
 
   static async remove(filename: string) {
-    const sanitizedFilename = filename.split('/').pop() ?? filename;
+    const sanitizedFilename = ImagesService.nameOf(filename);
 
     try {
       const filePath = path.join(IMAGE_DIR, sanitizedFilename);

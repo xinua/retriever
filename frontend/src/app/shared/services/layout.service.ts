@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { moveItemInArray } from '@angular/cdk/drag-drop';
-import { DefaultSectionOrder, SectionOrderStorageKey } from '@shared/constants';
-import { HomeSection, HomeSectionOrder } from '@shared/models';
+import { DefaultSectionOrder, SectionOrderStorageKey } from '../constants/layout.const';
+import { HomeSection, HomeSectionOrder } from '../models/layout.model';
 
 const KNOWN_SECTIONS = Object.values(HomeSection);
 

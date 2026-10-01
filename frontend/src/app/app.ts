@@ -1,11 +1,11 @@
 import { NgComponentOutlet } from '@angular/common';
 import { ApplicationRef, Component, inject, OnInit } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { HEIGHT_CHANGE_TOKEN, SCROLL_TOKEN, TAB_ACTIVE_TOKEN } from '@shared/constants';
+import { DRAG_TOKEN, HEIGHT_CHANGE_TOKEN, SCROLL_TOKEN, TAB_ACTIVE_TOKEN } from '@shared/constants';
 import { NotifierContainerComponent } from 'angular-notifier';
-import { fromEvent } from 'rxjs';
+import { catchError, EMPTY, fromEvent, switchMap } from 'rxjs';
+import { browserTimeZone, createDragObservable } from './shared/helpers';
 import { HttpService } from './shared/services/http.service';
-import { StorageService } from './shared/services/storage.service';
 
 @Component({
   selector: 'rt-root',
@@ -39,11 +39,14 @@ import { StorageService } from './shared/services/storage.service';
       provide: TAB_ACTIVE_TOKEN,
       useValue: fromEvent(document, 'visibilitychange'),
     },
+    {
+      provide: DRAG_TOKEN,
+      useValue: createDragObservable(),
+    },
   ],
 })
 export class App implements OnInit {
   private readonly _http = inject(HttpService);
-  private readonly _storage = inject(StorageService);
   protected readonly notifierContainer = NotifierContainerComponent;
 
   /**
@@ -55,6 +58,16 @@ export class App implements OnInit {
 
   ngOnInit(): void {
     this._http.getUiConfig().subscribe();
-    this._http.getSettings().subscribe();
+    // The first browser to load the app gives the server its zone, so poll
+    // hours mean what they say here rather than on the server's clock.
+    this._http
+      .getSettings()
+      .pipe(
+        switchMap((settings) =>
+          settings.id != null && !settings.timeZone ? this._http.fillTimeZone(browserTimeZone()) : EMPTY,
+        ),
+        catchError(() => EMPTY),
+      )
+      .subscribe();
   }
 }

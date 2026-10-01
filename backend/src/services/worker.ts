@@ -5,10 +5,10 @@ import { eq, sql } from "drizzle-orm";
 import { getFeedVideos, type RssVideo } from "./rss.js";
 import { isShort } from "./shorts.js";
 import * as DownloadQueue from "./download-queue.js";
-import { sendWebhook } from "./webhook.js";
+import { notifyNewVideo } from "./notify.js";
 import { withLock } from "./lock.js";
 import { ImagesService } from "./images.service.js";
-import { avatarName } from "./avatar.js";
+import { avatarName, decorateChannel } from "./avatar.js";
 import { YoutubeService } from "./youtube.service.js";
 
 import type { Channel, Settings } from "../db/types.js";
@@ -203,7 +203,7 @@ export async function processChannel(
 ) {
   await ensureAvatar(ch);
 
-  const feed = await getFeedVideos(ch.rssUrl);
+  const feed = await getFeedVideos(ch.rssUrl, appSettings);
   const latest = await pickLatest(ch, feed.videos);
 
   const now = new Date();
@@ -212,7 +212,7 @@ export async function processChannel(
   // Nothing new, nothing this subscription wants, or a feed that carried no
   // usable entry at all: the scan still happened, so it books the next one.
   if (!latest?.videoId) {
-    const nextCheckAt = scheduled ? calculateNextCheck(ch, now) : ch.nextCheckAt;
+    const nextCheckAt = scheduled ? calculateNextCheck(ch, now, appSettings.timeZone) : ch.nextCheckAt;
     await db.update(channel)
       .set({
         lastCheckedAt: nowIso,
@@ -239,7 +239,7 @@ export async function processChannel(
     // on the row it read - otherwise a `pollOnce` subscription books another
     // check for today and only holds off from the tick after that.
     const nextCheckAt = scheduled
-      ? calculateNextCheck({ ...ch, lastCaptureAt: nowIso }, now)
+      ? calculateNextCheck({ ...ch, lastCaptureAt: nowIso }, now, appSettings.timeZone)
       : ch.nextCheckAt;
 
     await db.update(channel)
@@ -278,24 +278,10 @@ export async function processChannel(
 
   await DownloadQueue.enqueue({ channel: ch, settings: appSettings, video: latest });
 
-  const webhookUrl =
-    ch.webhookOverride || appSettings.webhookUrl;
-
-  if (ch.notifyHA && webhookUrl) {
-    await sendWebhook(webhookUrl, {
-      // The watcher's own id (the one the widget URL takes), not the
-      // channel's YouTube id.
-      watcherId: ch.id,
-      channel: ch.name,
-      videoId: latest.videoId,
-      title: latest.title,
-      type: ch.type,
-      date: new Date(nowIso).toISOString()
-    });
-  }
+  await notifyNewVideo(ch, latest, appSettings, nowIso);
 
   const nextCheckAt = scheduled
-    ? calculateNextCheck({ ...ch, lastCaptureAt: nowIso }, now)
+    ? calculateNextCheck({ ...ch, lastCaptureAt: nowIso }, now, appSettings.timeZone)
     : ch.nextCheckAt;
 
   await db.update(channel)
@@ -316,7 +302,7 @@ export async function processChannel(
     .from(channel)
     .where(eq(channel.id, ch.id));
 
-  broadcast('channel-updated', { channel: updatedChannel });
+  broadcast('channel-updated', { channel: decorateChannel(updatedChannel) });
   broadcast('next-check', await getLastCheck());
   broadcast('notification', {
     type: 'success',
@@ -379,10 +365,10 @@ export async function runWorkerTick() {
     // until tomorrow, whatever its row says is due: `nextCheckAt` can still
     // point at today after a manual run, or after the flag was turned on with
     // a check already booked.
-    if (isHeldForToday(ch, now)) {
+    if (isHeldForToday(ch, now, appSettings.timeZone)) {
 
       await db.update(channel)
-        .set({ nextCheckAt: calculateNextCheck(ch, now) })
+        .set({ nextCheckAt: calculateNextCheck(ch, now, appSettings.timeZone) })
         .where(eq(channel.id, ch.id));
 
       broadcast('next-check', await getLastCheck());
@@ -397,7 +383,7 @@ export async function runWorkerTick() {
     } catch (e) {
 
       console.error("Channel error:", ch.id, e);
-      const nextCheckAt = calculateNextCheck(ch, now);
+      const nextCheckAt = calculateNextCheck(ch, now, appSettings.timeZone);
 
       await db.update(channel)
         .set({

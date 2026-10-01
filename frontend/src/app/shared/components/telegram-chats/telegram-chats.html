@@ -1,0 +1,187 @@
+@let st = status();
+
+@if (st?.enabled) {
+  <div class="flex items-center gap-2 text-sm text-gray-400">
+    <mat-icon class="text-base!" [class]="st!.running ? 'text-green-500!' : 'text-red-400!'">
+      {{ st!.running ? 'verified_user' : 'gpp_bad' }}
+    </mat-icon>
+
+    <span>
+      Bot:
+      @if (st!.running) {
+        <span class="text-gray-200">connected as &#64;{{ st!.username }}</span>
+      } @else {
+        <span class="text-red-400">{{ st!.error ?? (st!.configured ? 'not running' : 'no token saved') }}</span>
+      }
+      @if (st.running) {
+        <span class="text-gray-500">— {{ st!.local ? 'local server' : 'cloud' }}</span>
+        <span class="text-gray-500 hidden md:inline">, {{ st!.limitMb }} MB limit</span>
+      }
+    </span>
+  </div>
+}
+
+<ng-content select="div.bot-settings" />
+
+@if (st?.warning) {
+  <div class="bg-amber-400/20 py-2 px-4 my-4 rounded-md">
+    <span>{{ st!.warning }}</span>
+  </div>
+}
+
+<ng-content select=".keep-files" />
+
+<div class="grid grid-cols-1 gap-2 bg-white/5 rounded-lg p-4">
+  <div class="flex items-center justify-between gap-2">
+    <h1 class="text-lg">Chats</h1>
+
+    <div class="flex items-center gap-1">
+      @if (chats().length > 0 && chats().some(chat => chat.notify)) {
+        <button
+          mat-icon-button
+          type="button"
+          class="text-white!"
+          matTooltip="Send a test message to every chat with Notify on"
+          [disabled]="isTesting()"
+          (click)="test()"
+        >
+          <mat-icon class="text-base!" [class.animated-loading]="isTesting()">{{
+            isTesting() ? 'radar' : 'send'
+          }}</mat-icon>
+        </button>
+      }
+
+      <button
+        mat-icon-button
+        type="button"
+        class="text-white!"
+        matTooltip="Add group/channel"
+        (click)="isAdding.set(!isAdding())"
+      >
+        <mat-icon class="text-base" [fontIcon]="isAdding() ? 'close' : 'add'" />
+      </button>
+    </div>
+  </div>
+
+  @if (isAdding()) {
+    <div class="flex flex-wrap items-center gap-2">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="flex-1 min-w-36">
+        <mat-label>Chat ID</mat-label>
+        <input
+          matInput
+          [(ngModel)]="newChatId"
+          placeholder="-1001234567890"
+          (keydown.enter)="$event.preventDefault(); addChat()"
+        />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="flex-1 min-w-36">
+        <mat-label>Name</mat-label>
+        <input
+          matInput
+          [(ngModel)]="newChatName"
+          placeholder="Family group"
+          (keydown.enter)="$event.preventDefault(); addChat()"
+        />
+      </mat-form-field>
+
+      <button
+        mat-flat-button
+        type="button"
+        class="rounded-md! h-full!"
+        [disabled]="!newChatId.trim()"
+        (click)="addChat()"
+      >
+        Add
+      </button>
+    </div>
+  }
+
+  @for (chat of chats(); track chat.chatId) {
+    <div class="flex flex-wrap items-center gap-2 rounded-lg border border-gray-800 px-3 py-2">
+      <label
+        [for]="'chat-name-' + chat.chatId"
+        class="text-xs rounded px-2 py-0.5"
+        [class]="
+          chat.status === 'approved'
+            ? 'bg-green-900/40 text-green-300'
+            : chat.status === 'pending'
+              ? 'bg-yellow-900/40 text-yellow-300'
+              : 'bg-red-900/40 text-red-300'
+        "
+      >
+        {{ chat.status | titlecase }}
+      </label>
+
+      <input
+        [id]="'chat-name-' + chat.chatId"
+        class="flex-1 max-w-full order-2 md:order-[unset] bg-transparent font-rubik leading-none mb-3 md:mb-0 text-xl md:text-sm text-gray-200 outline-none border-b border-transparent focus:border-gray-600"
+        [value]="chat.name ?? ''"
+        [placeholder]="chat.chatId"
+        [matTooltip]="'ID ' + chat.chatId + (chat.username ? ' · @' + chat.username : '')"
+        (blur)="rename(chat, $any($event.target).value)"
+        (keydown.enter)="$event.preventDefault(); $any($event.target).blur()"
+      />
+
+      <div class="flex items-center gap-2 ml-auto">
+        @if (chat.status === 'approved') {
+          <button
+            mat-icon-button
+            type="button"
+            matTooltip="Allow notifications"
+            (click)="setNotify(chat, !chat.notify)"
+          >
+            <mat-icon
+              [class]="chat.notify ? 'text-white!' : 'text-gray-300!'"
+              [fontIcon]="chat.notify ? 'notifications' : 'notifications_off'"
+            />
+          </button>
+        }
+
+        @if (chat.status !== 'approved') {
+          <button mat-icon-button type="button" matTooltip="Approve" (click)="setChatStatus(chat, 'approved')">
+            <mat-icon class="text-green-400!">check</mat-icon>
+          </button>
+        }
+
+        @if (chat.status !== 'blocked') {
+          <button mat-icon-button type="button" matTooltip="Block" (click)="setChatStatus(chat, 'blocked')">
+            <mat-icon class="text-white!">block</mat-icon>
+          </button>
+        }
+
+        <button mat-icon-button type="button" matTooltip="Remove" (click)="remove(chat)">
+          <mat-icon class="text-red-500!">delete</mat-icon>
+        </button>
+      </div>
+    </div>
+  } @empty {
+    <div class="flex flex-wrap items-center gap-2 rounded-lg border border-gray-800 px-3 py-2">
+      <div class="bg-gray-600 rounded w-15 h-5 animate-pulse"></div>
+      <div class="bg-gray-600 rounded w-30 h-5 animate-pulse order-2 md:order-[unset]"></div>
+
+      <div class="flex items-center gap-2 ml-auto">
+        @let items = [] | array: 3;
+        @for (i of items; track i) {
+          <div class="rounded-full bg-gray-600 w-6 h-6 m-2 animate-pulse"></div>
+        }
+      </div>
+    </div>
+
+    <p class="text-xs">
+      No chats yet. Send <code class="text-blue-500 bg-gray-800 rounded-md px-1 py-0.5">/start</code> to the
+      @if (st?.username) {
+        <a [href]="'https://t.me/' + st!.username" target="_blank" class="text-blue-500 hover:text-blue-600"
+          >&#64;bot</a
+        >
+      } @else {
+        bot
+      }
+      and approve the chat here, or add a group or channel by its ID.
+    </p>
+  }
+
+  @if (chats().length > 0 && chats().some(chat => chat.notify)) {
+    <ng-content select=".notify-failed" />
+  }
+</div>

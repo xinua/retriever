@@ -40,10 +40,22 @@ const MAX_SLEEP_MS = 15 * 60 * 1000;
  */
 const MIN_GAP_MS = 4 * 60 * 60 * 1000;
 
+/**
+ * A manual check inside this long after the previous attempt answers from the
+ * cache, so a user hammering "Check for updates" costs one request, not many.
+ */
+const MANUAL_COOLDOWN_MS = 60 * 1000;
+
 const WINDOW_DEFAULT = "00:00-02:00";
 
 let timer: NodeJS.Timeout | null = null;
-let checking = false;
+
+/**
+ * The check in progress, if any. A second caller - the scheduler and a manual
+ * check landing together - waits on the same request instead of being turned
+ * away with whatever the cache held before it.
+ */
+let inflight: Promise<void> | null = null;
 
 interface CheckWindow {
   startMin: number;
@@ -178,11 +190,15 @@ async function getRow() {
  * the database on the mounted volume, so restarting the container replays the
  * schedule it was already on instead of starting a fresh day.
  */
-async function runCheck(): Promise<void> {
-  if (checking) return;
+function runCheck(): Promise<void> {
+  inflight ??= fetchAndStore().finally(() => {
+    inflight = null;
+  });
 
-  checking = true;
+  return inflight;
+}
 
+async function fetchAndStore(): Promise<void> {
   const now = new Date();
   const nowIso = now.toISOString();
   const controller = new AbortController();
@@ -242,7 +258,6 @@ async function runCheck(): Promise<void> {
       .where(eq(versionCheck.id, 1));
   } finally {
     clearTimeout(timeout);
-    checking = false;
   }
 }
 
@@ -317,7 +332,12 @@ export function stopVersionCheck(): void {
   timer = null;
 }
 
+export function isVersionCheckEnabled(): boolean {
+  return ENABLED;
+}
+
 export interface VersionInfo {
+  enabled: boolean;
   current: string | null;
   latest: string | null;
   updateAvailable: boolean;
@@ -350,6 +370,7 @@ export async function getVersionInfo(): Promise<VersionInfo> {
 
   return {
     ...payload,
+    enabled: ENABLED,
     current: CURRENT_VERSION,
     latest: row?.latestVersion ?? null,
     updateAvailable: isNewer(row?.latestVersion ?? null, CURRENT_VERSION),
@@ -357,4 +378,24 @@ export async function getVersionInfo(): Promise<VersionInfo> {
     nextCheckAt: row?.nextCheckAt ?? null,
     error: row?.checkedAt ? null : row?.lastError ?? null
   };
+}
+
+/**
+ * Checks right now on a user's request, unless the previous attempt is fresh
+ * enough to answer for it. The schedule needs no nudging: a check moves
+ * `nextCheckAt` on by itself and the scheduler re-reads it on every wake-up.
+ *
+ * Unlike `getVersionInfo`, `error` here is the outcome of the latest attempt
+ * even when an older check succeeded - a user who asked to check must hear
+ * that the check failed, not see yesterday's answer as if it were fresh.
+ */
+export async function checkNow(): Promise<VersionInfo> {
+  const row = await getRow();
+  const lastAttempt = row?.lastAttemptAt ? new Date(row.lastAttemptAt).getTime() : NaN;
+
+  if (!(Date.now() - lastAttempt < MANUAL_COOLDOWN_MS)) await runCheck();
+
+  const fresh = await getRow();
+
+  return { ...(await getVersionInfo()), error: fresh?.lastError ?? null };
 }

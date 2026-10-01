@@ -6,8 +6,9 @@ import {getFeedInfo} from "../../services/rss.js";
 import {YoutubeService} from "../../services/youtube.service.js";
 import {ImagesService} from "../../services/images.service.js";
 import {isSubPoster, runChannelOnce} from "../../services/worker.js";
-import {avatarName} from "../../services/avatar.js";
+import {avatarName, decorateChannel} from "../../services/avatar.js";
 import { removeArchive } from "../../services/ytdlp.js";
+import * as ArtworkReplace from "../../services/artwork-replace.js";
 import {
   calculateNextCheck,
   normalizePollTimes,
@@ -15,6 +16,7 @@ import {
 } from "../../utils/schedule.helper.js";
 import { broadcast } from "../ws/websockets.js";
 import { getLastCheck } from "../../utils/last-check.helper.js";
+import { getSavedTimeZone } from "../../utils/time-zone.helper.js";
 
 function isRssUrl(url: string) {
   return url.includes("feeds/videos.xml");
@@ -53,11 +55,13 @@ async function releaseAvatar(channelId: string | null) {
 
 export function channelsRoutes(app: FastifyInstance) {
   // GET all
-  app.get("/api/channels", () => {
-    return db
+  app.get("/api/channels", async () => {
+    const rows = await db
       .select()
       .from(channel)
       .orderBy(asc(channel.sortOrder));
+
+    return rows.map(decorateChannel);
   });
 
   // GET one
@@ -69,7 +73,7 @@ export function channelsRoutes(app: FastifyInstance) {
       .from(channel)
       .where(eq(channel.id, Number(id)));
 
-    return row ?? null;
+    return row ? decorateChannel(row) : null;
   });
 
   // CREATE
@@ -117,11 +121,20 @@ export function channelsRoutes(app: FastifyInstance) {
       }
 
       // ---------- RSS DATA ----------
-      const feed = rssUrl ? await getFeedInfo(rssUrl) : null;
+      // Only the title is read from it, and the channel page below has that
+      // too - so a feed that is down (YouTube's often is) must not stop the
+      // subscription from being created.
+      const feed = rssUrl
+        ? await getFeedInfo(rssUrl).catch((e) => {
+            console.warn("Channel feed unavailable:", e?.message ?? e);
+            return null;
+          })
+        : null;
 
       // ---------- CHANNEL DATA ----------
       let description: string | null = null;
       let avatarPath: string | null = null;
+      let pageTitle: string | null = null;
 
       try {
         const channelUrl = `https://www.youtube.com/channel/${channelId}`;
@@ -129,6 +142,7 @@ export function channelsRoutes(app: FastifyInstance) {
 
         if (info) {
           description = info.description ?? null;
+          pageTitle = info.title ?? null;
 
           if (info.avatar) {
             avatarPath = await ImagesService.download(info.avatar, avatarName(channelId!));
@@ -149,7 +163,7 @@ export function channelsRoutes(app: FastifyInstance) {
         .values({
           channelId,
           sortOrder: nextOrder,
-          name: body.name ?? feed!.title ?? "Unknown channel",
+          name: body.name ?? feed?.title ?? pageTitle ?? "Unknown channel",
           channelDescription: description,
           channelAvatarPath: avatarPath,
           rssUrl: rssUrl as string,
@@ -162,6 +176,7 @@ export function channelsRoutes(app: FastifyInstance) {
           startFromLast: body.startFromLast ?? true,
           downloadShorts: body.downloadShorts ?? false,
           notifyHA: body.notifyHA ?? false,
+          notifyTelegram: body.notifyTelegram ?? false,
           splitChapters: body.splitChapters ?? false,
           removeSponsors: body.removeSponsors ?? false,
 
@@ -178,7 +193,11 @@ export function channelsRoutes(app: FastifyInstance) {
         .returning();
 
       const created = result[0];
-      const nextCheckAt = calculateNextCheck(created, new Date());
+      const nextCheckAt = calculateNextCheck(
+        created,
+        new Date(),
+        await getSavedTimeZone()
+      );
 
       await db.update(channel)
         .set({ nextCheckAt })
@@ -193,7 +212,7 @@ export function channelsRoutes(app: FastifyInstance) {
         .from(channel)
         .where(eq(channel.id, created.id));
 
-      return full;
+      return decorateChannel(full);
     } catch (e) {
 
       console.error("Create channel error:", e);
@@ -221,6 +240,10 @@ export function channelsRoutes(app: FastifyInstance) {
     // does not blank a field it never mentioned.
     const patch = { ...body };
 
+    // Owned by the server: a client echoing back the row it was sent would
+    // otherwise store the versioned URL (see decorateChannel) in the column.
+    delete patch.channelAvatarPath;
+
     if ("pollTime" in body) {
       patch.pollTime = normalizePollTimes(body.pollTime);
     }
@@ -236,7 +259,8 @@ export function channelsRoutes(app: FastifyInstance) {
   
     const nextCheckAt = calculateNextCheck(
       updatedChannel,
-      new Date()
+      new Date(),
+      await getSavedTimeZone()
     );
   
     await db.update(channel)
@@ -254,7 +278,34 @@ export function channelsRoutes(app: FastifyInstance) {
   
     broadcast('next-check', await getLastCheck());
 
-    return updated;
+    return decorateChannel(updated);
+  });
+
+  /**
+   * Replaces the channel's avatar with the uploaded picture (the request body
+   * is the image itself). The file is shared per YouTube channel, so this
+   * changes it for every subscription on the channel and every download it
+   * produced — see services/artwork-replace.ts.
+   */
+  app.put("/api/channels/:id/avatar", async (req, reply) => {
+    const { id } = req.params as { id: string };
+
+    if (!Buffer.isBuffer(req.body)) {
+      return reply.code(415).send({ error: "Send the image as the request body" });
+    }
+
+    const [row] = await db
+      .select()
+      .from(channel)
+      .where(eq(channel.id, Number(id)));
+
+    if (!row) return reply.code(404).send({ error: "Not found" });
+
+    const result = await ArtworkReplace.replaceChannelAvatar(row, req.body);
+
+    if (!result.ok) return reply.code(result.status).send({ error: result.error });
+
+    return result.channel;
   });
 
   // DELETE

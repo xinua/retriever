@@ -16,6 +16,49 @@ export const settings = sqliteTable("settings", {
 
   ytdlpConcurrency: integer("ytdlpConcurrency").notNull().default(2),
 
+  /**
+   * IANA zone, such as "Europe/Kyiv", that subscription poll hours are read
+   * in. The client fills it from the browser when it is empty. Null falls
+   * back to the server's own clock (`TZ`) - see schedule.helper.ts.
+   */
+  timeZone: text("timeZone"),
+
+  /**
+   * Whether a finished video gets its poster written into the file as cover
+   * art, the way audio always does. Off by default: it rewrites the whole
+   * file once more after the download (see cover-art.ts), which costs a copy
+   * of the file's worth of disk I/O.
+   */
+  embedVideoCover: integer("embedVideoCover", { mode: "boolean" })
+    .notNull()
+    .default(false),
+
+  /**
+   * Telegram: one bot serves both the notifications and the download bot -
+   * see services/telegram/. A null `telegramApiUrl` means api.telegram.org;
+   * anything else is a local Bot API server, which lifts the upload limit to
+   * 2 GB and is handed files by path instead of by upload.
+   */
+  telegramEnabled: integer("telegramEnabled", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  telegramBotToken: text("telegramBotToken"),
+  telegramApiUrl: text("telegramApiUrl"),
+
+  /**
+   * Whether a file the bot downloaded stays where the normal pipeline put it
+   * once it has been sent. Off by default: the chat is the destination, and
+   * the downloads folder is what Plex scans.
+   */
+  telegramKeepFiles: integer("telegramKeepFiles", { mode: "boolean" })
+    .notNull()
+    .default(false),
+
+  /** Sends "download failed" to the notification chats. */
+  notifyDownloadFailed: integer("notifyDownloadFailed", { mode: "boolean" })
+    .notNull()
+    .default(false),
+
   createdAt: text("createdAt")
     .notNull()
     .default(sql`(datetime('now'))`),
@@ -136,6 +179,12 @@ export const channel = sqliteTable("channel", {
     .notNull()
     .default(false),
 
+  // Sends each finished download's file to the Telegram chats with "Notify"
+  // on; separate from `notifyHA`, which only gates the webhook.
+  notifyTelegram: integer("notifyTelegram", { mode: "boolean" })
+    .notNull()
+    .default(false),
+
   splitChapters: integer("splitChapters", { mode: "boolean" })
     .notNull()
     .default(false),
@@ -161,8 +210,8 @@ export const channel = sqliteTable("channel", {
   /**
    * "time" polling: the wall-clock hours to poll at, as `["09:00", "18:00"]`.
    * JSON rather than a child table because it is only ever read and written
-   * whole, alongside the row. Hours are read against the server's local
-   * clock, so `TZ` decides what "09:00" means - see schedule.helper.ts.
+   * whole, alongside the row. Hours are read in `settings.timeZone` - see
+   * schedule.helper.ts.
    */
   pollTime: text("pollTime", { mode: "json" }).$type<string[]>(),
 
@@ -244,6 +293,10 @@ export const download = sqliteTable("download", {
   // time and so says nothing about the file. Video rows only.
   mediaCodec: text("mediaCodec"),
 
+  // The container the finished file landed in, by its extension. `format`
+  // above is only the request, and "auto" leaves it to yt-dlp.
+  mediaFormat: text("mediaFormat"),
+
   // Manual-download options. Unused by watcher rows, which still read the
   // live channel so editing a channel keeps affecting its queued downloads.
   folder: text("folder"),
@@ -274,6 +327,9 @@ export const download = sqliteTable("download", {
   speed: text("speed"),
   eta: text("eta"),
   totalBytes: integer("totalBytes"),
+  // What a running job is doing once the transfer is over. "converting" while
+  // ffmpeg re-encodes to the requested codec; null the rest of the time.
+  phase: text("phase"),
 
   filePath: text("filePath"),
 
@@ -286,10 +342,48 @@ export const download = sqliteTable("download", {
 
   error: text("error"),
 
+  // Set for a download the Telegram bot queued: where the file goes once it
+  // is done, the status message to keep editing, and how it is sent
+  // ("video" | "audio"). On the row so a restart that requeues
+  // the job still delivers it.
+  telegramChatId: text("telegramChatId"),
+  telegramMessageId: integer("telegramMessageId"),
+  telegramDelivery: text("telegramDelivery"),
+
   createdAt: text("createdAt")
     .notNull()
     .default(sql`(datetime('now'))`),
 
   startedAt: text("startedAt"),
   finishedAt: text("finishedAt")
+});
+
+/**
+ * Every chat the Telegram bot knows about. A chat that sends /start lands
+ * here as "pending" and the bot ignores it until it is approved in the UI;
+ * "blocked" keeps it from coming back as pending. A chat can also be added by
+ * hand, already approved - a group or channel where nobody can send /start.
+ *
+ * `notify` is independent of the status: notifications are only ever sent
+ * outwards, so they go to every chat with the flag set.
+ */
+export const telegramChat = sqliteTable("telegram_chat", {
+  // Telegram ids can exceed 2^31 and are negative for groups, so TEXT.
+  chatId: text("chatId").primaryKey(),
+  type: text("type"),
+  name: text("name"),
+  username: text("username"),
+  status: text("status").notNull().default("pending"),
+
+  notify: integer("notify", { mode: "boolean" })
+    .notNull()
+    .default(false),
+
+  createdAt: text("createdAt")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+
+  updatedAt: text("updatedAt")
+    .notNull()
+    .default(sql`(datetime('now'))`)
 });

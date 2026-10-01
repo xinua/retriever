@@ -1,22 +1,43 @@
-@let isOutdated = data.current !== data.latest;
+@let data = info();
 
 <mat-card class="px-4 py-2 lg:px-8 lg:py-4">
-  <mat-card-header class="font-calculator! relative">
+  <mat-card-header class="font-calculator! relative block!">
     <button mat-icon-button (click)="dialogRef.close()" class="absolute! top-0 -right-4">
       <mat-icon class="text-white!">close</mat-icon>
     </button>
 
     <mat-card-title class="text-2xl!">Release Notes</mat-card-title>
 
-    <mat-card-subtitle class="pb-2">
+    <mat-card-subtitle class="pb-2 flex! items-center">
       Latest version {{ data.latest }}
-      <small [class]="isOutdated ? 'text-red-500' : 'text-green-500'">
-        ({{ isOutdated ? 'Update available' : 'Up to date' }})
-      </small>
+
+      @if (checkedForUpdates() || isOutdated()) {
+        <small [class]="'ml-2 ' + (isOutdated() ? 'text-red-500' : 'text-green-500')">
+          ({{ isOutdated() ? 'Update available' : 'Up to date' }})
+        </small>
+      } @else if (data.enabled) {
+        <button
+          mat-icon-button
+          class="scale-75!"
+          [disabled]="checking()"
+          (click)="checkForUpdates()"
+          aria-label="Check for updates"
+          matTooltip="Check for updates"
+        >
+          <mat-icon fontIcon="update" class="text-(--rt-accent)!" [class.animate-spin]="checking()" />
+        </button>
+      }
     </mat-card-subtitle>
   </mat-card-header>
 
   <mat-card-content class="max-h-[80vh] overflow-y-auto">
+    @if (latestChangelog()?.developerMessage) {
+      <div class="p-4 bg-amber-500/20 rounded-md">
+        <h3 class="text-lg">From developer:</h3>
+        <p class="text-sm italic">{{ latestChangelog()?.developerMessage }}</p>
+      </div>
+    }
+
     @if (!!latestChangelog()) {
       @for (type of changeTypes(); track $index) {
         <h3 class="text-lg font-medium mt-4">{{ type | titlecase }}</h3>
@@ -39,8 +60,8 @@
     }
   </mat-card-content>
 
-  <mat-card-footer [class]="'pt-4! flex items-center ' + (isOutdated ? 'justify-between' : 'justify-end')">
-    @if (isOutdated) {
+  <mat-card-footer [class]="'pt-4! flex items-center ' + (isOutdated() ? 'justify-between' : 'justify-end')">
+    @if (isOutdated()) {
       <div class="latest flex flex-col">
         <p>Latest version: {{ data.latest }}</p>
         <p>

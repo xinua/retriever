@@ -1,5 +1,5 @@
 import { Pipe, PipeTransform } from '@angular/core';
-import { FilterModel } from '@shared/models';
+import { FilterModel } from '../../models/common.model';
 
 @Pipe({
   name: 'isActiveFilter',

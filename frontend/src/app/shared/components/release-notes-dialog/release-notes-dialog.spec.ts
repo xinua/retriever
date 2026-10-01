@@ -1,16 +1,19 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { inject, provideAppInitializer } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatIconRegistry } from '@angular/material/icon';
 import { DomSanitizer } from '@angular/platform-browser';
 import { VersionModel } from '@shared/models';
-import { useIconFactory } from '../../providers';
+import { provideNotifier, useIconFactory } from '../../providers';
 import { ReleaseNotesDialog } from './release-notes-dialog';
 
 const mockData: VersionModel = {
   version: '1.0.0',
   releaseDate: '2026-01-01',
+  enabled: true,
   changelog: [
     {
       version: '1.0.1',
@@ -49,6 +52,9 @@ describe('ReleaseNotesDialog', () => {
     await TestBed.configureTestingModule({
       imports: [ReleaseNotesDialog],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideNotifier(),
         {
           provide: MAT_DIALOG_DATA,
           useValue: mockData,

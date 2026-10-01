@@ -1,6 +1,7 @@
 /* You can add global styles to this file, and also import other style files */
 
 @import 'tailwindcss';
+@import './styles/animations.css';
 
 @font-face {
   font-family: 'drop-shade';
@@ -125,6 +126,15 @@ span {
   img {
     transform: scale(1.5);
     opacity: 0.3;
+  }
+}
+
+.fade {
+  opacity: 0;
+  transition: opacity 1s ease-out;
+
+  &.animate {
+    opacity: 1;
   }
 }
 

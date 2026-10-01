@@ -12,19 +12,26 @@ import { RtPlayer } from './player';
 import { useIconFactory } from '../../providers';
 import { DomSanitizer } from '@angular/platform-browser';
 import { MatIconRegistry } from '@angular/material/icon';
+import { Subject } from 'rxjs';
+import { DownloadStatus } from '../../models/download.model';
+import { WsService } from '../../services/ws.service';
 
 describe('RtPlayer', () => {
   let component: RtPlayer;
   let fixture: ComponentFixture<RtPlayer>;
   let httpMock: HttpTestingController;
+  let downloadUpdated$: Subject<DownloadModel>;
 
   beforeEach(async () => {
+    downloadUpdated$ = new Subject<DownloadModel>();
+
     await TestBed.configureTestingModule({
       imports: [RtPlayer],
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
         provideNotifier(),
+        { provide: WsService, useValue: { downloadUpdated$: () => downloadUpdated$ } },
         provideAppInitializer(() => {
           const initializerFn = useIconFactory(inject(DomSanitizer), inject(MatIconRegistry));
           return initializerFn();
@@ -205,5 +212,53 @@ describe('RtPlayer', () => {
     expect(component.fileNotFound()).toBe(true);
     expect(component.canPlay()).toBe(false);
     expect(notify).toHaveBeenCalledWith('error', 'File not found (status: 404)');
+  });
+
+  describe('when a download of this subscription finishes', () => {
+    const finished = (overrides: Partial<DownloadModel> = {}) =>
+      downloadUpdated$.next({
+        ...DownloadRecordMock,
+        id: 9,
+        watcherId: 1,
+        status: DownloadStatus.DONE,
+        ...overrides,
+      } as DownloadModel);
+
+    it('asks for the last download again and plays the new one', async () => {
+      await render({ download: { fileExists: false } });
+      expect(component.canPlay()).toBe(false);
+
+      finished();
+      httpMock
+        .expectOne('/api/downloads/by-watcher/1?statuses=done')
+        .flush({ ...DownloadRecordMock, id: 9, fileExists: true } as DownloadModel);
+      await fixture.whenStable();
+
+      expect(component.canPlay()).toBe(true);
+      expect(component.mediaUrl()).toBe('/api/downloads/9/file?inline=1');
+    });
+
+    it('clears a missing file once a new one is found', async () => {
+      await render();
+      component.handleError();
+      expect(component.fileNotFound()).toBe(true);
+
+      finished();
+      httpMock
+        .expectOne('/api/downloads/by-watcher/1?statuses=done')
+        .flush({ ...DownloadRecordMock, id: 9, fileExists: true } as DownloadModel);
+
+      expect(component.fileNotFound()).toBe(false);
+    });
+
+    it('ignores other subscriptions and downloads that are not done yet', async () => {
+      await render();
+
+      finished({ watcherId: 2 });
+      finished({ watcherId: null });
+      finished({ status: DownloadStatus.RUNNING });
+
+      httpMock.expectNone(() => true);
+    });
   });
 });

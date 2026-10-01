@@ -13,10 +13,11 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NotifierService } from 'angular-notifier';
-import { fromEvent, take, takeWhile } from 'rxjs';
+import { filter, fromEvent, take, takeWhile } from 'rxjs';
 import { hasFile } from '../../helpers/common.helpers';
 import { DownloadModel, DownloadStatus } from '../../models/download.model';
 import { HttpService } from '../../services/http.service';
+import { WsService } from '../../services/ws.service';
 import { AudioPlayer } from '../audio-player/audio-player';
 
 @Component({
@@ -27,6 +28,7 @@ import { AudioPlayer } from '../audio-player/audio-player';
 })
 export class RtPlayer implements OnInit {
   private readonly _http = inject(HttpService);
+  private readonly _ws = inject(WsService);
   private readonly _notifier = inject(NotifierService);
   private readonly _cdr = inject(ChangeDetectorRef);
   private readonly _destroyRef = inject(DestroyRef);
@@ -57,10 +59,19 @@ export class RtPlayer implements OnInit {
    * which download is the last video and whether it can be played.
    */
   ngOnInit(): void {
-    this._http.getDownloadByWatcher(this.subscriptionId(), { statuses: [DownloadStatus.DONE], types: [] }).subscribe({
-      next: (download) => this.download.set(download),
-      error: () => this.fileNotFound.set(true),
-    });
+    this._loadDownload();
+
+    // A download of this subscription finishing ("Download again", or a scan
+    // picking up a new video) may replace the one the card holds. Asked again
+    // rather than taken from the message, so the server still decides which
+    // row is the last video.
+    this._ws
+      .downloadUpdated$()
+      .pipe(
+        filter((row) => row.watcherId === this.subscriptionId() && row.status === DownloadStatus.DONE),
+        takeUntilDestroyed(this._destroyRef),
+      )
+      .subscribe(() => this._loadDownload());
   }
 
   togglePlay(event?: MouseEvent) {
@@ -77,6 +88,16 @@ export class RtPlayer implements OnInit {
   handleError() {
     this.fileNotFound.set(true);
     this._notifier.notify('error', 'File not found (status: 404)');
+  }
+
+  private _loadDownload(): void {
+    this._http.getDownloadByWatcher(this.subscriptionId(), { statuses: [DownloadStatus.DONE], types: [] }).subscribe({
+      next: (download) => {
+        this.download.set(download);
+        this.fileNotFound.set(false);
+      },
+      error: () => this.fileNotFound.set(true),
+    });
   }
 
   private _getVideoUrl(): string {

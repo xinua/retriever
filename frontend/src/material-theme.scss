@@ -125,20 +125,34 @@ html {
       rt-downloads .mat-mdc-table {
         --mat-sys-outline: white;
       }
+
       --mat-select-panel-background-color: #181717;
       --mat-sys-surface-container: #181717;
       --mat-expansion-header-description-color: #ffffff;
       --mat-form-field-filled-container-color: rgba(255, 255, 255, 0.08);
+
+      --mat-slide-toggle-unselected-track-color: rgba(255, 255, 255, 0.12);
+      --mat-slide-toggle-track-outline-color: rgba(255, 255, 255, 0.12);
+      --mat-slide-toggle-unselected-hover-track-color: rgba(255, 255, 255, 0.24);
+      --mat-slide-toggle-unselected-active-track-color: rgba(255, 255, 255, 0.24);
+      --mat-slide-toggle-unselected-handle-color: rgba(255, 255, 255, 0.8);
+      --mat-slide-toggle-unselected-hover-handle-color: rgba(255, 255, 255, 1);
+      --mat-slide-toggle-unselected-active-handle-color: rgba(255, 255, 255, 1);
+
+      --mat-tooltip-container-color: #fff;
+      --mat-checkbox-unselected-icon-color: #fff;
+
+      --mat-stepper-header-icon-background-color: #fff;
+      --mat-stepper-header-selected-state-label-text-color: #fff;
+      --mat-stepper-line-color: #fff;
     }
   }
 }
 
-// .mat-mdc-select-panel
-
 body {
   --mat-sys-surface: #0f0f0f;
   --mat-sys-on-surface: #ffffff;
-  --mat-sys-surface-container-low: color-mix(in oklab, var(--color-black) 70%, transparent);
+  --mat-sys-surface-container-low: color-mix(in oklab, var(--color-black) 80%, transparent);
 
   // Default the application to a light color theme. This can be changed to
   // `dark` to enable the dark color theme, or to `light dark` to defer to the
@@ -206,5 +220,15 @@ body {
       background-color: #27272793;
       color: #ffffff;
     }
+  }
+}
+
+.mdc-button--outlined.mat-mdc-outlined-button mat-icon {
+  --tw-leading: 1;
+}
+
+@media (max-width: 1024px) {
+  .mat-mdc-paginator-page-size-label {
+    display: none;
   }
 }

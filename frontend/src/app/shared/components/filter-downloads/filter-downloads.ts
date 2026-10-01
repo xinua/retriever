@@ -4,9 +4,9 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
-import { DefaultFilterGroups } from '@shared/constants';
-import { FilterModel } from '@shared/models';
-import { StorageService } from '@shared/services';
+import { DefaultFilterGroups } from '../../constants/defaults.const';
+import { FilterModel } from '../../models/common.model';
+import { StorageService } from '../../services/storage.service';
 import { debounceTime, distinctUntilChanged, Subject, tap } from 'rxjs';
 import { IsActiveFilterPipe } from './is-active-filter.pipe';
 
@@ -29,10 +29,10 @@ export class FilterDownloads implements OnInit {
   ngOnInit(): void {
     this._trigger$
       .pipe(
-        takeUntilDestroyed(this._destroyRef),
         debounceTime(200),
         distinctUntilChanged((prev, curr) => JSON.stringify(prev) === JSON.stringify(curr)),
         tap(() => this.startFiltering.emit(this.filters())),
+        takeUntilDestroyed(this._destroyRef),
       )
       .subscribe();
   }

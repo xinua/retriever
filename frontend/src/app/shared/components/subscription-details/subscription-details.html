@@ -17,7 +17,15 @@
       <div class="flex flex-col col-span-4 z-1">
         <div class="flex flex-col gap-5 px-4">
           <figure class="flex flex-col items-start gap-5">
-            <rt-avatar [sourceImg]="sub().channelAvatarPath" imgSize="200x200" customClass="w-50 h-50" />
+            <div class="relative">
+              <rt-avatar [sourceImg]="sub().channelAvatarPath" imgSize="200x200" customClass="w-50 h-50" />
+              <rt-drop-area
+                label="Update avatar"
+                customClass="rounded-full"
+                [dialogData]="dialogData"
+                (onFileDrop)="updateAvatar($event)"
+              />
+            </div>
 
             <figcaption class="flex flex-col gap-2 max-w-full whitespace-break-spaces wrap-break-word">
               <a
@@ -61,6 +69,17 @@
           </span>
         </div>
 
+        @let isTelegramEnabled = sub().notifyTelegram;
+        <div class="grid grid-cols-2 gap-10 py-4 border-b border-gray-700">
+          <span>Telegram:</span>
+          <span>
+            <span
+              [class]="'inline-block h-2 w-2 mr-2 rounded-full ' + (isTelegramEnabled ? 'bg-green-400' : 'bg-red-400')"
+            ></span>
+            <span>{{ isTelegramEnabled ? 'Enabled' : 'Disabled' }}</span>
+          </span>
+        </div>
+
         <div class="grid grid-cols-2 gap-10 py-4 items-center border-b border-gray-700 font-drop-shade">
           @let isVideo = sub().type === types.VIDEO;
 
@@ -100,14 +119,10 @@
           </div>
         </div>
 
-        <div
-          class="grid grid-cols-2 gap-10 py-4 border-b border-gray-700"
-          [matTooltip]="(sub().pollOnce ? 'Stop' : 'Continue') + ' polling after today\'s first capture'"
-          matTooltipPosition="above"
-        >
+        <div class="grid grid-cols-2 gap-10 py-4 border-b border-gray-700">
           <span>Polling:</span>
           <span>
-            <span>{{ sub().pollOnce ? 'One-time' : 'Ongoing' }}</span>
+            <span>{{ sub().pollOnce ? 'Self-pausing' : 'Continuous' }}</span>
           </span>
         </div>
 
@@ -199,15 +214,15 @@
                 </button>
 
                 <mat-menu #actionsMenu>
+                  <button mat-menu-item (click)="downloadAgain()">
+                    <mat-icon class="text-white!">download</mat-icon>
+                    <span>Download again</span>
+                  </button>
+
                   <button mat-menu-item (click)="openWidgetInNewTab(sub().id)">
                     <mat-icon class="text-white!">widgets</mat-icon>
                     <span>Open widget</span>
                   </button>
-
-                  <!-- <button mat-menu-item disabled (click)="downloadAgain(sub().id)">
-                    <mat-icon>download</mat-icon>
-                    <span>Download again</span>
-                  </button> -->
 
                   <button mat-menu-item (click)="copyHaCardCode(sub().id)">
                     <mat-icon class="text-white!">content_copy</mat-icon>

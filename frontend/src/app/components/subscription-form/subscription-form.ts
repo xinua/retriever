@@ -46,10 +46,11 @@ import {
   Types,
   VideoFormats,
 } from '@shared/models';
-import { HttpService, SnackbarType, StorageService } from '@shared/services';
+import { SnackbarType } from '@shared/models';
+import { HttpService, StorageService } from '@shared/services';
 import { RtValidators } from '@shared/validators';
 import { NotifierService } from 'angular-notifier';
-import { NgxMaskDirective } from 'ngx-mask';
+import { NgxMaskDirective, provideNgxMask } from 'ngx-mask';
 import { catchError, combineLatest, map, Observable, of, startWith, tap } from 'rxjs';
 import { TimePipe } from '../../shared/pipes/time.pipe';
 import { IntervalRange } from './components/interval-range/interval-range';
@@ -92,6 +93,7 @@ import { SubscriptionFlagKey } from './subscription-form.model';
     LowerCasePipe,
     IntervalRange,
   ],
+  providers: [provideNgxMask()],
   templateUrl: './subscription-form.html',
   styleUrl: './subscription-form.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -107,6 +109,8 @@ export class SubscriptionForm implements OnInit {
 
   protected readonly defaultChannel = DefaultSubscription;
   globalWebhookURL = computed((): string => this._storage.settings().webhookUrl);
+  /** The zone poll hours are read in - see the time zone field in settings. */
+  timeZoneLabel = computed((): string => this._storage.settings().timeZone ?? 'server time');
   globalWebhookURL$ = toObservable(this.globalWebhookURL);
 
   form!: FormGroup<ChannelFormModel>;
@@ -163,6 +167,7 @@ export class SubscriptionForm implements OnInit {
         validators: Validators.required,
       }),
       notifyHA: this._fb.control(false, { nonNullable: true, validators: Validators.required }),
+      notifyTelegram: this._fb.control(false, { nonNullable: true }),
       webhookOverride: this._fb.control({ value: '', disabled: true }),
       pollOnce: this._fb.control(false, { nonNullable: true }),
       prefix: this._fb.control(''),
@@ -226,6 +231,10 @@ export class SubscriptionForm implements OnInit {
   }
 
   resetForm(): void {
+    if (this.isEditing()) {
+      this.closeForm();
+      return;
+    }
     this._storage.editingSubscription.set(null);
     this.form.clearValidators();
     this._formDirective()?.resetForm(DefaultSubscription);
@@ -306,7 +315,6 @@ export class SubscriptionForm implements OnInit {
       });
   }
 
-  // todo - update to track other tabs
   private _trackChannel() {
     effect((): void => {
       // If the channel was deleted while editing, close the form
@@ -330,7 +338,7 @@ export class SubscriptionForm implements OnInit {
       const subscription = this._storage.editingSubscription();
 
       this.form.patchValue({ ...subscription, pollTime: subscription.pollTime ?? [] });
-      this.form.addValidators(RtValidators.formChanged(this.form.value, equalJson));
+      this.form.addValidators(RtValidators.formChanged(this.form.value));
     } else {
       this.form.clearValidators();
       this.form.reset(DefaultSubscription);

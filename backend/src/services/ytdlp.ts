@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 
 import type { Channel, Settings } from "../db/types.js";
 import * as Ffmpeg from "./ffmpeg.js";
+import * as MediaOptions from "../models/media-options.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -21,6 +22,12 @@ const MANAGED_BIN = path.join(DATA_DIR, "bin", "yt-dlp");
  * itself, and let removeArchive() forget a watcher along with its row.
  */
 const ARCHIVE_DIR = path.join(DATA_DIR, "archive");
+/**
+ * Where an uploaded cookies file is kept. Under DATA_DIR rather than next to
+ * the downloads because yt-dlp writes refreshed cookies back to the file on
+ * exit, so it has to stay writable and private.
+ */
+export const COOKIES_FILE = path.join(DATA_DIR, "cookies.txt");
 
 export function archiveFile(watcherId: number): string {
   return path.join(ARCHIVE_DIR, `watcher-${watcherId}.txt`);
@@ -428,13 +435,23 @@ const VCODEC_FILTERS: Record<string, string> = {
  */
 const NO_HEVC = "[vcodec!~='^(hev|hvc|h265)']";
 
-const AUDIO_FORMATS = new Set(["m4a", "mp3", "opus", "wav", "flac"]);
+const AUDIO_FORMATS = new Set<string>(MediaOptions.AUDIO_FORMATS);
 
 /**
- * A bitrate target means nothing to a lossless codec — ffmpeg accepts -b:a
- * there and ignores it — so these formats are always encoded at best effort.
+ * "auto" never converts: it picks the stream most worth keeping as it is and
+ * extracts it with `--audio-format best`, which copies the codec into its own
+ * container. The codecs that carry cover art (see cover-art.ts) are tried
+ * first, so a site offering AAC next to Opus — YouTube — ends up as an .m4a
+ * with a cover rather than an .opus without one; anything else is taken as
+ * the site serves it.
  */
-const LOSSLESS_AUDIO = new Set(["wav", "flac"]);
+const AUTO_AUDIO_PREFERENCE = ["[ext=m4a]", "[acodec^=mp3]", "[acodec^=flac]"];
+
+function autoAudioSelector(worst: boolean): string {
+  const base = worst ? "wa" : "ba";
+
+  return [...AUTO_AUDIO_PREFERENCE.map((filter) => `${base}${filter}`), base, worst ? "w" : "b"].join("/");
+}
 
 /**
  * Audio has no height to cap, so its quality is a target bitrate applied by
@@ -451,15 +468,7 @@ const AUDIO_BITRATES: Record<string, string> = {
  * A quality is a ceiling, not an exact match: "1080p" means the best stream
  * at 1080p or below, so a video that only exists in 720p still downloads.
  */
-const QUALITY_HEIGHTS: Record<string, number> = {
-  "2160p": 2160,
-  "1440p": 1440,
-  "1080p": 1080,
-  "720p": 720,
-  "480p": 480,
-  "360p": 360,
-  "240p": 240
-};
+const QUALITY_HEIGHTS = MediaOptions.QUALITY_HEIGHTS;
 
 function buildFormatArgs(opts: JobOptions): string[] {
   if (opts.type === "thumbnail") {
@@ -476,7 +485,17 @@ function buildFormatArgs(opts: JobOptions): string[] {
     // Rows queued before audio had its own quality list carry a video value:
     // "worst" still means what it did, and a height is simply not a bitrate.
     const worst = opts.quality === "worst";
-    const bitrate = LOSSLESS_AUDIO.has(audioFormat)
+
+    // Nothing is encoded, so there is no bitrate to aim for either.
+    if (audioFormat === "auto") {
+      return [
+        "-f", autoAudioSelector(worst),
+        "-x",
+        "--audio-format", "best"
+      ];
+    }
+
+    const bitrate = MediaOptions.isLosslessAudio(audioFormat)
       ? undefined
       : AUDIO_BITRATES[opts.quality ?? ""];
 
@@ -490,56 +509,60 @@ function buildFormatArgs(opts: JobOptions): string[] {
     ];
   }
 
-  // An explicit choice is honoured as-is; "auto" only avoids HEVC.
-  const explicit = VCODEC_FILTERS[opts.codec ?? "auto"];
-  const preferred = explicit ?? NO_HEVC;
-  const codec = explicit ?? "";
+  // An explicit choice is preferred, "auto" only avoids HEVC. Neither is a
+  // requirement: YouTube never offers H.265, so a selector that insisted on
+  // it failed with "Requested format is not available". The tiers below fall
+  // back to the best stream in any codec, and download-queue re-encodes it
+  // into an explicit choice afterwards (see transcode.ts).
+  const preferred = VCODEC_FILTERS[opts.codec ?? "auto"] ?? NO_HEVC;
 
-  const isMp4 = opts.format === "mp4" || opts.format === "ios";
+  const isMp4 = opts.format === "mp4";
+
+  // Matroska holds any codec, so it needs no say in which streams are picked:
+  // a merge is written straight into it, and a site's single ready-made file
+  // (an mp4, usually) is remuxed — a copy, never a re-encode.
+  const container = isMp4
+    ? ["--merge-output-format", "mp4"]
+    : opts.format === "mkv"
+      ? ["--merge-output-format", "mkv", "--remux-video", "mkv"]
+      : [];
 
   if (opts.quality === "worst") {
     // A codec filter would fight the "smallest possible" intent, so drop it.
     return isMp4
-      ? [
-          "-f", "wv*[ext=mp4]+wa[ext=m4a]/wv*+wa/w[ext=mp4]/w",
-          "--merge-output-format", "mp4"
-        ]
-      : ["-f", "wv*+wa/w"];
+      ? ["-f", "wv*[ext=mp4]+wa[ext=m4a]/wv*+wa/w[ext=mp4]/w", ...container]
+      : ["-f", "wv*+wa/w", ...container];
   }
 
   const height = QUALITY_HEIGHTS[opts.quality ?? ""];
   const cap = height ? `[height<=${height}]` : "";
-  const filter = `${codec}${cap}`;
   const wanted = `${preferred}${cap}`;
 
-  // iOS uses the same mp4-friendly selector; the client switch happens below.
   // The preferred tiers come first and the plain ones behind them, so the
   // codec preference never costs a download that could otherwise happen.
   const selectors = isMp4
     ? [
         `bv*${wanted}[ext=mp4]+ba[ext=m4a]`,
         `bv*${wanted}+ba`,
-        `bv*${filter}[ext=mp4]+ba[ext=m4a]`,
-        `bv*${filter}+ba`,
+        `bv*${cap}[ext=mp4]+ba[ext=m4a]`,
+        `bv*${cap}+ba`,
         `b${wanted}[ext=mp4]`,
         `b${cap}[ext=mp4]`,
         `b${cap}`
       ]
-    : [`bv*${wanted}+ba`, `bv*${filter}+ba`, `b${wanted}`, `b${cap}`];
+    : [`bv*${wanted}+ba`, `bv*${cap}+ba`, `b${wanted}`, `b${cap}`];
 
   // Last resort when the height cap matches nothing — a vertical TikTok is
   // 1024 tall, so "720p or below" excludes every format it has. Drop the cap
   // rather than fail, but keep the codec preference one tier longer: going
   // straight to a bare "b" here was enough to hand back the HEVC copy the
   // preference exists to avoid.
-  if (cap) selectors.push(`b${preferred}`, "b");
+  if (cap) selectors.push(`b${preferred}`, "b", "bv*+ba");
 
-  // An explicit codec makes the preferred and plain tiers identical.
+  // Without a cap the preferred and plain tiers can coincide.
   const chain = [...new Set(selectors)].join("/");
 
-  return isMp4
-    ? ["-f", chain, "--merge-output-format", "mp4"]
-    : ["-f", chain];
+  return ["-f", chain, ...container];
 }
 
 /**
@@ -970,6 +993,17 @@ export async function buildArgs(
     args.push("--keep-video");
   }
 
+  // A multi-period DASH stream (dreamerscast, for one) gets yt-dlp's
+  // FixupDuplicateMoov pass before -x sees the file. That fixup is a stream
+  // copy with no -f, so ffmpeg picks the muxer from the extension — and for
+  // .m4a that is "ipod", which cannot hold the Opus or FLAC such streams
+  // often carry. It fails with "Error opening output files: Invalid argument"
+  // and the extraction never runs. FixupM4a, which runs just before it, has
+  // the same job and already says -f mp4; this gives its sibling the same.
+  if (opts.type === "audio") {
+    args.push("--postprocessor-args", "FixupDuplicateMoov:-f mp4");
+  }
+
   // Tag the file the way a player expects: title, artist (the uploader),
   // date (the upload year), comment (the source URL), description and genre,
   // all taken from the info dict yt-dlp already has. Without this a download
@@ -1004,10 +1038,6 @@ export async function buildArgs(
     args.push("--split-chapters");
   }
 
-  if (opts.format === "ios" && opts.type === "video") {
-    args.push("--extractor-args", "youtube:player_client=ios");
-  }
-
   if (settings.cookiesPath?.trim()) {
     args.push("--cookies", settings.cookiesPath.trim());
   }
@@ -1026,6 +1056,112 @@ export async function buildArgs(
   }
 
   return args;
+}
+
+/** A frame needs a second or two of video, never the whole track. */
+const FRAME_CLIP_SECONDS = 2;
+const FRAME_CLIP_TIMEOUT_MS = 120_000;
+
+/**
+ * Fetches a couple of seconds of video for an audio job to take its poster
+ * from, and returns the clip's path — or null when there is no video to be had.
+ *
+ * An audio job keeps the file it extracted from (see keepVideo), which is
+ * enough wherever audio and video arrive muxed together — an HLS stream, a
+ * plain mp4. A DASH manifest lists them as separate tracks, so `ba` takes the
+ * audio track alone and the kept file has no frames at all. Downloading the
+ * whole video track as well would multiply the transfer several times over
+ * for one picture; a short section of the smallest sensible rendition costs a
+ * few hundred kilobytes.
+ *
+ * Runs with the job's own cookies and extra arguments, which is where a
+ * referer or a header a site insists on lives. Writes into its own scratch
+ * directory next to the job's, which the caller removes with
+ * cleanupFrameClip() — and which boot's sweepTemp collects if it never does.
+ */
+export async function fetchFrameClip(
+  opts: JobOptions,
+  settings: Settings,
+  videoUrl: string,
+  jobId: number,
+  /** Seconds into the media to start the clip at. */
+  start: number
+): Promise<string | null> {
+  const dir = frameClipDir(settings, jobId);
+
+  await fsp.mkdir(dir, { recursive: true });
+
+  const from = Math.max(0, Math.floor(start));
+
+  const args = [
+    "--no-playlist",
+    "--no-progress",
+    "--no-color",
+    "--no-simulate",
+    "-P", `home:${dir}`,
+    "-P", `temp:${dir}`
+  ];
+
+  const ffmpeg = Ffmpeg.known();
+
+  if (ffmpeg?.location) {
+    args.push("--ffmpeg-location", ffmpeg.location);
+  }
+
+  if (settings.cookiesPath?.trim()) {
+    args.push("--cookies", settings.cookiesPath.trim());
+  }
+
+  args.push(...jsRuntimeArgs());
+  args.push(...potArgs());
+  args.push(...tokenizeArgs(settings.ytdlpArgs));
+  args.push(...tokenizeArgs(opts.ytdlpArgs));
+
+  // After the job's own arguments, so an -f, -o or section of theirs — all
+  // chosen for the audio — cannot turn the clip into something else.
+  args.push(
+    // A poster is 640 wide, so anything past 720p is bytes for nothing; the
+    // fallback takes whatever video there is rather than no picture.
+    "-f", "bv*[height<=720]/wv*",
+    "--download-sections", `*${from}-${from + FRAME_CLIP_SECONDS}`,
+    "-o", "frame.%(ext)s",
+    "--", videoUrl
+  );
+
+  try {
+    await execFileAsync(resolveBin(), args, {
+      timeout: FRAME_CLIP_TIMEOUT_MS,
+      maxBuffer: 4 * 1024 * 1024
+    });
+  } catch {
+    // No video track, or the site refused the second request. Either way
+    // there is no clip, and the download itself is unaffected.
+    return null;
+  }
+
+  const names = await fsp.readdir(dir).catch(() => [] as string[]);
+  const clip = names.find((name) => name.startsWith("frame.") && !PARTIAL_FILE.test(name));
+
+  return clip ? path.join(dir, clip) : null;
+}
+
+export async function cleanupFrameClip(settings: Settings, jobId: number): Promise<void> {
+  await fsp
+    .rm(frameClipDir(settings, jobId), { recursive: true, force: true, maxRetries: 2 })
+    .catch(() => {});
+}
+
+/**
+ * Where a finished audio file waits while its cover goes in, out of sight of
+ * the destination folder. Same filesystem as that folder, so getting there and
+ * back is a rename.
+ */
+export function artworkStageDir(settings: Settings, jobId: number): string {
+  return path.join(downloadsRoot(settings), TEMP_DIR_NAME, `${jobId}-art`);
+}
+
+function frameClipDir(settings: Settings, jobId: number): string {
+  return path.join(downloadsRoot(settings), TEMP_DIR_NAME, `${jobId}-frame`);
 }
 
 /**

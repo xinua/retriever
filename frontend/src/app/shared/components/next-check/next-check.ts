@@ -1,7 +1,8 @@
 import { AsyncPipe } from '@angular/common';
 import { Component, computed, DestroyRef, effect, inject, OnInit } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { HttpService, StorageService } from '@shared/services';
+import { HttpService } from '../../services/http.service';
+import { StorageService } from '../../services/storage.service';
 import { defaultIfEmpty, filter, interval, map, Observable, takeWhile } from 'rxjs';
 
 interface NextCheckIn {

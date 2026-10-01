@@ -12,13 +12,21 @@ export enum Types {
   THUMBNAIL = 'thumbnail',
 }
 
+export enum NoEmbedFormats {
+  WEBM = 'webm',
+  MOV = 'mov',
+  OPUS = 'opus',
+  WAV = 'wav',
+}
+
 export enum VideoFormats {
   AUTO = 'auto',
   MP4 = 'mp4',
-  IOS = 'ios',
+  MKV = 'mkv',
 }
 
 export enum AudioFormats {
+  AUTO = 'auto',
   MP3 = 'mp3',
   M4A = 'm4a',
   OPUS = 'opus',
@@ -84,6 +92,7 @@ export interface SubscriptionModel {
   startFromLast: boolean;
   downloadShorts: boolean;
   notifyHA: boolean;
+  notifyTelegram?: boolean;
   intervalPeriod: Nullable<IntervalRangeModel>;
   pollType: PollType;
   pollInterval: Nullable<number>;
@@ -116,6 +125,7 @@ export interface ChannelFormModel {
   startFromLast: FormControl<SubscriptionModel['startFromLast']>;
   downloadShorts: FormControl<SubscriptionModel['downloadShorts']>;
   notifyHA: FormControl<SubscriptionModel['notifyHA']>;
+  notifyTelegram: FormControl<boolean>;
   webhookOverride: FormControl<SubscriptionModel['webhookOverride']>;
   prefix: FormControl<SubscriptionModel['prefix']>;
   tag: FormControl<SubscriptionModel['tag']>;

@@ -2,14 +2,7 @@ import { Injectable } from '@angular/core';
 import { MatSnackBar, MatSnackBarRef } from '@angular/material/snack-bar';
 import { WebhookSnackbar } from '../components/webhook-snackbar/webhook-snackbar';
 import { NotificationData, NotificationSnackbar } from '../components/notification-snackbar/notification-snackbar';
-
-export enum SnackbarType {
-  SUCCESS = 'success',
-  ERROR = 'error',
-  INFO = 'info',
-  WARNING = 'warning',
-  DARK = 'dark',
-}
+import { SnackbarType } from '../models/snackbar.model';
 
 @Injectable({
   providedIn: 'root',

@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import path from "node:path";
 import { spawn } from "node:child_process";
 
 import * as Ffmpeg from "./ffmpeg.js";
@@ -57,9 +56,9 @@ const DIRECT_MEDIA_URL = /\.(m3u8|mpd|mp4|m4v|mov|mkv|webm|ts)(\?|#|$)/i;
  * preloader rather than settling on a picture that is about to be replaced.
  */
 export function posterFor(row: Download): string | null {
-  if (row.thumbnailPath) return row.thumbnailPath;
+  if (row.thumbnailPath) return ImagesService.versioned(row.thumbnailPath);
 
-  if (hasCachedArtwork(row)) return `/images/video-${row.videoId}.jpg`;
+  if (hasCachedArtwork(row)) return ImagesService.urlFor(`video-${row.videoId}.jpg`);
 
   return null;
 }
@@ -104,7 +103,7 @@ export function decorateAll<T extends Download>(rows: T[]): Decorated<T>[] {
  */
 export function fileFor(row: Download): string | null {
   const name = row.thumbnailPath
-    ? path.basename(row.thumbnailPath)
+    ? ImagesService.nameOf(row.thumbnailPath)
     : hasCachedArtwork(row)
       ? `video-${row.videoId}.jpg`
       : null;
@@ -200,7 +199,8 @@ export function remove(id: number): void {
   void ImagesService.remove(posterName(id));
 }
 
-function seekFor(duration: number | null): number {
+/** Where in a file of this length a representative frame is likely to be. */
+export function seekFor(duration: number | null): number {
   if (!duration || !Number.isFinite(duration) || duration <= 0) {
     return SEEK_FALLBACK_S;
   }

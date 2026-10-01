@@ -1,27 +1,32 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { catchError, EMPTY, Observable, tap } from 'rxjs';
-import { SettingsModel } from '../../shared';
 import { webhookExamplePayload } from '../components/webhook-snackbar/webhook-snackbar.constants';
-import { DefaultSettings, DefaultUiConfig } from '../constants';
+import { DefaultSettings, DefaultUiConfig } from '../constants/defaults.const';
 import { silent } from '../interceptors/error.interceptor';
 import {
   DownloadInfoModel,
   DownloadModel,
   DownloadsPageModel,
-  FilterModel,
-  FoldersModel,
   ManualDownloadRequest,
   ManualDownloadResult,
-  Nullable,
-  NextCheckModel,
+  UpdatePosterResponse,
+} from '../models/download.model';
+import { FilterModel, Nullable } from '../models/common.model';
+import {
+  FoldersModel,
   PotStatusModel,
-  SubscriptionModel,
-  UiConfig,
-  VersionModel,
+  SettingsModel,
   YtdlpStatusModel,
   YtdlpUpdateModel,
-} from '../models';
+  TelegramChatModel,
+  TelegramChatStatus,
+  TelegramStatusModel,
+  TelegramTestResult,
+} from '../models/settings.model';
+import { NextCheckModel, SubscriptionModel } from '../models/subscription.model';
+import { UiConfig } from '../models/ui-config.model';
+import { VersionModel } from '../models/version.model';
 import { StorageService } from './storage.service';
 
 @Injectable({
@@ -37,6 +42,14 @@ export class HttpService {
    */
   checkVersion(): Observable<VersionModel> {
     return this._http.get<VersionModel>('/api/version', { context: silent() }).pipe(catchError(() => EMPTY));
+  }
+
+  /**
+   * The user asked, so unlike `checkVersion` a failure is reported: an HTTP
+   * error by the interceptor, a failed upstream fetch through `error`.
+   */
+  checkForUpdates(): Observable<VersionModel> {
+    return this._http.post<VersionModel>('/api/version/check', null);
   }
 
   getError(): Observable<void> {
@@ -57,6 +70,16 @@ export class HttpService {
   saveSettings(settings: SettingsModel): Observable<SettingsModel> {
     return this._http
       .post<SettingsModel>('/api/settings', settings)
+      .pipe(tap((settings) => this._storage.settings.set(settings)));
+  }
+
+  /**
+   * Saves `timeZone` only if the server has none yet, and returns the settings
+   * either way. Safe to call on every load.
+   */
+  fillTimeZone(timeZone: string): Observable<SettingsModel> {
+    return this._http
+      .post<SettingsModel>('/api/settings/time-zone', { timeZone })
       .pipe(tap((settings) => this._storage.settings.set(settings)));
   }
 
@@ -120,8 +143,19 @@ export class HttpService {
     return this._http.post<{ enabled: boolean }>(`/api/actions/toggle-enabled`, {});
   }
 
-  validateYtdlp(downloadsDir?: string, cookiesPath?: string): Observable<YtdlpStatusModel> {
-    return this._http.post<YtdlpStatusModel>(`/api/settings/validate-ytdlp`, { downloadsDir, cookiesPath });
+  validateYtdlp(downloadsDir?: string): Observable<YtdlpStatusModel> {
+    return this._http.post<YtdlpStatusModel>(`/api/settings/validate-ytdlp`, { downloadsDir });
+  }
+
+  /** Sent as the file's own text; the server stores it and points cookiesPath at it. */
+  uploadCookies(file: File): Observable<SettingsModel> {
+    return this._http.post<SettingsModel>('/api/settings/cookies', file, {
+      headers: { 'Content-Type': 'text/plain' },
+    });
+  }
+
+  removeCookies(): Observable<SettingsModel> {
+    return this._http.delete<SettingsModel>('/api/settings/cookies');
   }
 
   getYtdlpVersion(): Observable<{ version: string | null; available: boolean }> {
@@ -221,6 +255,35 @@ export class HttpService {
     return this._http.post<{ ok: boolean }>(`/api/actions/send-webhook`, { url, body });
   }
 
+  getTelegramStatus(): Observable<TelegramStatusModel> {
+    return this._http.get<TelegramStatusModel>('/api/telegram/status');
+  }
+
+  /** Sends a test message to every chat with notifications on. */
+  testTelegram(): Observable<TelegramTestResult> {
+    return this._http.post<TelegramTestResult>('/api/telegram/test', {});
+  }
+
+  getTelegramChats(): Observable<TelegramChatModel[]> {
+    return this._http.get<TelegramChatModel[]>('/api/telegram/chats');
+  }
+
+  /** Adds a chat by hand, already approved - for groups and channels. */
+  addTelegramChat(chatId: string, name: Nullable<string>): Observable<TelegramChatModel> {
+    return this._http.post<TelegramChatModel>('/api/telegram/chats', { chatId, name });
+  }
+
+  updateTelegramChat(
+    chatId: string,
+    patch: Partial<{ name: Nullable<string>; status: TelegramChatStatus; notify: boolean }>,
+  ): Observable<TelegramChatModel> {
+    return this._http.patch<TelegramChatModel>(`/api/telegram/chats/${encodeURIComponent(chatId)}`, patch);
+  }
+
+  deleteTelegramChat(chatId: string): Observable<{ ok: boolean }> {
+    return this._http.delete<{ ok: boolean }>(`/api/telegram/chats/${encodeURIComponent(chatId)}`);
+  }
+
   saveUiConfig(patch: Partial<UiConfig>): Observable<UiConfig> {
     return this._http.post<UiConfig>('/api/ui-config', patch);
   }
@@ -239,5 +302,17 @@ export class HttpService {
 
   setDownloadPath(id: number, path: string): Observable<DownloadModel> {
     return this._http.patch<DownloadModel>(`/api/downloads/${id}/path`, { path });
+  }
+
+  updateSubAvatar(id: number, avatar: File): Observable<SubscriptionModel> {
+    return this._http.put<SubscriptionModel>(`/api/channels/${id}/avatar`, avatar);
+  }
+
+  updateDownloadAvatar(id: number, avatar: File): Observable<DownloadModel> {
+    return this._http.put<DownloadModel>(`/api/downloads/${id}/avatar`, avatar);
+  }
+
+  updateDownloadPoster(id: number, poster: File, embed: boolean): Observable<UpdatePosterResponse> {
+    return this._http.put<UpdatePosterResponse>(`/api/downloads/${id}/poster?embed=${embed}`, poster);
   }
 }
