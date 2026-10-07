@@ -8,7 +8,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { Codecs, PollType, SubscriptionModel, Types, VideoQuality } from '../../models/subscription.model';
 import { ManualDownloadRequest } from '../../models/download.model';
 import { NotifierService } from 'angular-notifier';
-import { HA_AUTOMATION_CODE, WIDGET_CODE } from '../../../components/widget-page/widget.constants';
+import { HA_AUTOMATION_CODE, WIDGET_CODE } from '../../constants/code.const';
 import { AudioFormatLabels, CodecLabels, VideoFormatLabels } from '../../constants/labels.const';
 import { DayPipe } from '../../pipes/day.pipe';
 import { TimePipe } from '../../pipes/time.pipe';

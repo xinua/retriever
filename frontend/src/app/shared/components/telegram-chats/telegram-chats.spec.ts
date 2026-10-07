@@ -3,14 +3,16 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatTooltip } from '@angular/material/tooltip';
 import { By } from '@angular/platform-browser';
 import { TelegramChatModel, TelegramStatusModel } from '@shared/models';
-import { HttpService, WsService } from '@shared/services';
+import { DRAG_TOKEN } from '@shared/constants';
+import { HttpService, StorageService, WsService } from '@shared/services';
 import { NotifierService } from 'angular-notifier';
-import { NEVER, of, Subject, throwError } from 'rxjs';
+import { NEVER, Observable, of, Subject, tap, throwError } from 'rxjs';
 
 import { TelegramChats } from './telegram-chats';
 
 const chat = (overrides: Partial<TelegramChatModel> = {}): TelegramChatModel => ({
   chatId: '100',
+  avatar: null,
   type: 'private',
   name: 'Alice',
   username: 'alice',
@@ -42,13 +44,25 @@ describe('TelegramChats', () => {
   let wsStatus: Subject<TelegramStatusModel>;
   let wsChats: Subject<TelegramChatModel[]>;
 
+  // The real HttpService writes every chat response to StorageService, which the component renders from.
+  const store = <T>(source: Observable<T>, write: (chats: TelegramChatModel[], value: T) => TelegramChatModel[]) =>
+    source.pipe(tap((value) => TestBed.inject(StorageService).telegramChats.update((chats) => write(chats, value))));
+
   beforeEach(async () => {
     http = {
       getTelegramStatus: vi.fn(() => of(botStatus())),
       getTelegramChats: vi.fn(() => of([])),
-      updateTelegramChat: vi.fn((chatId: string, patch: Partial<TelegramChatModel>) => of(chat({ chatId, ...patch }))),
-      deleteTelegramChat: vi.fn(() => of({ ok: true })),
-      addTelegramChat: vi.fn((chatId: string, name: string | null) => of(chat({ chatId, name }))),
+      updateTelegramChat: vi.fn((chatId: string, patch: Partial<TelegramChatModel>) =>
+        store(of(chat({ chatId, ...patch })), (chats, updated) =>
+          chats.map((c) => (c.chatId === updated.chatId ? updated : c)),
+        ),
+      ),
+      deleteTelegramChat: vi.fn((chatId: string) =>
+        store(of({ ok: true }), (chats) => chats.filter((c) => c.chatId !== chatId)),
+      ),
+      addTelegramChat: vi.fn((chatId: string, name: string | null) =>
+        store(of(chat({ chatId, name })), (chats, added) => [...chats.filter((c) => c.chatId !== added.chatId), added]),
+      ),
       testTelegram: vi.fn(),
     };
     notify = vi.fn();
@@ -60,6 +74,7 @@ describe('TelegramChats', () => {
       providers: [
         { provide: HttpService, useValue: http },
         { provide: NotifierService, useValue: { notify } },
+        { provide: DRAG_TOKEN, useValue: NEVER },
         {
           provide: WsService,
           useValue: { telegramStatus$: () => wsStatus.asObservable(), telegramChats$: () => wsChats.asObservable() },
@@ -69,7 +84,7 @@ describe('TelegramChats', () => {
   });
 
   async function render(chats: TelegramChatModel[] = []) {
-    http['getTelegramChats'].mockReturnValue(of(chats));
+    http['getTelegramChats'].mockReturnValue(store(of(chats), (_, loaded) => loaded));
     fixture = TestBed.createComponent(TelegramChats);
     component = fixture.componentInstance;
     await fixture.whenStable();
@@ -571,6 +586,7 @@ describe('TelegramChats content projection', () => {
           useValue: { getTelegramStatus: () => of(botStatus()), getTelegramChats: () => of([]) },
         },
         { provide: NotifierService, useValue: { notify: vi.fn() } },
+        { provide: DRAG_TOKEN, useValue: NEVER },
         { provide: WsService, useValue: { telegramStatus$: () => NEVER, telegramChats$: () => chats } },
       ],
     }).compileComponents();

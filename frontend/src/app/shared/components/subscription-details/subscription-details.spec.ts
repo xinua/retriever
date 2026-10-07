@@ -12,7 +12,7 @@ import { of } from 'rxjs';
 import { AudioFormats, PollType, SubscriptionModel, Types, VideoFormats } from '@shared/models';
 import { HttpService, StorageService } from '@shared/services';
 import { provideNotifier, useIconFactory } from '../../providers';
-import { HA_AUTOMATION_CODE, WIDGET_CODE } from '../../../components/widget-page/widget.constants';
+import { HA_AUTOMATION_CODE, WIDGET_CODE } from '../../constants/code.const';
 
 describe('SubscriptionDetails', () => {
   let component: SubscriptionDetails;

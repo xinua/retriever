@@ -256,7 +256,9 @@ export class HttpService {
   }
 
   getTelegramStatus(): Observable<TelegramStatusModel> {
-    return this._http.get<TelegramStatusModel>('/api/telegram/status');
+    return this._http
+      .get<TelegramStatusModel>('/api/telegram/status')
+      .pipe(tap((status) => this._storage.telegramStatus.set(status)));
   }
 
   /** Sends a test message to every chat with notifications on. */
@@ -265,23 +267,39 @@ export class HttpService {
   }
 
   getTelegramChats(): Observable<TelegramChatModel[]> {
-    return this._http.get<TelegramChatModel[]>('/api/telegram/chats');
+    return this._http
+      .get<TelegramChatModel[]>('/api/telegram/chats')
+      .pipe(tap((chats) => this._storage.telegramChats.set(chats)));
   }
 
   /** Adds a chat by hand, already approved - for groups and channels. */
   addTelegramChat(chatId: string, name: Nullable<string>): Observable<TelegramChatModel> {
-    return this._http.post<TelegramChatModel>('/api/telegram/chats', { chatId, name });
+    return this._http
+      .post<TelegramChatModel>('/api/telegram/chats', { chatId, name })
+      .pipe(
+        tap((chat) =>
+          this._storage.telegramChats.update((chats) => [...chats.filter((c) => c.chatId !== chat.chatId), chat]),
+        ),
+      );
   }
 
   updateTelegramChat(
     chatId: string,
     patch: Partial<{ name: Nullable<string>; status: TelegramChatStatus; notify: boolean }>,
   ): Observable<TelegramChatModel> {
-    return this._http.patch<TelegramChatModel>(`/api/telegram/chats/${encodeURIComponent(chatId)}`, patch);
+    return this._http
+      .patch<TelegramChatModel>(`/api/telegram/chats/${encodeURIComponent(chatId)}`, patch)
+      .pipe(
+        tap((chat) =>
+          this._storage.telegramChats.update((chats) => chats.map((c) => (c.chatId === chat.chatId ? chat : c))),
+        ),
+      );
   }
 
   deleteTelegramChat(chatId: string): Observable<{ ok: boolean }> {
-    return this._http.delete<{ ok: boolean }>(`/api/telegram/chats/${encodeURIComponent(chatId)}`);
+    return this._http
+      .delete<{ ok: boolean }>(`/api/telegram/chats/${encodeURIComponent(chatId)}`)
+      .pipe(tap(() => this._storage.telegramChats.update((chats) => chats.filter((c) => c.chatId !== chatId))));
   }
 
   saveUiConfig(patch: Partial<UiConfig>): Observable<UiConfig> {
@@ -314,5 +332,25 @@ export class HttpService {
 
   updateDownloadPoster(id: number, poster: File, embed: boolean): Observable<UpdatePosterResponse> {
     return this._http.put<UpdatePosterResponse>(`/api/downloads/${id}/poster?embed=${embed}`, poster);
+  }
+
+  updateChatAvatar(chatId: string, avatar: File): Observable<TelegramChatModel> {
+    return this._http
+      .put<TelegramChatModel>(`/api/telegram/chats/${encodeURIComponent(chatId)}/avatar`, avatar, { context: silent() })
+      .pipe(
+        tap((chat) =>
+          this._storage.telegramChats.update((chats) => chats.map((c) => (c.chatId === chat.chatId ? chat : c))),
+        ),
+      );
+  }
+
+  /** Posts a finished file to the webhook, for a Home Assistant automation to play. */
+  sendDownloadToHA(id: number): Observable<{ ok: boolean }> {
+    return this._http.post<{ ok: boolean }>(`/api/downloads/${id}/send-to-ha`, {});
+  }
+
+  /** Queues a finished file for upload to one Telegram chat; the outcome arrives as a websocket notification. */
+  sendDownloadToTelegram(id: number, chatId: string): Observable<{ ok: boolean }> {
+    return this._http.post<{ ok: boolean }>(`/api/downloads/${id}/send-to-telegram`, { chatId });
   }
 }

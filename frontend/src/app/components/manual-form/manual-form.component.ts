@@ -12,7 +12,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormBuilder, FormControl, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormControl, FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -117,7 +117,7 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
 
   constructor() {
     this.form = this._fb.group<ManualFormModel>({
-      url: new FormControl('', [Validators.required, RtValidators.url]),
+      url: new FormControl('', [RtValidators.url]),
       quality: new FormControl(VideoQuality.BEST),
       type: new FormControl(Types.VIDEO),
       format: new FormControl(this.videoFormats[0]),
@@ -212,6 +212,9 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
    * count towards form.invalid, so checking afterwards let any url through.
    */
   private _submit(): void {
+    // Not a validator: an empty url is simply nothing to do, not an error to show.
+    if (this.form.controls.url.value.trim() === '') return;
+
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;

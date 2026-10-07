@@ -12,8 +12,6 @@
   </mat-card-header>
 
   <mat-card-content class="max-h-[70vh] lg:max-h-[80vh] overflow-y-auto">
-    <!-- One form for every step: each extra [formGroup] on the same group
-         re-runs its validators when it appears, mid change detection. -->
     <form [formGroup]="form">
       <mat-stepper
         [rtDisableStep]="steps()"
@@ -283,6 +281,7 @@
                       autocomplete="off"
                       [type]="showToken() ? 'text' : 'password'"
                       placeholder="123456:ABC-DEF..."
+                      name="token"
                     />
                     <mat-icon
                       matSuffix
@@ -302,18 +301,19 @@
 
                   <mat-form-field appearance="outline">
                     <mat-label>Bot API URL</mat-label>
-                    <input matInput formControlName="telegramApiUrl" placeholder="https://api.telegram.org" />
+                    <input matInput formControlName="telegramApiUrl" placeholder="http://tg-api:8081" />
                     <mat-icon
                       matSuffix
                       fontIcon="dns"
                       matTooltip="A local telegram-bot-api server raises the upload limit from 50MB to 2GB."
+                      [matTooltipDisabled]="tgIsLocal()"
                       class="relative z-10"
                     />
                     <mat-hint>Leave empty to use api.telegram.org</mat-hint>
                   </mat-form-field>
                 </div>
 
-                <div class="flex w-full justify-end mb-4 keep-files">
+                <div class="flex w-full justify-end mb-4 mt-4 md:mt-0 keep-files">
                   <mat-slide-toggle formControlName="telegramKeepFiles" labelPosition="before">
                     <span class="mx-2 text-sm">Keep downloaded files after sending</span>
                   </mat-slide-toggle>
@@ -322,9 +322,11 @@
                 <mat-slide-toggle
                   formControlName="notifyDownloadFailed"
                   labelPosition="before"
-                  class="justify-self-start notify-failed"
+                  class="mt-2 notify-failed"
                 >
-                  <span class="mx-2 text-sm">Include notifications about subscription's download failures</span>
+                  <span class="mx-2 text-xs md:text-sm block"
+                    >Include notifications about subscription's download failures</span
+                  >
                 </mat-slide-toggle>
               </rt-telegram-chats>
 
@@ -339,15 +341,108 @@
 
           <div class="rounded-xl border border-gray-800 p-4">
             <mat-form-field class="w-full" appearance="outline">
-              <mat-label>Address</mat-label>
-              <input matInput formControlName="webhookUrl" placeholder="Ex. 1 Main St, New York, NY" required />
+              @let isValid = form.controls.webhookUrl.valid && form.controls.webhookUrl.value.length > 0;
+              <mat-label>Webhook URL</mat-label>
+              <input
+                matInput
+                formControlName="webhookUrl"
+                placeholder="Ex. http://homeassistant.local:8123/api/webhook/..."
+              />
+              <mat-icon
+                matSuffix
+                fontIcon="webhook"
+                matTooltip="Send now to test"
+                class="relative z-10"
+                [class.cursor-pointer]="isValid"
+                [class.opacity-50]="!isValid"
+                (click)="isValid && sendWebhook()"
+              />
             </mat-form-field>
 
             <div class="bg-(--rt-accent)/20 py-2 px-4 rounded-md">
-              Webhook URL is used to send notifications when a download is complete by subscription.
+              This webhook URL will be used for all actions and events.
               <br />
-              You can override the default URL in the every subscription's advanced settings.
+              You can override this URL for each subscription in the advanced settings.
               <br />
+            </div>
+
+            <div class="mt-4 bg-white/5 rounded-md p-4 hidden md:block">
+              <h3 class="text-md font-bold mb-4">
+                Check examples below to see Webhook Payloads and how you can use them:
+              </h3>
+
+              <mat-accordion>
+                <mat-expansion-panel>
+                  <mat-expansion-panel-header>
+                    <mat-panel-title>Webhook payloads</mat-panel-title>
+                    <mat-panel-description class="opacity-50!">
+                      <mat-form-field
+                        (click)="$event.stopPropagation()"
+                        subscriptSizing="dynamic"
+                        appearance="fill"
+                        class="description-select"
+                      >
+                        <mat-select [(value)]="selectedWebhook">
+                          @for (webhook of code.webhooks; track trackByValue(webhook)) {
+                            <mat-option [value]="webhook">{{ webhook.name }}</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
+                    </mat-panel-description>
+                  </mat-expansion-panel-header>
+                  <rt-code [code]="selectedWebhook().code" language="js" />
+                </mat-expansion-panel>
+
+                <mat-expansion-panel>
+                  <mat-expansion-panel-header>
+                    <mat-panel-title>Automation examples</mat-panel-title>
+                    <mat-panel-description class="opacity-50!">
+                      <mat-form-field
+                        (click)="$event.stopPropagation()"
+                        subscriptSizing="dynamic"
+                        appearance="fill"
+                        class="description-select"
+                      >
+                        <mat-select [(value)]="selectedAutomation">
+                          @for (automation of code.automations; track trackByValue(automation)) {
+                            <mat-option [value]="automation">{{ automation.name }}</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
+                    </mat-panel-description>
+                  </mat-expansion-panel-header>
+
+                  <div class="flex flex-col gap-2">
+                    <rt-code [code]="selectedAutomation().code" language="yaml" />
+
+                    <div class="flex flex-col">
+                      @if (selectedAutomation().value === 'notifyAutomation') {
+                        <small class="text-gray-500"
+                          >You can copy ready-to-use automation code from Subscription's menu under poster.</small
+                        >
+                      }
+                      <small class="text-gray-500"
+                        >Don't forget to replace <code class="text-red-500">&lt;variables&gt;</code> with your actual
+                        data.</small
+                      >
+                    </div>
+                  </div>
+                </mat-expansion-panel>
+
+                <mat-expansion-panel>
+                  <mat-expansion-panel-header>
+                    <mat-panel-title>Widget example</mat-panel-title>
+                  </mat-expansion-panel-header>
+
+                  <div class="flex flex-col gap-2">
+                    <rt-code [code]="code.widget.code" language="yaml" />
+
+                    <small class="text-gray-500"
+                      >You can copy ready-to-use widget code from Subscription's menu under poster.</small
+                    >
+                  </div>
+                </mat-expansion-panel>
+              </mat-accordion>
             </div>
 
             <ng-container *ngTemplateOutlet="saveButton"></ng-container>
@@ -360,7 +455,7 @@
 
 <ng-template #saveButton>
   <div class="flex w-full justify-end mt-4">
-    <button mat-flat-button color="primary" (click)="saveSettings()" [disabled]="!form.valid">
+    <button mat-flat-button color="primary" (click)="saveSettings()" [disabled]="!form.valid || form.pending">
       <mat-icon class="text-base">save</mat-icon>
       Save
     </button>

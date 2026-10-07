@@ -1,7 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 
 import { db } from "../../db/index.js";
-import { telegramChat } from "../../db/schema.js";
+import { telegramChat, telegramChatAvatar } from "../../db/schema.js";
 import { broadcast } from "../../routes/ws/websockets.js";
 
 import type { TelegramChat } from "../../db/types.js";
@@ -9,6 +9,14 @@ import type { TelegramChat } from "../../db/types.js";
 export type ChatStatus = "pending" | "approved" | "blocked";
 
 export const CHAT_STATUSES: readonly ChatStatus[] = ["pending", "approved", "blocked"];
+
+/** A chat the way the UI gets it: a ready URL in place of the avatar's id. */
+export type ChatView = Omit<TelegramChat, "avatarId"> & { avatar: string | null };
+
+export function present({ avatarId, ...row }: TelegramChat): ChatView {
+  // The id changes with the picture, so the URL does too and caches can keep it forever.
+  return { ...row, avatar: avatarId ? `/api/telegram/chats/${row.chatId}/avatar?v=${avatarId}` : null };
+}
 
 export async function get(chatId: string): Promise<TelegramChat | undefined> {
   const [row] = await db.select().from(telegramChat).where(eq(telegramChat.chatId, chatId));
@@ -65,6 +73,8 @@ export async function update(
 export async function remove(chatId: string): Promise<boolean> {
   const rows = await db.delete(telegramChat).where(eq(telegramChat.chatId, chatId)).returning();
 
+  await db.delete(telegramChatAvatar).where(eq(telegramChatAvatar.chatId, chatId));
+
   if (rows.length) await publish();
 
   return rows.length > 0;
@@ -72,5 +82,5 @@ export async function remove(chatId: string): Promise<boolean> {
 
 /** Pushes the whole list to open tabs; it is a handful of rows at most. */
 async function publish(): Promise<void> {
-  broadcast("telegram-chats", await list());
+  broadcast("telegram-chats", (await list()).map(present));
 }

@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, inject, output, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
@@ -12,23 +13,77 @@ import {
 import { MatAutocomplete, MatAutocompleteTrigger, MatOption } from '@angular/material/autocomplete';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatCard, MatCardContent, MatCardHeader, MatCardSubtitle, MatCardTitle } from '@angular/material/card';
+import { MatExpansionModule } from '@angular/material/expansion';
 import { MatIcon } from '@angular/material/icon';
 import { MatError, MatFormField, MatHint, MatInput, MatLabel, MatSuffix } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggle, MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatStepperModule } from '@angular/material/stepper';
 import { MatTooltip } from '@angular/material/tooltip';
-import { DisableStepDirective } from '../../directives/disable-step.directive';
 import { NotifierService } from 'angular-notifier';
 import { catchError, finalize, of, tap } from 'rxjs';
+import {
+  notifyAutomationExample,
+  notifyWebhookExample,
+  playDownloadAutomationExample,
+  playWebhookExample,
+  WIDGET_CODE,
+} from '../../constants/code.const';
+import { DRAG_TOKEN } from '../../constants/drag-token';
+import { DisableStepDirective } from '../../directives/disable-step.directive';
 import { browserTimeZone, supportedTimeZones } from '../../helpers/common.helpers';
+import { createDragObservable } from '../../helpers/factory.helpers';
+import { formatNotifyAutomation, formatPlayDownloadAutomation } from '../../helpers/settings.helpers';
 import { PotStatusModel, SettingsFormModel, SettingsModel } from '../../models/settings.model';
-import { SnackbarType } from '../../models/snackbar.model';
 import { HttpService } from '../../services/http.service';
-import { SnackbarService } from '../../services/snackbar.service';
 import { StorageService } from '../../services/storage.service';
 import { RtValidators } from '../../validators/rt.validators';
+import { Code } from '../code/code';
 import { TelegramChats } from '../telegram-chats/telegram-chats';
-import { NgTemplateOutlet } from '@angular/common';
+
+interface CodeExample {
+  value: string;
+  name: string;
+  code: string;
+}
+
+interface CodeExamples {
+  webhooks: CodeExample[];
+  automations: CodeExample[];
+  widget: CodeExample;
+}
+
+const codeExamples: CodeExamples = {
+  webhooks: [
+    {
+      value: 'notifyWebhook',
+      name: 'Notify Webhook',
+      code: notifyWebhookExample,
+    },
+    {
+      value: 'playWebhook',
+      name: 'Play Webhook',
+      code: playWebhookExample,
+    },
+  ],
+  automations: [
+    {
+      value: 'notifyAutomation',
+      name: 'Notify Automation',
+      code: notifyAutomationExample,
+    },
+    {
+      value: 'playAutomation',
+      name: 'Play Automation',
+      code: playDownloadAutomationExample,
+    },
+  ],
+  widget: {
+    value: 'cardWidget',
+    name: 'Card widget',
+    code: WIDGET_CODE(window.location.origin, 1),
+  },
+};
 
 @Component({
   selector: 'rt-app-settings',
@@ -60,6 +115,15 @@ import { NgTemplateOutlet } from '@angular/common';
     DisableStepDirective,
     MatIconButton,
     NgTemplateOutlet,
+    MatExpansionModule,
+    Code,
+    MatSelectModule,
+  ],
+  providers: [
+    {
+      provide: DRAG_TOKEN,
+      useValue: createDragObservable(),
+    },
   ],
   templateUrl: './app-settings.html',
   styleUrl: './app-settings.css',
@@ -69,9 +133,7 @@ export class AppSettings {
   private readonly _httpService = inject(HttpService);
   private readonly _storage = inject(StorageService);
   private readonly _notifier = inject(NotifierService);
-  private readonly _snackbar = inject(SnackbarService);
   private _changedValidator?: ValidatorFn;
-
   closeDialog = output<void>();
 
   ytdlpVersion = signal<string | null>(null);
@@ -83,12 +145,17 @@ export class AppSettings {
   isUploadingCookies = signal(false);
   readonly cookiesFileName = computed(() => this.cookiesPath()?.split(/[\\/]/).pop() ?? '');
 
+  code = codeExamples;
+  selectedWebhook = signal<CodeExample>(codeExamples.webhooks[0]);
+  selectedAutomation = signal<CodeExample>(codeExamples.automations[0]);
+
   /**
    * Null until the check comes back, and stays hidden unless a provider is
    * actually configured — the POT provider is opt-in, so for most installs
    * there is nothing worth saying.
    */
   potStatus = signal<PotStatusModel | null>(null);
+  tgIsLocal = computed<boolean>(() => !!this._storage.telegramStatus()?.local);
 
   readonly browserTimeZone = browserTimeZone();
   private readonly _timeZones = supportedTimeZones();
@@ -126,6 +193,7 @@ export class AppSettings {
   isTelegramEnabled = toSignal(this.form.controls.telegramEnabled.valueChanges, {
     initialValue: this.form.controls.telegramEnabled.value,
   });
+
   steps = computed(() => [
     { index: 2, enabled: this.potStatus()?.configured },
     { index: 3, enabled: this.isTelegramEnabled() },
@@ -138,10 +206,21 @@ export class AppSettings {
       this.form.patchValue(settings);
       this._resetValidators();
       this.form.updateValueAndValidity();
+      this._formatAutomations(settings.webhookUrl ?? '');
     });
 
     this._loadVersion();
     this._loadPotStatus();
+  }
+
+  private _formatAutomations(webhook: string) {
+    this.code.automations.forEach((automation) => {
+      if (automation.value === 'notifyAutomation') {
+        automation.code = formatNotifyAutomation(automation.code, webhook);
+      } else if (automation.value === 'playAutomation') {
+        automation.code = formatPlayDownloadAutomation(automation.code, webhook);
+      }
+    });
   }
 
   showUpdated() {
@@ -234,8 +313,7 @@ export class AppSettings {
       .pipe(
         tap((response) => {
           if (response.ok) {
-            this._notifier.notify('success', 'Webhook sent successfully.', 'webhookOk');
-            this._showPayloadExample();
+            this._notifier.notify('success', 'Notify webhook sent successfully.', 'webhookOk');
           } else {
             this._notifier.notify('error', 'Failed to send webhook.');
           }
@@ -246,6 +324,10 @@ export class AppSettings {
         }),
       )
       .subscribe();
+  }
+
+  trackByValue(item: { value: string }) {
+    return item.value;
   }
 
   /** The health check reads the saved cookies, so re-run it against the new file. */
@@ -273,10 +355,6 @@ export class AppSettings {
       .pipe(catchError(() => of(null)))
       // .pipe(map(() => ({ configured: true, ok: true, version: '1.0.0', baseUrl: 'https://example.com', error: null })), catchError(() => of(null)))
       .subscribe((status) => this.potStatus.set(status));
-  }
-
-  private _showPayloadExample() {
-    this._snackbar.showWebhookDemo(SnackbarType.DARK, null);
   }
 
   private _resetValidators() {

@@ -24,7 +24,7 @@ export class ReleaseNotesDialog {
 
   /** Starts as the opener's copy; a manual check replaces it. */
   readonly info = signal<VersionModel>(inject(MAT_DIALOG_DATA));
-  readonly isOutdated = computed(() => this.info().current !== this.info().latest);
+  readonly isOutdated = computed(() => this.info()?.updateAvailable);
 
   /** Lets the opener refresh its own copy (badge, notification) as well. */
   readonly versionChecked = output<VersionModel>();
@@ -49,8 +49,8 @@ export class ReleaseNotesDialog {
         }
 
         this.info.set(info);
-        this.checkedForUpdates.set(true);
         this.versionChecked.emit(info);
+        this.checkedForUpdates.set(true);
       });
   }
 

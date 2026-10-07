@@ -1,22 +1,10 @@
 /* You can add global styles to this file, and also import other style files */
 
 @import 'tailwindcss';
+@import 'highlight.js/styles/stackoverflow-dark.min.css';
+@import 'highlight.js/styles/obsidian.min.css';
 @import './styles/animations.css';
-
-@font-face {
-  font-family: 'drop-shade';
-  src: url('public/assets/fonts/drop-shade-shadow.ttf') format('truetype');
-}
-
-@font-face {
-  font-family: 'calculator';
-  src: url('public/assets/fonts/calculator.ttf') format('truetype');
-}
-
-@font-face {
-  font-family: 'rubik';
-  src: url('public/assets/fonts/rubik.ttf') format('truetype');
-}
+@import './styles/fonts.css';
 
 @keyframes reveal {
   from {
@@ -52,18 +40,6 @@
 
 .animate-cicle-once {
   animation: cicle-once 0.5s ease-in-out forwards !important;
-}
-
-.font-drop-shade {
-  font-family: 'drop-shade', sans-serif;
-}
-
-.font-calculator {
-  font-family: 'calculator', sans-serif;
-}
-
-.font-rubik {
-  font-family: 'rubik', sans-serif;
 }
 
 input::-webkit-outer-spin-button,

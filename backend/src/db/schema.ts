@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
+import { sqliteTable, blob, integer, text } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 export const settings = sqliteTable("settings", {
@@ -375,6 +375,10 @@ export const telegramChat = sqliteTable("telegram_chat", {
   username: text("username"),
   status: text("status").notNull().default("pending"),
 
+  // The photo's file_unique_id, null when the chat has none the bot can see.
+  // The image itself is in telegram_chat_avatar, out of every list query.
+  avatarId: text("avatarId"),
+
   notify: integer("notify", { mode: "boolean" })
     .notNull()
     .default(false),
@@ -382,6 +386,20 @@ export const telegramChat = sqliteTable("telegram_chat", {
   createdAt: text("createdAt")
     .notNull()
     .default(sql`(datetime('now'))`),
+
+  updatedAt: text("updatedAt")
+    .notNull()
+    .default(sql`(datetime('now'))`)
+});
+
+/**
+ * The small (160x160) JPEG of each chat's photo, fetched once when the chat
+ * is approved so serving it never calls Telegram.
+ */
+export const telegramChatAvatar = sqliteTable("telegram_chat_avatar", {
+  chatId: text("chatId").primaryKey(),
+  fileUniqueId: text("fileUniqueId").notNull(),
+  data: blob("data", { mode: "buffer" }).notNull(),
 
   updatedAt: text("updatedAt")
     .notNull()

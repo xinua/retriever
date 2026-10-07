@@ -296,11 +296,13 @@ That's it. New uploads arrive on their own.
   "videoId": "4f35jL3Wd",
   "title": "Video Title",
   "type": "video",
-  "date": "2026-09-05T12:00:00.000Z"
+  "date": "2026-09-05T12:00:00.000Z",
+  "path": "Channel Name/Video Title.mp4",
+  "fileUrl": "/api/downloads/1/file?inline=1"
 }
 ```
 
-`watcherId` is the watcher's own id — the same one the widget URL below takes — not the channel's YouTube id.
+The webhook is sent once the subscription's download has finished. `watcherId` is the watcher's own id — the same one the widget URL below takes — not the channel's YouTube id. `path` is the file's location inside the downloads folder, and `fileUrl` streams it from Retriever, the same URL the widget plays.
 
 **Widget cards.** Each watcher has a compact page showing its latest video:
 
@@ -381,10 +383,12 @@ docker run -d \
   --network retriever-net \
   -e TELEGRAM_API_ID=123456 \
   -e TELEGRAM_API_HASH=0123456789abcdef0123456789abcdef \
-  -e TELEGRAM_LOCAL=1 \
   -v /your-directory/tg-api:/var/lib/telegram-bot-api \
   -v /your-media/youtube:/downloads:ro \
-  aiogram/telegram-bot-api:latest
+  --entrypoint telegram-bot-api \
+  aiogram/telegram-bot-api:latest \
+  --local --http-port=8081 \
+  --dir=/var/lib/telegram-bot-api --temp-dir=/tmp/telegram-bot-api
 
 docker run -d \
   --name retriever \
@@ -421,16 +425,25 @@ services:
   tg-api:
     image: aiogram/telegram-bot-api:latest
     container_name: retriever-tg-api
+    # Runs the server as root, so it can read the downloads whatever their
+    # permissions. See the note below.
+    entrypoint:
+      - telegram-bot-api
+      - --local
+      - --http-port=8081
+      - --dir=/var/lib/telegram-bot-api
+      - --temp-dir=/tmp/telegram-bot-api
     environment:
       TELEGRAM_API_ID: "123456"
       TELEGRAM_API_HASH: 0123456789abcdef0123456789abcdef
-      TELEGRAM_LOCAL: "1"
     volumes:
       - /mnt/tank/apps/retriever/tg-api:/var/lib/telegram-bot-api
       # Same path as in the retriever service. Read-only is enough.
-      - /mnt/tank/media/youtube:/downloads
+      - /mnt/tank/media/youtube:/downloads:ro
     restart: unless-stopped
 ```
+
+> **File permissions.** The server has to be able to read every downloaded file. The image's default entrypoint drops to its own user, `telegram-bot-api` (uid 101). If your downloads folder isn't readable by that user, which is common on NAS datasets with `770` permissions or ACLs, every send fails with *can't get stat about the file*. The `entrypoint` above avoids that by running the server as root, and the `:ro` mount keeps it from changing anything. If you'd rather keep the default entrypoint, give uid 101 read and traverse access to the downloads folder and the files created in it.
 
 The `pot` service is optional here too. Then, in **Settings → Telegram bot**, set **Bot API URL** to `http://tg-api:8081` and save. The status line should switch to *local server, 2000 MB limit*.
 

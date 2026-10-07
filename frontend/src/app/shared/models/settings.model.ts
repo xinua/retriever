@@ -84,6 +84,7 @@ export type TelegramChatStatus = 'pending' | 'approved' | 'blocked';
 
 export interface TelegramChatModel {
   chatId: string;
+  avatar: Nullable<string>;
   type: Nullable<string>;
   name: Nullable<string>;
   username: Nullable<string>;

@@ -188,6 +188,17 @@ describe('Header', () => {
   });
 
   describe('dialogs', () => {
+    // The dialogs are lazy chunks; loading them on the first click can outlast the
+    // test timeout when the whole suite runs, so load them once up front.
+    beforeAll(
+      () =>
+        Promise.all([
+          import('../../shared/components/theme-dialog/theme-dialog'),
+          import('../../shared/components/app-settings-dialog/app-settings-dialog'),
+        ]),
+      30_000,
+    );
+
     it('opens the theme dialog from the "Theme config" button', async () => {
       await render();
       const spy = vi.spyOn(component, 'openThemeDialog');

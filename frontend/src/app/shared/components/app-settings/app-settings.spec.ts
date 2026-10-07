@@ -5,12 +5,12 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatIconRegistry } from '@angular/material/icon';
 import { DomSanitizer } from '@angular/platform-browser';
 import { DefaultSettings } from '@shared/constants';
-import { PotStatusModel, SettingsModel, SnackbarType } from '@shared/models';
+import { PotStatusModel, SettingsModel } from '@shared/models';
 import { HttpService, SnackbarService, StorageService, WsService } from '@shared/services';
 import { NotifierService } from 'angular-notifier';
 import { NEVER, of, throwError } from 'rxjs';
 
-import { useIconFactory } from '../../providers';
+import { provideCodeHighlight, useIconFactory } from '../../providers';
 import { AppSettings } from './app-settings';
 
 const savedSettings: SettingsModel = {
@@ -61,6 +61,7 @@ describe('AppSettings', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideCodeHighlight(),
         { provide: HttpService, useValue: http },
         { provide: NotifierService, useValue: { notify } },
         { provide: SnackbarService, useValue: { showWebhookDemo } },
@@ -406,14 +407,14 @@ describe('AppSettings', () => {
       expect(http['sendWebhook']).not.toHaveBeenCalled();
     });
 
-    it('sends a test and shows the payload example on success', () => {
+    it('sends a test on success; the payload examples live in the Webhook step now', () => {
       http['sendWebhook'].mockReturnValue(of({ ok: true }));
 
       component.sendWebhook();
 
       expect(http['sendWebhook']).toHaveBeenCalledWith('https://ha.local/webhook');
-      expect(notify).toHaveBeenCalledWith('success', 'Webhook sent successfully.', 'webhookOk');
-      expect(showWebhookDemo).toHaveBeenCalledWith(SnackbarType.DARK, null);
+      expect(notify).toHaveBeenCalledWith('success', 'Notify webhook sent successfully.', 'webhookOk');
+      expect(showWebhookDemo).not.toHaveBeenCalled();
     });
 
     it('reports a rejected webhook', () => {

@@ -48,7 +48,9 @@ describe('Downloads', () => {
     | 'cancelDownload'
     | 'deleteDownload'
     | 'clearFinishedDownloads'
-    | 'downloadFileUrl',
+    | 'downloadFileUrl'
+    | 'getTelegramChats'
+    | 'getTelegramStatus',
     ReturnType<typeof vi.fn>
   >;
   let notify: ReturnType<typeof vi.fn>;
@@ -81,6 +83,8 @@ describe('Downloads', () => {
       deleteDownload: vi.fn(() => of({ ok: true })),
       clearFinishedDownloads: vi.fn(() => of({ ok: true })),
       downloadFileUrl: vi.fn((id: number) => `/api/downloads/${id}/file`),
+      getTelegramChats: vi.fn(() => of([])),
+      getTelegramStatus: vi.fn(() => of(null)),
     };
 
     TestBed.configureTestingModule({

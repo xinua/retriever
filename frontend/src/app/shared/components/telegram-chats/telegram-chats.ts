@@ -1,6 +1,6 @@
 import { TitleCasePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, output, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -11,13 +11,22 @@ import { catchError, of, tap } from 'rxjs';
 import { TelegramChatModel, TelegramChatStatus, TelegramStatusModel } from '../../models/settings.model';
 import { ArrayPipe } from '../../pipes/array.pipe';
 import { HttpService } from '../../services/http.service';
+import { StorageService } from '../../services/storage.service';
 import { WsService } from '../../services/ws.service';
+import { DropArea } from '../drop-area/drop-area';
+import { DRAG_TOKEN } from '../../constants/drag-token';
+import { MatDialogConfig } from '@angular/material/dialog';
 
-/**
- * The live half of the Telegram settings: the bot's status, the chats it
- * knows about, and the actions that take effect at once rather than on Save -
- * approving a chat, toggling its notifications, sending a test.
- */
+const DIALOG_DATA: MatDialogConfig = {
+  data: {
+    title: 'Update avatar',
+    message: 'Upprove chat first. Custom avatar will be reset after approval.',
+    cancelText: ' ',
+    actionText: 'Okay',
+    role: 'dialog',
+  },
+};
+
 @Component({
   selector: 'rt-telegram-chats',
   imports: [
@@ -31,25 +40,31 @@ import { WsService } from '../../services/ws.service';
     MatTooltip,
     TitleCasePipe,
     ArrayPipe,
+    DropArea,
   ],
   templateUrl: './telegram-chats.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TelegramChats implements OnInit {
   private readonly _http = inject(HttpService);
+  private readonly _storage = inject(StorageService);
   private readonly _ws = inject(WsService);
   private readonly _notifier = inject(NotifierService);
   private readonly _destroyRef = inject(DestroyRef);
+  private readonly _drag = inject(DRAG_TOKEN);
 
   saved = output<void>();
 
   status = signal<TelegramStatusModel | null>(null);
-  chats = signal<TelegramChatModel[]>([]);
+  /** Shared with the download menus; HttpService keeps it in step with every request. */
+  chats = this._storage.telegramChats;
   isTesting = signal(false);
   isAdding = signal(false);
 
   newChatId = '';
   newChatName = '';
+  dialogData = DIALOG_DATA;
+  isDragOver = toSignal(this._drag, { initialValue: false });
 
   ngOnInit() {
     this._http
@@ -60,7 +75,7 @@ export class TelegramChats implements OnInit {
     this._http
       .getTelegramChats()
       .pipe(catchError(() => of([])))
-      .subscribe((chats) => this.chats.set(chats));
+      .subscribe();
 
     this._ws
       .telegramStatus$()
@@ -91,7 +106,6 @@ export class TelegramChats implements OnInit {
 
   remove(chat: TelegramChatModel) {
     this._http.deleteTelegramChat(chat.chatId).subscribe({
-      next: () => this.chats.update((chats) => chats.filter((c) => c.chatId !== chat.chatId)),
       error: () => this._notifier.notify('error', 'Could not remove the chat.'),
     });
   }
@@ -102,13 +116,20 @@ export class TelegramChats implements OnInit {
     if (!chatId) return;
 
     this._http.addTelegramChat(chatId, this.newChatName.trim() || null).subscribe({
-      next: (chat) => {
-        this.chats.update((chats) => [...chats.filter((c) => c.chatId !== chat.chatId), chat]);
+      next: () => {
         this.newChatId = '';
         this.newChatName = '';
         this.isAdding.set(false);
       },
       error: (e) => this._notifier.notify('error', e?.error?.error ?? 'Could not add the chat.'),
+    });
+  }
+
+  uploadAvatar(chat: TelegramChatModel, file: File) {
+    if (chat.status !== 'approved') return;
+
+    this._http.updateChatAvatar(chat.chatId, file).subscribe({
+      error: () => this._notifier.notify('error', 'Could not upload the avatar.'),
     });
   }
 
@@ -140,7 +161,6 @@ export class TelegramChats implements OnInit {
       .updateTelegramChat(chat.chatId, patch)
       .pipe(tap(() => this.saved.emit()))
       .subscribe({
-        next: (updated) => this.chats.update((chats) => chats.map((c) => (c.chatId === updated.chatId ? updated : c))),
         error: () => this._notifier.notify('error', 'Could not update the chat.'),
       });
   }

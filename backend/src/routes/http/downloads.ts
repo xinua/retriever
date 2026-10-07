@@ -8,8 +8,13 @@ import * as DownloadQueue from "../../services/download-queue.js";
 import { startManualDownload } from "../../services/manual-download.js";
 import { lookupDownloads, lookupKey } from "../../services/download-lookup.js";
 import * as Poster from "../../services/poster.js";
+import * as Notify from "../../services/notify.js";
 import * as MediaQuality from "../../services/media-quality.js";
 import * as ArtworkReplace from "../../services/artwork-replace.js";
+import * as TelegramBot from "../../services/telegram/bot.js";
+import * as TelegramChats from "../../services/telegram/chats.js";
+import * as TelegramSend from "../../services/telegram/send.js";
+import { formatBytes } from "../../services/telegram/formats.js";
 import {
   contentDisposition,
   contentTypeFor,
@@ -637,6 +642,125 @@ export async function downloadsRoutes(app: FastifyInstance) {
     return reply
       .header("content-length", file.size)
       .send(fs.createReadStream(file.path));
+  });
+
+  /** Posts a finished file to the global webhook, for HA to play. */
+  app.post("/api/downloads/:id/send-to-ha", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const rowId = Number(id);
+
+    if (!Number.isInteger(rowId)) {
+      return reply.code(400).send({ error: "id must be a number" });
+    }
+
+    const [row] = await db
+      .select()
+      .from(download)
+      .where(eq(download.id, rowId));
+
+    if (!row) return reply.code(404).send({ error: "Not found" });
+
+    const [appSettings] = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.id, 1));
+
+    if (!appSettings) {
+      return reply.code(500).send({ error: "Settings unavailable" });
+    }
+
+    if (!appSettings.webhookUrl) {
+      return reply.code(409).send({ error: "No webhook URL is set" });
+    }
+
+    const file = await resolveDownloadFile(row, appSettings);
+
+    if (!file.ok) {
+      return reply.code(file.status).send({ error: file.error });
+    }
+
+    try {
+      await Notify.sendDownloadToHA(row, appSettings);
+    } catch (e) {
+      return reply.code(502).send({ error: e instanceof Error ? e.message : "Webhook failed" });
+    }
+
+    return { ok: true };
+  });
+
+  /**
+   * Sends a finished file to one approved Telegram chat: as a video, audio or
+   * photo when Telegram can show it that way, as a document otherwise - see
+   * TelegramSend.kindFor. Answers once the request is checked; the upload can
+   * take a good while, so how it went comes back as a websocket notification.
+   */
+  app.post("/api/downloads/:id/send-to-telegram", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const rowId = Number(id);
+    const chatId = String((req.body as { chatId?: string | number } | null)?.chatId ?? "").trim();
+
+    if (!Number.isInteger(rowId)) {
+      return reply.code(400).send({ error: "id must be a number" });
+    }
+
+    if (!chatId) return reply.code(400).send({ error: "chatId is required" });
+
+    if (!TelegramBot.getApi()) {
+      return reply.code(409).send({ error: "Telegram is off or has no bot token" });
+    }
+
+    const chat = await TelegramChats.get(chatId);
+
+    if (chat?.status !== "approved") {
+      return reply.code(404).send({ error: "No approved Telegram chat with that ID" });
+    }
+
+    const [row] = await db
+      .select()
+      .from(download)
+      .where(eq(download.id, rowId));
+
+    if (!row) return reply.code(404).send({ error: "Not found" });
+
+    const [appSettings] = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.id, 1));
+
+    if (!appSettings) {
+      return reply.code(500).send({ error: "Settings unavailable" });
+    }
+
+    const file = await resolveDownloadFile(row, appSettings);
+
+    if (!file.ok) {
+      return reply.code(file.status).send({ error: file.error });
+    }
+
+    const limit = TelegramBot.uploadLimit();
+
+    if (file.size > limit) {
+      return reply.code(413).send({
+        error: `${formatBytes(file.size).replace("~", "")} is over the ${formatBytes(limit).replace("~", "")} Telegram upload limit`
+      });
+    }
+
+    const to = chat.name ?? chatId;
+    const what = row.title ?? file.filename;
+
+    // The row's own path, not the resolved one: a local Bot API server reads
+    // the file itself and shares the downloads mount, not our symlinks.
+    void TelegramSend.sendDownload(chatId, row, row.filePath!.trim(), file.size).then(
+      () => broadcast("notification", { type: "success", title: "Sent to Telegram", subtitle: to, message: what }),
+      (e) => {
+        const error = TelegramBot.describe(e);
+
+        console.warn(`telegram: sending download ${rowId} to ${chatId} failed:`, error);
+        broadcast("notification", { type: "error", title: "Telegram send failed", subtitle: to, message: `${what}: ${error}` });
+      }
+    );
+
+    return reply.code(202).send({ ok: true });
   });
 
   /**

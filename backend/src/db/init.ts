@@ -173,8 +173,18 @@ export function initSchema() {
       name TEXT,
       username TEXT,
       status TEXT NOT NULL DEFAULT 'pending',
+      avatarId TEXT,
       notify INTEGER NOT NULL DEFAULT 0,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  db.run(sql`
+    CREATE TABLE IF NOT EXISTS telegram_chat_avatar (
+      chatId TEXT PRIMARY KEY,
+      fileUniqueId TEXT NOT NULL,
+      data BLOB NOT NULL,
       updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
@@ -242,6 +252,9 @@ function runColumnMigrations() {
 
   // Off is how every subscription behaved before Telegram existed.
   ensureColumn("channel", "notifyTelegram", "INTEGER NOT NULL DEFAULT 0");
+
+  // Null until the next approval or refresh fetches the photo.
+  ensureColumn("telegram_chat", "avatarId", "TEXT");
 
   migrateChannelPollColumns();
 

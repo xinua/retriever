@@ -1,10 +1,12 @@
 .animate-zoom {
   &:hover img {
-    transform: scale(1.25);
+    transform: rotate(0.01deg) scale(1.25);
     transition-delay: 0s;
   }
 
   img {
     transition: transform 2.5s ease-out 1s;
+    will-change: transform;
+    transform: rotate(0.01deg);
   }
 }

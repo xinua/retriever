@@ -77,7 +77,11 @@ export async function newDownload(row: Download, media: MediaInfo | null): Promi
     return;
   }
 
-  const kind = Send.kindFor(filePath, bytes, media?.codec ?? row.mediaCodec);
+  const kind = Send.kindFor(filePath, bytes, {
+    codec: media?.codec ?? row.mediaCodec,
+    width: media?.width,
+    height: media?.height
+  });
   const thumbPath = await Send.makeThumbnail(row);
   let fileId: string | null = null;
 

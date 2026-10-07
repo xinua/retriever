@@ -10,7 +10,7 @@ import { DownloadInfoModel, DownloadModel } from '../models/download.model';
 import { FilterModel, Nullable, PaginatorModel } from '../models/common.model';
 import { ManualDownloadModel } from '../models/main-form.model';
 import { NextCheckModel, SubscriptionModel } from '../models/subscription.model';
-import { SettingsModel } from '../models/settings.model';
+import { SettingsModel, TelegramChatModel, TelegramStatusModel } from '../models/settings.model';
 import { UiConfig } from '../models/ui-config.model';
 
 @Injectable({
@@ -23,21 +23,16 @@ export class StorageService {
   showForm = signal<boolean>(false);
   nextCheck = signal<Nullable<NextCheckModel>>(null);
   downloads = signal<DownloadModel[]>([]);
-  /** Whole-table counts from /api/downloads/info — `downloads` is only the current page. */
   downloadInfo = signal<Nullable<DownloadInfoModel>>(null);
   uiConfig = signal<UiConfig>(DefaultUiConfig);
   filters = signal<FilterModel>(DefaultFilters);
   paginator = signal<PaginatorModel>(DefaultPaginator);
   manualDownloadForm = signal<ManualDownloadModel>(DefaultManualForm);
+  telegramChats = signal<TelegramChatModel[]>([]);
+  telegramStatus = signal<TelegramStatusModel | null>(null);
 
-  /** Folders that exist on disk under the downloads root — see /api/folders. */
   folders = signal<string[]>([]);
 
-  /**
-   * What the folder autocompletes offer. Disk is the source of truth, but a
-   * subscription's tag is a folder the user has already committed to even
-   * when nothing has been downloaded into it yet, so both are offered.
-   */
   folderOptions = computed<string[]>(() =>
     [...new Set([...this.folders(), ...this.subscriptions().map(({ tag }) => tag)])]
       .filter(Boolean)
@@ -56,13 +51,6 @@ export class StorageService {
     });
   }
 
-  /**
-   * Merges download rows in by id. The same row legitimately arrives more than
-   * once — the response to a manual download and the websocket broadcast that
-   * announces it race each other — so adding blindly would duplicate the card.
-   * Existing rows keep their position; genuinely new ones go on top, newest
-   * first, matching the order the list is loaded in.
-   */
   upsertDownloads(incoming: DownloadModel[]): void {
     if (!incoming?.length) return;
 

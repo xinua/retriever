@@ -37,6 +37,21 @@
   }
 }
 
+@keyframes shake {
+  0% {
+    transform: translateX(0);
+  }
+  33% {
+    transform: translateX(2px) rotate(30deg);
+  }
+  66% {
+    transform: translateX(-2px) rotate(30deg);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
 .fadeIn,
 .animate-fadeIn {
   animation: fadeIn 0.3s linear;
@@ -49,4 +64,8 @@
 
 .animate-heartbeat {
   animation: heartbeat 1s ease-in-out infinite;
+}
+
+.animate-shake {
+  animation: shake 0.1s ease-in-out infinite;
 }

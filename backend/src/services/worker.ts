@@ -5,7 +5,6 @@ import { eq, sql } from "drizzle-orm";
 import { getFeedVideos, type RssVideo } from "./rss.js";
 import { isShort } from "./shorts.js";
 import * as DownloadQueue from "./download-queue.js";
-import { notifyNewVideo } from "./notify.js";
 import { withLock } from "./lock.js";
 import { ImagesService } from "./images.service.js";
 import { avatarName, decorateChannel } from "./avatar.js";
@@ -277,8 +276,6 @@ export async function processChannel(
   );
 
   await DownloadQueue.enqueue({ channel: ch, settings: appSettings, video: latest });
-
-  await notifyNewVideo(ch, latest, appSettings, nowIso);
 
   const nextCheckAt = scheduled
     ? calculateNextCheck({ ...ch, lastCaptureAt: nowIso }, now, appSettings.timeZone)

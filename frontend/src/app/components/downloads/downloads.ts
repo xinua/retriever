@@ -32,6 +32,8 @@ import {
   DownloadStatus,
   FilterModel,
   Platform,
+  TelegramChatModel,
+  TelegramStatusModel,
 } from '@shared/models';
 import { AnimationService, CustomPaginatorIntl, HttpService, StorageService } from '@shared/services';
 import { NotifierService } from 'angular-notifier';
@@ -161,10 +163,10 @@ export class Downloads implements OnInit {
   }
 
   ngOnInit() {
+    this._getTelegramChats().subscribe();
+    this._getTelegramStatus().subscribe();
     this._fetchDownloads().subscribe();
-
     this._trackSearch().subscribe();
-
     this._trackRefill().subscribe((result) => this._syncPage(result));
 
     this._wsService
@@ -438,5 +440,13 @@ export class Downloads implements OnInit {
       {} as Record<DownloadStatus, number>,
     );
     return counts;
+  }
+
+  private _getTelegramChats(): Observable<TelegramChatModel[]> {
+    return this._httpService.getTelegramChats().pipe();
+  }
+
+  private _getTelegramStatus(): Observable<TelegramStatusModel> {
+    return this._httpService.getTelegramStatus().pipe();
   }
 }

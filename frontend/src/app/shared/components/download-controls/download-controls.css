@@ -1,11 +1,15 @@
-::ng-deep .mat-mdc-menu-content {
+.mat-mdc-menu-content {
   padding-top: 0 !important;
 }
 
-::ng-deep .file-name .mat-mdc-form-field-subscript-wrapper.mat-mdc-form-field-bottom-align {
+.file-name .mat-mdc-form-field-subscript-wrapper.mat-mdc-form-field-bottom-align {
   display: none !important;
 }
 
 .file-name-input::placeholder {
   opacity: 0.5;
+}
+
+.chats-menu .mat-mdc-menu-content {
+  padding-bottom: 0 !important;
 }

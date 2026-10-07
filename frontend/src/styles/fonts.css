@@ -1,0 +1,35 @@
+@font-face {
+  font-family: 'drop-shade';
+  src: url('../../public/assets/fonts/drop-shade-shadow.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'calculator';
+  src: url('../../public/assets/fonts/calculator.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'rubik';
+  src: url('../../public/assets/fonts/rubik.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'jetbrains';
+  src: url('../../public/assets/fonts/JetBrainsMono.ttf') format('truetype');
+}
+
+.font-drop-shade {
+  font-family: 'drop-shade', sans-serif;
+}
+
+.font-calculator {
+  font-family: 'calculator', sans-serif;
+}
+
+.font-rubik {
+  font-family: 'rubik', sans-serif;
+}
+
+.font-jetbrains {
+  font-family: 'jetbrains', sans-serif;
+}

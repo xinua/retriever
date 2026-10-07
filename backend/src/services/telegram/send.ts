@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -7,6 +8,7 @@ import type { Message } from "grammy/types";
 
 import * as Poster from "../poster.js";
 import * as Jpeg from "../jpeg.js";
+import * as MediaQuality from "../media-quality.js";
 import * as Bot from "./bot.js";
 
 import type { Download } from "../../db/types.js";
@@ -28,14 +30,32 @@ const AUDIO_CONTAINERS = new Set(["mp3", "m4a"]);
 const PHOTO_CONTAINERS = new Set(["jpg", "jpeg", "png"]);
 
 /**
- * How a file is best sent, by its container and the video codec the probe
- * found. A file that would only show as a broken player - an mkv, an AV1
- * stream, a flac - goes as a plain document instead.
+ * The tallest picture sent as a video, measured on the short side so a
+ * vertical 1080x1920 short still counts. Larger goes as a document, which
+ * keeps the quality the player would not.
  */
-export function kindFor(filePath: string, bytes: number, codec: string | null): SendKind {
-  const ext = path.extname(filePath).slice(1).toLowerCase();
+const VIDEO_MAX_SIDE = 1080;
 
-  if (VIDEO_CONTAINERS.has(ext) && (!codec || VIDEO_CODECS.has(codec))) return "video";
+type Probed = { codec: string | null; width?: number | null; height?: number | null };
+
+/**
+ * How a file is best sent, by its container and what the probe found. A file
+ * that would only show as a broken player - an mkv, an AV1 stream, a flac,
+ * a 4K picture - goes as a plain document instead. Unknown codec or size
+ * gives the file the benefit of the doubt.
+ */
+export function kindFor(filePath: string, bytes: number, media: Probed): SendKind {
+  const ext = path.extname(filePath).slice(1).toLowerCase();
+  const side = media.width && media.height ? Math.min(media.width, media.height) : null;
+
+  if (
+    VIDEO_CONTAINERS.has(ext) &&
+    (!media.codec || VIDEO_CODECS.has(media.codec)) &&
+    (side == null || side <= VIDEO_MAX_SIDE)
+  ) {
+    return "video";
+  }
+
   if (AUDIO_CONTAINERS.has(ext)) return "audio";
   if (PHOTO_CONTAINERS.has(ext) && bytes <= PHOTO_LIMIT) return "photo";
 
@@ -135,9 +155,45 @@ export async function makeThumbnail(row: Download): Promise<string | null> {
 
   if (!source) return null;
 
-  const target = path.join(os.tmpdir(), `retriever-tg-thumb-${row.id}.jpg`);
+  // Unique per call: the same row can be on its way to two chats at once.
+  const target = path.join(os.tmpdir(), `retriever-tg-thumb-${row.id}-${randomUUID().slice(0, 8)}.jpg`);
 
   return (await Jpeg.convert(source, target, { kind: "box", max: 320 })) ? target : null;
+}
+
+/**
+ * Sends a finished download to one chat, for the "Send to TG" button. The
+ * caller has checked the file is there and under the upload limit.
+ */
+export async function sendDownload(chatId: string, row: Download, filePath: string, bytes: number): Promise<SendKind> {
+  const media = await MediaQuality.probe(filePath, row.type);
+  const kind = kindFor(filePath, bytes, {
+    codec: media.codec ?? row.mediaCodec,
+    width: media.width,
+    height: media.height
+  });
+
+  const title = escape((row.title ?? path.basename(filePath)).slice(0, 700));
+  const channel = row.channelName ? `<b>${escape(row.channelName.slice(0, 200))}</b>\n` : "";
+
+  const thumbPath = kind === "photo" ? null : await makeThumbnail(row);
+
+  try {
+    await sendFile(chatId, { path: filePath }, {
+      kind,
+      caption: `${channel}<a href="${escape(row.url)}">${title}</a>`,
+      title: row.title,
+      performer: row.channelName,
+      width: media.width,
+      height: media.height,
+      duration: media.duration ?? row.duration,
+      thumbPath
+    });
+  } finally {
+    if (thumbPath) await fsp.rm(thumbPath, { force: true }).catch(() => {});
+  }
+
+  return kind;
 }
 
 export function escape(text: string): string {

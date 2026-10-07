@@ -20,6 +20,41 @@
     </button>
   }
 
+  @if (webhookUrl() && download().fileExists) {
+    <button mat-menu-item (click)="sendToHomeAssistant(download())">
+      <mat-icon class="text-white!" svgIcon="homeassistant" />
+      <span>Send to HA</span>
+    </button>
+  }
+
+  @if (telegramStatus()?.running && telegramChats().length && download().fileExists) {
+    @if (telegramChats().length === 1) {
+      <button
+        mat-menu-item
+        (click)="sendToTelegram(download())"
+        [disabled]="!isBelowTelegramLimit()"
+        matTooltip="File is too large for Telegram"
+        matTooltipPosition="left"
+        [matTooltipDisabled]="isBelowTelegramLimit()"
+      >
+        <mat-icon class="text-white!" svgIcon="telegram" />
+        <span>Send to TG</span>
+      </button>
+    } @else {
+      <button
+        mat-menu-item
+        [matMenuTriggerFor]="tgMenu"
+        [disabled]="!isBelowTelegramLimit()"
+        matTooltip="File is too large for Telegram"
+        matTooltipPosition="left"
+        [matTooltipDisabled]="isBelowTelegramLimit()"
+      >
+        <mat-icon class="text-white!" svgIcon="telegram" />
+        <span>Send to TG</span>
+      </button>
+    }
+  }
+
   <button mat-menu-item (click)="retry.emit()">
     <mat-icon class="text-white!">refresh</mat-icon>
     <span>Download again</span>
@@ -60,4 +95,19 @@
       <span>Save</span>
     </button>
   </div>
+</mat-menu>
+
+<mat-menu #tgMenu class="pt-0! chats-menu">
+  @for (chat of telegramChats(); track chat.chatId) {
+    <button mat-menu-item (click)="sendToTelegram(download(), chat.chatId)" class="hover:[&_img]:scale-250">
+      <div class="flex items-center gap-4">
+        @if (chat.avatar) {
+          <img [src]="chat.avatar" class="w-8 h-8 rounded-full transition-transform duration-300" />
+        } @else {
+          <mat-icon class="text-white!">person_outline</mat-icon>
+        }
+        <span class="relative mix-blend-difference">{{ chat.name ?? chat.chatId }}</span>
+      </div>
+    </button>
+  }
 </mat-menu>

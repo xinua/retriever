@@ -17,3 +17,4 @@ export * from './release-notes-dialog/release-notes-dialog';
 export * from './filter-downloads/filter-downloads';
 export * from './decision-dialog/decision-dialog';
 export * from './app-settings/app-settings';
+export * from './code/code';

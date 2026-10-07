@@ -14,7 +14,7 @@
         <span class="text-red-400">{{ st!.error ?? (st!.configured ? 'not running' : 'no token saved') }}</span>
       }
       @if (st.running) {
-        <span class="text-gray-500">— {{ st!.local ? 'local server' : 'cloud' }}</span>
+        <span class="text-gray-500"> — {{ st!.local ? 'local server' : 'cloud' }}</span>
         <span class="text-gray-500 hidden md:inline">, {{ st!.limitMb }} MB limit</span>
       }
     </span>
@@ -113,11 +113,37 @@
         {{ chat.status | titlecase }}
       </label>
 
+      <div class="relative transition-scale duration-300 -order-1 md:order-[unset]" [class.scale-300]="isDragOver()">
+        @if (chat.avatar) {
+          <img
+            [src]="chat.avatar"
+            class="w-6 h-6 rounded-full transition-scale duration-300"
+            [class.hover:scale-350]="!isDragOver()"
+            [class.hover:ring-1]="!isDragOver()"
+          />
+        } @else {
+          <div
+            class="w-6 h-6 rounded-full bg-gray-600"
+            matTooltip="Avatar unavailable (private account). Drop an image here. Approve first."
+          ></div>
+        }
+
+        <rt-drop-area
+          (onFileDrop)="uploadAvatar(chat, $event.file)"
+          [askForDecision]="chat.status !== 'approved'"
+          [dialogData]="dialogData"
+          customClass="rounded-full border-1!"
+        >
+          <span>{{ (chat.name ?? chat.chatId)[0] }}</span>
+        </rt-drop-area>
+      </div>
+
       <input
         [id]="'chat-name-' + chat.chatId"
-        class="flex-1 max-w-full order-2 md:order-[unset] bg-transparent font-rubik leading-none mb-3 md:mb-0 text-xl md:text-sm text-gray-200 outline-none border-b border-transparent focus:border-gray-600"
+        class="flex-1 max-w-full order-2 md:order-[unset] bg-transparent font-jetbrains leading-none mb-3 md:mb-0 text-xl md:text-sm text-gray-200 outline-none border-b border-transparent focus:border-gray-600"
         [value]="chat.name ?? ''"
         [placeholder]="chat.chatId"
+        [disabled]="isDragOver()"
         [matTooltip]="'ID ' + chat.chatId + (chat.username ? ' · @' + chat.username : '')"
         (blur)="rename(chat, $any($event.target).value)"
         (keydown.enter)="$event.preventDefault(); $any($event.target).blur()"

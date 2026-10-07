@@ -11,3 +11,33 @@
 :host::ng-deep .mat-step-icon span {
   color: black !important;
 }
+
+:host::ng-deep .description-select .mat-mdc-text-field-wrapper {
+  background-color: transparent;
+}
+
+:host ::ng-deep .description-select .mdc-line-ripple::before {
+  display: none !important;
+}
+
+:host ::ng-deep .description-select .mat-mdc-select-arrow {
+  /* color: var(--rt-accent) !important; */
+  color: white !important;
+}
+
+:host ::ng-deep .description-select .mat-mdc-form-field-focus-overlay {
+  display: none !important;
+}
+
+:host ::ng-deep .description-select.mat-mdc-form-field.mat-form-field-animations-enabled .mdc-line-ripple::after {
+  display: none !important;
+}
+
+:host ::ng-deep .notify-failed .mdc-form-field {
+  display: flex;
+  justify-content: space-between;
+}
+
+:host ::ng-deep .notify-failed .mdc-form-field--align-end > label {
+  margin-left: 0;
+}

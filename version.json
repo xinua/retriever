@@ -1,7 +1,29 @@
 {
-  "version": "1.2.0",
-  "releaseDate": "2026-10-05",
+  "version": "1.2.1",
+  "releaseDate": "2026-10-07",
   "changelog": [
+    {
+      "version": "1.2.1",
+      "releaseDate": "2026-10-07",
+      "changelog": {
+        "bugfixes": [
+          "Fix fake \"Update available\" notification in the Release notes popup",
+          "Remove mistakenly added required URL field"
+        ],
+        "features": [
+          "Add \"Send to HA\" button: sends a webhook with the file data payload, so downloaded media can be played on a Home Assistant speaker/TV",
+          "Add \"Send to TG\" button to share media with any approved Telegram chat",
+          "Add Telegram avatars for approved chats, with the ability to update the image"
+        ],
+        "improvements": [
+          "Update Home Assistant section in App settings: webhook/automation/card code examples",
+          "Bring back the \"Test webhook\" button"
+        ],
+        "other": [
+          "Other UI fixes and improvements"
+        ]
+      }
+    },
     {
       "version": "1.2.0",
       "releaseDate": "2026-10-05",

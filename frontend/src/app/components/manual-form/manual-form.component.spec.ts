@@ -149,10 +149,11 @@ describe('ManualFormComponent', () => {
   });
 
   describe('url validation', () => {
-    it('requires a url', async () => {
+    it('does not require a url', async () => {
       await render();
 
-      expect(component.form.controls.url.hasError('required')).toBe(true);
+      expect(component.form.controls.url.hasError('required')).toBe(false);
+      expect(component.form.valid).toBe(true);
     });
 
     it('rejects a url without a scheme once edited', async () => {
@@ -415,7 +416,7 @@ describe('ManualFormComponent', () => {
 
       expect(http['createDownload']).not.toHaveBeenCalled();
       expect(component.form.controls.url.enabled).toBe(true);
-      expect(text()).toContain('A video, playlist or channel URL is required');
+      expect(text()).not.toContain('A video, playlist or channel URL is required');
     });
 
     it('starts from the download icon', async () => {
