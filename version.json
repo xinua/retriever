@@ -21,6 +21,10 @@
         ],
         "other": [
           "Other UI fixes and improvements"
+        ],
+        "images": [
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.2.1/1.webp",
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.2.1/2.webp"
         ]
       }
     },
