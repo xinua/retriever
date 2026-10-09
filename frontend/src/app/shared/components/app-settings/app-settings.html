@@ -1,7 +1,7 @@
 @let pot = potStatus();
 @let ytdlpControl = form.get('downloadsDir');
 
-<mat-card class="p-4 shadow-xl!">
+<mat-card class="p-4 shadow-xl! settings-card">
   <mat-card-header>
     <button mat-icon-button type="button" class="absolute! top-2 right-2" (click)="closeDialog.emit()">
       <mat-icon class="text-white!" fontIcon="close" />
@@ -28,11 +28,13 @@
           } @else if (index === 1) {
             <span class="select-none text-xs!">>_</span>
           } @else if (index === 2) {
-            <mat-icon fontIcon="token" />
-          } @else if (index === 3) {
             <mat-icon svgIcon="telegram" class="-ml-0.5" />
-          } @else if (index === 4) {
+          } @else if (index === 3) {
             <mat-icon svgIcon="homeassistant" />
+          } @else if (index === 4) {
+            <mat-icon fontIcon="extension" />
+          } @else if (index === 5) {
+            <mat-icon fontIcon="token" />
           }
         </ng-template>
 
@@ -43,11 +45,13 @@
           } @else if (index === 1) {
             <span class="select-none text-xs!">>_</span>
           } @else if (index === 2) {
-            <mat-icon fontIcon="token" />
-          } @else if (index === 3) {
             <mat-icon svgIcon="telegram" class="-ml-0.5" />
-          } @else if (index === 4) {
+          } @else if (index === 3) {
             <mat-icon svgIcon="homeassistant" />
+          } @else if (index === 4) {
+            <mat-icon fontIcon="extension" />
+          } @else if (index === 5) {
+            <mat-icon fontIcon="token" />
           }
         </ng-template>
 
@@ -58,11 +62,13 @@
           } @else if (index === 1) {
             <span class="select-none text-xs!">>_</span>
           } @else if (index === 2) {
-            <mat-icon fontIcon="token" />
-          } @else if (index === 3) {
             <mat-icon svgIcon="telegram" class="-ml-0.5" />
-          } @else if (index === 4) {
+          } @else if (index === 3) {
             <mat-icon svgIcon="homeassistant" />
+          } @else if (index === 4) {
+            <mat-icon fontIcon="extension" />
+          } @else if (index === 5) {
+            <mat-icon fontIcon="token" />
           }
         </ng-template>
 
@@ -235,29 +241,6 @@
           </div>
         </mat-step>
 
-        <!-- POT Provider step -->
-        <mat-step state="edit">
-          <ng-template matStepLabel>POT Provider</ng-template>
-
-          @if (pot?.configured) {
-            <div class="rounded-xl border border-gray-800 p-4">
-              <div class="flex items-center gap-2 text-sm text-gray-400">
-                <mat-icon class="text-base!" [class]="pot?.ok ? 'text-green-500!' : 'text-red-400!'">
-                  {{ pot?.ok ? 'verified_user' : 'gpp_bad' }}
-                </mat-icon>
-
-                <span
-                  >POT provider:
-                  <span [class]="pot!.ok ? 'text-gray-200' : 'text-red-400'">
-                    {{ pot!.ok ? 'connected' + (pot!.version ? ' (' + pot!.version + ')' : '') : pot!.error }}
-                  </span>
-                  <span class="text-gray-500">— {{ pot!.baseUrl }}</span>
-                </span>
-              </div>
-            </div>
-          }
-        </mat-step>
-
         <!-- Telegram step -->
         <mat-step state="edit">
           <ng-template matStepLabel
@@ -311,6 +294,17 @@
                     />
                     <mat-hint>Leave empty to use api.telegram.org</mat-hint>
                   </mat-form-field>
+                </div>
+
+                <div class="flex w-full justify-end mb-4 mt-4 md:mt-0 keep-files">
+                  <mat-slide-toggle
+                    formControlName="telegramNoDescription"
+                    labelPosition="before"
+                    matTooltip="Don't send the video name in the file's description."
+                    matTooltipPosition="above"
+                  >
+                    <span class="mx-2 text-sm">No description</span>
+                  </mat-slide-toggle>
                 </div>
 
                 <div class="flex w-full justify-end mb-4 mt-4 md:mt-0 keep-files">
@@ -372,43 +366,47 @@
               </h3>
 
               <mat-accordion>
-                <mat-expansion-panel>
+                <mat-expansion-panel #webhookExpansionPanel>
                   <mat-expansion-panel-header>
                     <mat-panel-title>Webhook payloads</mat-panel-title>
                     <mat-panel-description class="opacity-50!">
-                      <mat-form-field
-                        (click)="$event.stopPropagation()"
-                        subscriptSizing="dynamic"
-                        appearance="fill"
-                        class="description-select"
-                      >
-                        <mat-select [(value)]="selectedWebhook">
-                          @for (webhook of code.webhooks; track trackByValue(webhook)) {
-                            <mat-option [value]="webhook">{{ webhook.name }}</mat-option>
-                          }
-                        </mat-select>
-                      </mat-form-field>
+                      @if (webhookExpansionPanel?.expanded) {
+                        <mat-form-field
+                          (click)="$event.stopPropagation()"
+                          subscriptSizing="dynamic"
+                          appearance="fill"
+                          class="description-select"
+                        >
+                          <mat-select [(value)]="selectedWebhook" [disabled]="!webhookExpansionPanel.expanded">
+                            @for (webhook of code.webhooks; track trackByValue(webhook)) {
+                              <mat-option [value]="webhook">{{ webhook.name }}</mat-option>
+                            }
+                          </mat-select>
+                        </mat-form-field>
+                      }
                     </mat-panel-description>
                   </mat-expansion-panel-header>
                   <rt-code [code]="selectedWebhook().code" language="js" />
                 </mat-expansion-panel>
 
-                <mat-expansion-panel>
+                <mat-expansion-panel #automationExpansionPanel>
                   <mat-expansion-panel-header>
                     <mat-panel-title>Automation examples</mat-panel-title>
                     <mat-panel-description class="opacity-50!">
-                      <mat-form-field
-                        (click)="$event.stopPropagation()"
-                        subscriptSizing="dynamic"
-                        appearance="fill"
-                        class="description-select"
-                      >
-                        <mat-select [(value)]="selectedAutomation">
-                          @for (automation of code.automations; track trackByValue(automation)) {
-                            <mat-option [value]="automation">{{ automation.name }}</mat-option>
-                          }
-                        </mat-select>
-                      </mat-form-field>
+                      @if (automationExpansionPanel?.expanded) {
+                        <mat-form-field
+                          (click)="$event.stopPropagation()"
+                          subscriptSizing="dynamic"
+                          appearance="fill"
+                          class="description-select"
+                        >
+                          <mat-select [(value)]="selectedAutomation">
+                            @for (automation of code.automations; track trackByValue(automation)) {
+                              <mat-option [value]="automation">{{ automation.name }}</mat-option>
+                            }
+                          </mat-select>
+                        </mat-form-field>
+                      }
                     </mat-panel-description>
                   </mat-expansion-panel-header>
 
@@ -447,6 +445,125 @@
 
             <ng-container *ngTemplateOutlet="saveButton"></ng-container>
           </div>
+        </mat-step>
+
+        <!-- Extension step -->
+        <mat-step state="edit">
+          @let isChrome = browser() === browserType.Chrome;
+          @let isFirefox = browser() === browserType.Firefox;
+          @let isExtConnected = !!extensionVersion();
+          @let isExtUpToDate = latestExtensionVersion() && latestExtensionVersion() === extensionVersion();
+          @let isExtUpdateAvailable = latestExtensionVersion() && latestExtensionVersion() !== extensionVersion();
+          <ng-template matStepLabel>Browser extension</ng-template>
+
+          <div class="rounded-xl border border-gray-800 p-4">
+            <div class="flex items-center gap-2 text-sm text-gray-400">
+              <mat-icon class="text-base!" [class]="isExtConnected ? 'text-green-600!' : 'text-red-400!'">
+                {{ isExtConnected ? 'verified_user' : 'gpp_bad' }}
+              </mat-icon>
+
+              <span
+                >Extension:
+                <span [class]="isExtConnected ? 'text-green-600' : 'text-red-400'">
+                  {{ isExtConnected ? 'connected' : 'not installed' }}
+                </span>
+                @if (isExtConnected) {
+                  <span class="text-gray-500">— v{{ extensionVersion() }}</span>
+                }
+                @if (isExtUpToDate) {
+                  <span class="text-green-500"> (up to date)</span>
+                }
+              </span>
+            </div>
+
+            @if (isExtUpdateAvailable) {
+              <div class="bg-(--rt-accent)/20 p-4 rounded-md mt-4">
+                <p>Update available!</p>
+                <p>Latest version: v{{ latestExtensionVersion() }}</p>
+              </div>
+            }
+
+            @if (isChrome && !isExtConnected) {
+              <article class="flex flex-col gap-2 mt-4 bg-(--rt-accent)/20 p-4 rounded-md">
+                <h3 class="text-md font-bold">Chrome extension installation</h3>
+                <p class="text-gray-400">
+                  Currently, the Chrome extension can be installed only from the source code.
+                  <br />
+                  To install the extension, please press the button below and follow the instructions:
+                </p>
+                <ol class="list-decimal list-inside">
+                  <li>Download the source code from the button below</li>
+                  <li>Extract the zip file</li>
+                  <li>Open the Chrome browser</li>
+                  <li>Open the extensions page — <span class="italic">chrome://extensions</span></li>
+                  <li>Enable developer mode</li>
+                  <li>Click on the "Load unpacked" button</li>
+                  <li>Select the extracted folder</li>
+                  <li>Pin the extension to the toolbar</li>
+                </ol>
+
+                <p>
+                  If extension is already installed, please open the extension's options page paste this url:
+                  <code class="bg-gray-800 px-1 cursor-pointer" (click)="copyToClipboard(appUrl)">{{ appUrl }}</code>
+                  and give permission to access the Retriever app.
+                </p>
+              </article>
+            }
+
+            @if (!isExtConnected || isExtUpdateAvailable) {
+              @let label =
+                isExtUpdateAvailable
+                  ? 'Donwload latest version'
+                  : isFirefox
+                    ? 'Download extension'
+                    : 'Download extension';
+              <div class="flex flex-col gap-2 mt-4">
+                <a
+                  mat-flat-button
+                  class="bg-blue-500! hover:bg-blue-600!"
+                  [href]="downloadExtension()"
+                  [download]="isChrome"
+                  [target]="isChrome ? '_self' : '_blank'"
+                >
+                  {{ label }}
+                  <mat-icon class="text-base" fontIcon="download" />
+                </a>
+              </div>
+            } @else if (isChrome && !latestExtensionVersion()) {
+              <div class="flex flex-col gap-2 mt-4">
+                <button
+                  #checkUpdatesButton
+                  matButton="outlined"
+                  (click)="checkExtensionUpdates(); checkUpdatesButton.disabled = true"
+                >
+                  Check updates
+                </button>
+              </div>
+            }
+          </div>
+        </mat-step>
+
+        <!-- POT Provider step -->
+        <mat-step state="edit">
+          <ng-template matStepLabel>POT Provider</ng-template>
+
+          @if (pot?.configured) {
+            <div class="rounded-xl border border-gray-800 p-4">
+              <div class="flex items-center gap-2 text-sm text-gray-400">
+                <mat-icon class="text-base!" [class]="pot?.ok ? 'text-green-500!' : 'text-red-400!'">
+                  {{ pot?.ok ? 'verified_user' : 'gpp_bad' }}
+                </mat-icon>
+
+                <span
+                  >POT provider:
+                  <span [class]="pot!.ok ? 'text-gray-200' : 'text-red-400'">
+                    {{ pot!.ok ? 'connected' + (pot!.version ? ' (' + pot!.version + ')' : '') : pot!.error }}
+                  </span>
+                  <span class="text-gray-500">— {{ pot!.baseUrl }}</span>
+                </span>
+              </div>
+            </div>
+          }
         </mat-step>
       </mat-stepper>
     </form>

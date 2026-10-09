@@ -17,6 +17,7 @@ export interface SettingsModel {
   telegramApiUrl?: Nullable<string>;
   /** Keep a file the bot sent in the downloads folder instead of deleting it. */
   telegramKeepFiles?: boolean;
+  telegramNoDescription?: boolean;
   notifyDownloadFailed?: boolean;
   updatedAt?: Date;
   createdAt?: Date;
@@ -33,6 +34,7 @@ export interface SettingsFormModel {
   telegramBotToken: FormControl<Nullable<string>>;
   telegramApiUrl: FormControl<Nullable<string>>;
   telegramKeepFiles: FormControl<boolean>;
+  telegramNoDescription: FormControl<boolean>;
   notifyDownloadFailed: FormControl<boolean>;
 }
 

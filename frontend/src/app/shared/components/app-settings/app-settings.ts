@@ -1,5 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { Component, computed, inject, output, signal } from '@angular/core';
+import { Component, computed, inject, output, signal, ViewEncapsulation } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
   AbstractControl,
@@ -11,7 +11,7 @@ import {
   Validators,
 } from '@angular/forms';
 import { MatAutocomplete, MatAutocompleteTrigger, MatOption } from '@angular/material/autocomplete';
-import { MatButton, MatIconButton } from '@angular/material/button';
+import { MatButton, MatButtonModule } from '@angular/material/button';
 import { MatCard, MatCardContent, MatCardHeader, MatCardSubtitle, MatCardTitle } from '@angular/material/card';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatIcon } from '@angular/material/icon';
@@ -35,6 +35,7 @@ import { browserTimeZone, supportedTimeZones } from '../../helpers/common.helper
 import { createDragObservable } from '../../helpers/factory.helpers';
 import { formatNotifyAutomation, formatPlayDownloadAutomation } from '../../helpers/settings.helpers';
 import { PotStatusModel, SettingsFormModel, SettingsModel } from '../../models/settings.model';
+import { ExtensionService } from '../../services/extension.service';
 import { HttpService } from '../../services/http.service';
 import { StorageService } from '../../services/storage.service';
 import { RtValidators } from '../../validators/rt.validators';
@@ -52,6 +53,18 @@ interface CodeExamples {
   automations: CodeExample[];
   widget: CodeExample;
 }
+
+enum Browser {
+  Firefox = 'Firefox',
+  Chrome = 'Chrome',
+  Other = 'Other',
+}
+
+const EXTENSION_URLS: Record<Browser, string> = {
+  [Browser.Chrome]: 'https://github.com/xinua/rt-ext/releases/latest/download/chrome.zip',
+  [Browser.Firefox]: 'https://github.com/xinua/rt-ext/releases/latest/download/firefox.zip',
+  [Browser.Other]: 'https://github.com/xinua/rt-ext',
+};
 
 const codeExamples: CodeExamples = {
   webhooks: [
@@ -113,7 +126,7 @@ const codeExamples: CodeExamples = {
     MatSlideToggle,
     TelegramChats,
     DisableStepDirective,
-    MatIconButton,
+    MatButtonModule,
     NgTemplateOutlet,
     MatExpansionModule,
     Code,
@@ -127,6 +140,7 @@ const codeExamples: CodeExamples = {
   ],
   templateUrl: './app-settings.html',
   styleUrl: './app-settings.css',
+  encapsulation: ViewEncapsulation.None,
 })
 export class AppSettings {
   private readonly _fb = new FormBuilder();
@@ -146,6 +160,7 @@ export class AppSettings {
   readonly cookiesFileName = computed(() => this.cookiesPath()?.split(/[\\/]/).pop() ?? '');
 
   code = codeExamples;
+  appUrl = window.location.origin;
   selectedWebhook = signal<CodeExample>(codeExamples.webhooks[0]);
   selectedAutomation = signal<CodeExample>(codeExamples.automations[0]);
 
@@ -157,6 +172,8 @@ export class AppSettings {
   potStatus = signal<PotStatusModel | null>(null);
   tgIsLocal = computed<boolean>(() => !!this._storage.telegramStatus()?.local);
 
+  readonly browser = signal<Browser>(this._getBrowser());
+  readonly browserType = Browser;
   readonly browserTimeZone = browserTimeZone();
   private readonly _timeZones = supportedTimeZones();
   private readonly _knownTimeZones = new Set(this._timeZones);
@@ -177,6 +194,7 @@ export class AppSettings {
     telegramBotToken: this._fb.control<string | null>(null),
     telegramApiUrl: this._fb.control<string | null>(null, { validators: [RtValidators.url] }),
     telegramKeepFiles: this._fb.control(false, { nonNullable: true }),
+    telegramNoDescription: this._fb.control(false, { nonNullable: true }),
     notifyDownloadFailed: this._fb.control(false, { nonNullable: true }),
   });
 
@@ -195,10 +213,12 @@ export class AppSettings {
   });
 
   steps = computed(() => [
-    { index: 2, enabled: this.potStatus()?.configured },
-    { index: 3, enabled: this.isTelegramEnabled() },
+    { index: 2, enabled: this.isTelegramEnabled() },
+    { index: 5, enabled: this.potStatus()?.configured },
   ]);
   isUpdated = signal(false);
+  extensionVersion = inject(ExtensionService).version;
+  latestExtensionVersion = signal<string | null>(null);
 
   ngOnInit() {
     this._httpService.getSettings().subscribe((settings) => {
@@ -211,16 +231,6 @@ export class AppSettings {
 
     this._loadVersion();
     this._loadPotStatus();
-  }
-
-  private _formatAutomations(webhook: string) {
-    this.code.automations.forEach((automation) => {
-      if (automation.value === 'notifyAutomation') {
-        automation.code = formatNotifyAutomation(automation.code, webhook);
-      } else if (automation.value === 'playAutomation') {
-        automation.code = formatPlayDownloadAutomation(automation.code, webhook);
-      }
-    });
   }
 
   showUpdated() {
@@ -330,6 +340,21 @@ export class AppSettings {
     return item.value;
   }
 
+  downloadExtension(): string {
+    return EXTENSION_URLS[this.browser()];
+  }
+
+  checkExtensionUpdates() {
+    this._httpService.getExtensionVersion().subscribe((result) => {
+      this.latestExtensionVersion.set(result.version);
+    });
+  }
+
+  copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text);
+    this._notifier.notify('success', 'Copied to clipboard.');
+  }
+
   /** The health check reads the saved cookies, so re-run it against the new file. */
   private _applyCookies(settings: SettingsModel) {
     this.cookiesPath.set(settings.cookiesPath);
@@ -362,5 +387,27 @@ export class AppSettings {
     this._changedValidator = RtValidators.formChanged(this.form.getRawValue(), true);
     this.form.addValidators(this._changedValidator);
     this.form.updateValueAndValidity();
+  }
+
+  private _formatAutomations(webhook: string) {
+    this.code.automations.forEach((automation) => {
+      if (automation.value === 'notifyAutomation') {
+        automation.code = formatNotifyAutomation(automation.code, webhook);
+      } else if (automation.value === 'playAutomation') {
+        automation.code = formatPlayDownloadAutomation(automation.code, webhook);
+      }
+    });
+  }
+
+  private _getBrowser(): Browser {
+    const ua = navigator.userAgent;
+
+    if (/firefox|fxios/i.test(ua)) return Browser.Firefox;
+
+    if (/chrome|chromium|crios/i.test(ua) && !/edg/i.test(ua) && !/opr\/|opera/i.test(ua)) {
+      return Browser.Chrome;
+    }
+
+    return Browser.Other;
   }
 }

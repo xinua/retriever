@@ -6,6 +6,7 @@ import { settings } from "../../db/schema.js";
 import { broadcast } from "../../routes/ws/websockets.js";
 import * as Chats from "./chats.js";
 import * as Download from "./download.js";
+import * as ProfilePhoto from "./profile-photo.js";
 
 import type { Settings } from "../../db/types.js";
 
@@ -52,6 +53,9 @@ export type TelegramStatus = {
 let bot: Bot | null = null;
 let api: Api | null = null;
 let apiRoot = CLOUD_API_ROOT;
+
+/** telegramNoDescription, kept here so a save applies it without a restart. */
+let noDescription = false;
 
 /** Bumped on every restart, so a stale start() cannot touch the new bot. */
 let generation = 0;
@@ -103,6 +107,15 @@ export function uploadLimit(): number {
   return isLocal() ? LOCAL_LIMIT : CLOUD_LIMIT;
 }
 
+export function setNoDescription(value: boolean): void {
+  noDescription = value;
+}
+
+/** Whether files go out with no caption. */
+export function sendsNoDescription(): boolean {
+  return noDescription;
+}
+
 /**
  * Restarts the bot on the saved settings. Given the settings before and after
  * a save, it first hands the bot over when the save moved it to another Bot
@@ -136,6 +149,7 @@ export async function start(warning: string | null = null): Promise<void> {
   const token = row?.telegramBotToken?.trim();
 
   apiRoot = rootFor(row);
+  noDescription = !!row?.telegramNoDescription;
 
   if (!row?.telegramEnabled || !token) {
     setStatus(statusFor(row, false, { warning }));
@@ -167,6 +181,8 @@ export async function start(warning: string | null = null): Promise<void> {
   await next.api
     .setMyCommands([{ command: "start", description: "Request access / show help" }])
     .catch((e) => console.warn("telegram: setMyCommands failed:", e));
+
+  void ProfilePhoto.ensure(next.api, next.botInfo.id);
 
   setStatus(statusFor(row, true, { username, warning }));
 

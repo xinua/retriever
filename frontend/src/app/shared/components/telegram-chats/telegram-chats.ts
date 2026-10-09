@@ -16,6 +16,7 @@ import { WsService } from '../../services/ws.service';
 import { DropArea } from '../drop-area/drop-area';
 import { DRAG_TOKEN } from '../../constants/drag-token';
 import { MatDialogConfig } from '@angular/material/dialog';
+import { SizePipe } from '../../pipes/size.pipe';
 
 const DIALOG_DATA: MatDialogConfig = {
   data: {
@@ -41,6 +42,7 @@ const DIALOG_DATA: MatDialogConfig = {
     TitleCasePipe,
     ArrayPipe,
     DropArea,
+    SizePipe,
   ],
   templateUrl: './telegram-chats.html',
   changeDetection: ChangeDetectionStrategy.OnPush,

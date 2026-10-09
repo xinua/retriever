@@ -69,17 +69,22 @@
           </div>
 
           @if (download().channelName) {
-            <div class="text-gray-500 truncate hidden lg:flex items-start gap-2">
+            @let isTelegram = download().source === downloadSource.TELEGRAM;
+            @let isWatcher = download().source === downloadSource.WATCHER;
+            <div
+              class="text-gray-500 truncate hidden lg:flex gap-2"
+              [class]="isTelegram ? 'items-center' : 'items-start'"
+            >
               {{ download().channelName }}
 
-              @if (download().source === downloadSource.WATCHER) {
+              @if (isWatcher) {
                 <mat-icon
                   class="text-sm! h-4! w-4! align-middle"
                   matTooltip="Downloaded by subscription"
                   fontIcon="subscriptions"
                 />
               }
-              @if (download().source === downloadSource.TELEGRAM) {
+              @if (isTelegram) {
                 <mat-icon
                   class="text-sm! h-4! w-4! align-middle"
                   matTooltip="Downloaded from Telegram"

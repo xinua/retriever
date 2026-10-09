@@ -76,6 +76,7 @@ export const DefaultSettings: SettingsModel = {
   telegramBotToken: null,
   telegramApiUrl: null,
   telegramKeepFiles: false,
+  telegramNoDescription: false,
   notifyDownloadFailed: false,
 };
 

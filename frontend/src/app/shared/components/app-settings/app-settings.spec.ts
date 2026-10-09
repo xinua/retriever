@@ -438,18 +438,18 @@ describe('AppSettings', () => {
   describe('steps', () => {
     it('enables the POT step only when a provider is configured', async () => {
       await render();
-      expect(component.steps()[0]).toEqual({ index: 2, enabled: false });
+      expect(component.steps()[1]).toEqual({ index: 5, enabled: false });
 
       component.potStatus.set(potStatus());
-      expect(component.steps()[0]).toEqual({ index: 2, enabled: true });
+      expect(component.steps()[1]).toEqual({ index: 5, enabled: true });
     });
 
     it('follows the Telegram toggle for the Telegram step', async () => {
       await render();
-      expect(component.steps()[1]).toEqual({ index: 3, enabled: false });
+      expect(component.steps()[0]).toEqual({ index: 2, enabled: false });
 
       component.form.controls.telegramEnabled.setValue(true);
-      expect(component.steps()[1]).toEqual({ index: 3, enabled: true });
+      expect(component.steps()[0]).toEqual({ index: 2, enabled: true });
     });
 
     it('disables the headers of steps that are off', async () => {
@@ -457,7 +457,7 @@ describe('AppSettings', () => {
 
       const headers: HTMLElement[] = Array.from(fixture.nativeElement.querySelectorAll('mat-step-header'));
       expect(headers[2].getAttribute('aria-disabled')).toBe('true');
-      expect(headers[3].getAttribute('aria-disabled')).toBe('true');
+      expect(headers[5].getAttribute('aria-disabled')).toBe('true');
       expect(headers[0].getAttribute('aria-disabled')).toBeNull();
     });
   });

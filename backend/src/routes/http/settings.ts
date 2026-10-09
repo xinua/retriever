@@ -71,6 +71,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       telegramBotToken?: string | null;
       telegramApiUrl?: string | null;
       telegramKeepFiles?: boolean | null;
+      telegramNoDescription?: boolean | null;
       notifyDownloadFailed?: boolean | null;
     };
 
@@ -112,6 +113,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         ...("telegramBotToken" in body ? { telegramBotToken: body.telegramBotToken?.trim() || null } : {}),
         ...("telegramApiUrl" in body ? { telegramApiUrl: body.telegramApiUrl?.trim() || null } : {}),
         ...("telegramKeepFiles" in body ? { telegramKeepFiles: body.telegramKeepFiles === true } : {}),
+        ...("telegramNoDescription" in body ? { telegramNoDescription: body.telegramNoDescription === true } : {}),
         ...("notifyDownloadFailed" in body ? { notifyDownloadFailed: body.notifyDownloadFailed === true } : {}),
         updatedAt: new Date().toISOString()
       })
@@ -136,6 +138,9 @@ export async function settingsRoutes(app: FastifyInstance) {
       previous?.telegramEnabled !== updated.telegramEnabled ||
       previous?.telegramBotToken !== updated.telegramBotToken ||
       previous?.telegramApiUrl !== updated.telegramApiUrl;
+
+    // Read on every call, so it applies without a restart.
+    Telegram.setNoDescription(updated.telegramNoDescription);
 
     if (telegramChanged) await Telegram.restart({ previous, next: updated });
 

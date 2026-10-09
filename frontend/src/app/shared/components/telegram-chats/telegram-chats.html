@@ -15,7 +15,7 @@
       }
       @if (st.running) {
         <span class="text-gray-500"> — {{ st!.local ? 'local server' : 'cloud' }}</span>
-        <span class="text-gray-500 hidden md:inline">, {{ st!.limitMb }} MB limit</span>
+        <span class="text-gray-500 hidden md:inline">, {{ st!.limitMb * 1000 * 1000 | size: 0 }} limit</span>
       }
     </span>
   </div>

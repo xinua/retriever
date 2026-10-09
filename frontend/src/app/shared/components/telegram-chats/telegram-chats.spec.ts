@@ -118,7 +118,7 @@ describe('TelegramChats', () => {
       await render();
 
       expect(text()).toContain('— local server');
-      expect(text()).toContain('2000 MB limit');
+      expect(text()).toContain('2 GB limit');
     });
 
     it('shows the error of a bot that is not running', async () => {

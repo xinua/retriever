@@ -1,43 +1,51 @@
-:host::ng-deep form {
+.settings-card form {
   margin-top: 20px;
 }
 
-:host::ng-deep .mat-step-icon {
+.settings-card .mat-stepper-vertical {
+  --mat-sys-focus-state-layer-opacity: 0;
+}
+
+.settings-card .mat-step-icon {
   --mat-stepper-header-selected-state-icon-background-color: white;
   --mat-stepper-header-edit-state-icon-background-color: white;
 }
 
-:host::ng-deep .mat-step-icon mat-icon,
-:host::ng-deep .mat-step-icon span {
+.settings-card .mat-step-icon mat-icon,
+.settings-card .mat-step-icon span {
   color: black !important;
 }
 
-:host::ng-deep .description-select .mat-mdc-text-field-wrapper {
+.settings-card .description-select .mat-mdc-text-field-wrapper {
   background-color: transparent;
 }
 
-:host ::ng-deep .description-select .mdc-line-ripple::before {
+.settings-card .description-select .mdc-line-ripple::before {
   display: none !important;
 }
 
-:host ::ng-deep .description-select .mat-mdc-select-arrow {
+.settings-card .description-select .mat-mdc-select-arrow {
   /* color: var(--rt-accent) !important; */
   color: white !important;
 }
 
-:host ::ng-deep .description-select .mat-mdc-form-field-focus-overlay {
+.settings-card .description-select .mat-mdc-form-field-focus-overlay {
   display: none !important;
 }
 
-:host ::ng-deep .description-select.mat-mdc-form-field.mat-form-field-animations-enabled .mdc-line-ripple::after {
+.settings-card .description-select.mat-mdc-form-field.mat-form-field-animations-enabled .mdc-line-ripple::after {
   display: none !important;
 }
 
-:host ::ng-deep .notify-failed .mdc-form-field {
+.settings-card .notify-failed .mdc-form-field {
   display: flex;
   justify-content: space-between;
 }
 
-:host ::ng-deep .notify-failed .mdc-form-field--align-end > label {
+.settings-card .notify-failed .mdc-form-field--align-end > label {
   margin-left: 0;
+}
+
+.settings-card .mat-step-text-label {
+  user-select: none;
 }

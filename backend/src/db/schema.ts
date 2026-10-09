@@ -54,6 +54,14 @@ export const settings = sqliteTable("settings", {
     .notNull()
     .default(false),
 
+  /**
+   * Sends files with no caption: no channel, title or link under them. Text
+   * messages keep theirs, since without it they would say nothing.
+   */
+  telegramNoDescription: integer("telegramNoDescription", { mode: "boolean" })
+    .notNull()
+    .default(false),
+
   /** Sends "download failed" to the notification chats. */
   notifyDownloadFailed: integer("notifyDownloadFailed", { mode: "boolean" })
     .notNull()

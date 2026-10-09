@@ -35,4 +35,5 @@ export const iconRegistry: string[] = [
   'upload_image',
   'telegram',
   'homeassistant',
+  'extension',
 ];

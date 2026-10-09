@@ -7,3 +7,4 @@ export * from './layout.service';
 export * from './ui-config.service';
 export * from './animation.service';
 export * from './custom-paginator.service';
+export * from './extension.service';

@@ -17,6 +17,7 @@ export function initSchema() {
       telegramBotToken TEXT,
       telegramApiUrl TEXT,
       telegramKeepFiles INTEGER NOT NULL DEFAULT 0,
+      telegramNoDescription INTEGER NOT NULL DEFAULT 0,
       notifyDownloadFailed INTEGER NOT NULL DEFAULT 0,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
@@ -246,6 +247,7 @@ function runColumnMigrations() {
   ensureColumn("settings", "telegramBotToken", "TEXT");
   ensureColumn("settings", "telegramApiUrl", "TEXT");
   ensureColumn("settings", "telegramKeepFiles", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn("settings", "telegramNoDescription", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn("settings", "notifyDownloadFailed", "INTEGER NOT NULL DEFAULT 0");
 
   ensureColumn("channel", "ytdlpArgs", "TEXT");

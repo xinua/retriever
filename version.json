@@ -1,7 +1,28 @@
 {
-  "version": "1.2.1",
-  "releaseDate": "2026-10-07",
+  "version": "1.2.2",
+  "releaseDate": "2026-10-09",
   "changelog": [
+    {
+      "version": "1.2.2",
+      "releaseDate": "2026-10-09",
+      "changelog": {
+        "bugfixes": [
+          "Prevent swipe navigation while seeking in the player"
+        ],
+        "features": [
+          "Add option to hide description in Telegram bot messages"
+        ],
+        "improvements": [
+          "Add browser extension section to App settings"
+        ],
+        "other": [
+          "Other UI fixes and improvements"
+        ],
+        "images": [
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.2.2/1.webp"
+        ]
+      }
+    },
     {
       "version": "1.2.1",
       "releaseDate": "2026-10-07",

@@ -100,7 +100,9 @@ export async function sendFile(
     "id" in file ? file.id : Bot.isLocal() ? pathToFileURL(file.path).href : new InputFile(file.path);
   const thumbnail = "path" in file && opts.thumbPath ? new InputFile(opts.thumbPath) : undefined;
 
-  const common = opts.caption ? { caption: opts.caption, parse_mode: "HTML" as const } : {};
+  // Every file goes out through here, so the setting needs checking only once.
+  const caption = Bot.sendsNoDescription() ? undefined : opts.caption;
+  const common = caption ? { caption, parse_mode: "HTML" as const } : {};
   const duration = Math.round(opts.duration ?? 0) || undefined;
 
   let message: Message;

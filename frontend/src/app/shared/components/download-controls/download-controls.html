@@ -99,14 +99,18 @@
 
 <mat-menu #tgMenu class="pt-0! chats-menu">
   @for (chat of telegramChats(); track chat.chatId) {
-    <button mat-menu-item (click)="sendToTelegram(download(), chat.chatId)" class="hover:[&_img]:scale-250">
+    <button
+      mat-menu-item
+      (click)="sendToTelegram(download(), chat.chatId)"
+      class="hover:[&_img]:scale-250 hover:[&_span.nickname]:translate-x-4 pr-10!"
+    >
       <div class="flex items-center gap-4">
         @if (chat.avatar) {
           <img [src]="chat.avatar" class="w-8 h-8 rounded-full transition-transform duration-300" />
         } @else {
           <mat-icon class="text-white!">person_outline</mat-icon>
         }
-        <span class="relative mix-blend-difference">{{ chat.name ?? chat.chatId }}</span>
+        <span class="relative transition-transform duration-300 nickname">{{ chat.name ?? chat.chatId }}</span>
       </div>
     </button>
   }

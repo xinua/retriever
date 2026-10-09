@@ -21,6 +21,9 @@ import { PlayerSize } from './audio-player.model';
   imports: [ProgressBarComponent, MatIcon, MatButtonModule, TimePipe],
   templateUrl: './audio-player.html',
   styleUrl: './audio-player.css',
+  host: {
+    '(pointerdown)': '$event.stopPropagation()',
+  },
 })
 export class AudioPlayer {
   audioUrl = input<string>();

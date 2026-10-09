@@ -353,4 +353,10 @@ export class HttpService {
   sendDownloadToTelegram(id: number, chatId: string): Observable<{ ok: boolean }> {
     return this._http.post<{ ok: boolean }>(`/api/downloads/${id}/send-to-telegram`, { chatId });
   }
+
+  getExtensionVersion(): Observable<{ version: string | null; available: boolean }> {
+    return this._http.get<{ version: string | null; available: boolean }>(
+      'https://raw.githubusercontent.com/xinua/rt-ext/main/version.json',
+    );
+  }
 }

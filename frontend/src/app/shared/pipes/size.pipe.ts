@@ -5,7 +5,7 @@ import { Pipe, PipeTransform } from '@angular/core';
   standalone: true,
 })
 export class SizePipe implements PipeTransform {
-  transform(bytes: number | null): string {
+  transform(bytes: number | null, decimalPlaces = 1): string {
     if (!bytes) return '';
 
     const units = ['B', 'KB', 'MB', 'GB'];
@@ -18,6 +18,6 @@ export class SizePipe implements PipeTransform {
       unit += 1;
     }
 
-    return `${value.toFixed(1)} ${units[unit]}`;
+    return `${value.toFixed(decimalPlaces)} ${units[unit]}`;
   }
 }
