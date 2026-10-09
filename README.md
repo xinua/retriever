@@ -28,13 +28,15 @@ Perfect if you:
 
 ---
 
-<center>
-  🖥👩‍💻[Installation](#docker)
-  <img src="demo/icons/retriever.svg" width="20" height="20">[Screenshots](SCREENSHOTS.md)
-  <img src="demo/icons/extension.svg" width="20" height="20">[Browser extension](https://github.com/xinua/rt-ext)
-  <img src="demo/icons/home-assistant.svg" width="20" height="20">[Home Assistant](HA.md)
-  <img src="demo/icons/telegram.svg" width="20" height="20">[Telegram bot](TG.md)
-</center>
+  🖥👩‍💻 [Installation](#docker)
+
+  <img src="demo/icons/retriever.svg" width="20" height="20"> [Screenshots](SCREENSHOTS.md)
+
+  <img src="demo/icons/extension.svg" width="20" height="20"> [Browser extension](https://github.com/xinua/rt-ext)
+
+  <img src="demo/icons/home-assistant.svg" width="20" height="20"> [Home Assistant](HA.md)
+
+  <img src="demo/icons/telegram.svg" width="20" height="20"> [Telegram bot](TG.md)
 
 ## ✨ Features
 
