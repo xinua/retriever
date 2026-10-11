@@ -20,7 +20,7 @@
     </button>
   }
 
-  @if (webhookUrl() && download().fileExists) {
+  @if (webhookUrl() && download().fileExists && download().type !== types.THUMBNAIL) {
     <button mat-menu-item (click)="sendToHomeAssistant(download())">
       <mat-icon class="text-white!" svgIcon="homeassistant" />
       <span>Send to HA</span>

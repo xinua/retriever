@@ -11,6 +11,7 @@ import { hasFile } from '../../helpers/common.helpers';
 import { DownloadModel, DownloadStatus } from '../../models/download.model';
 import { HttpService } from '../../services/http.service';
 import { StorageService } from '../../services/storage.service';
+import { Types } from '../../models/subscription.model';
 
 @Component({
   selector: 'rt-download-controls',
@@ -24,6 +25,7 @@ export class DownloadControls {
   private readonly _http = inject(HttpService);
   private readonly _notifier = inject(NotifierService);
 
+  readonly types = Types;
   readonly downloadStatus = DownloadStatus;
 
   webhookUrl = computed(() => this._storage.settings().webhookUrl);

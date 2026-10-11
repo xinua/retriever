@@ -18,7 +18,7 @@
         <mat-label>Paste video/playlist/channel URL</mat-label>
 
         <div matSuffix class="flex items-center">
-          @if (form.controls.url.value) {
+          @if (form.controls.url.value && !isPending()) {
             <button
               mat-icon-button
               (click)="clearUrl()"
@@ -37,16 +37,14 @@
             [matTooltip]="isPending() ? 'Working…' : 'Download'"
             (click)="download()"
           >
-            <mat-icon
-              [fontIcon]="isPending() ? 'radar' : 'download'"
-              [class]="
-                isPending()
-                  ? 'text-white! animate-spin'
-                  : form.controls.url.value && form.controls.url.valid
-                    ? `text-(--rt-accent)! animate-bounce`
-                    : ''
-              "
-            />
+            @if (isPending()) {
+              <mat-icon svgIcon="loading" />
+            } @else {
+              <mat-icon
+                fontIcon="download"
+                [class]="form.controls.url.value && form.controls.url.valid ? `text-(--rt-accent)! animate-bounce` : ''"
+              />
+            }
           </div>
         </div>
 

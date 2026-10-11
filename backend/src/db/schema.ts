@@ -278,9 +278,17 @@ export const download = sqliteTable("download", {
   platform: text("platform").notNull().default("unknown"),
 
   // "watcher" for anything an RSS scan queued, "manual" for a one-off request
-  // from the Download-now form. Manual rows carry their own options below,
+  // from the Download-now form, "telegram" for the bot and "extension" for
+  // the browser extension. Non-watcher rows carry their own options below,
   // because there is no channel row to read them from.
   source: text("source").notNull().default("watcher"),
+
+  // Left out of the Downloads list and its counts. The browser extension asks
+  // for this when the user only wants the file, not a card for it; the row
+  // still exists so lookups, retries and "Clear finished" treat it as usual.
+  hidden: integer("hidden", { mode: "boolean" })
+    .notNull()
+    .default(false),
 
   // Snapshot of the channel's settings at queue time, so editing the channel
   // later does not rewrite the history of what was already downloaded. The

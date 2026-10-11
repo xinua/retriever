@@ -19,9 +19,9 @@ import { Nullable } from '../../models/common.model';
       >
         @if (!isLoaded()) {
           <div
-            class="preloader bg-[#1f1f1f] animate-pulse {{ customClass() }}"
-            [style.width]="imgSize().split('x')[0] + 'px'"
-            [style.height]="imgSize().split('x')[1] + 'px'"
+            class="preloader aspect-video bg-[#1f1f1f] animate-pulse {{ customClass() }}"
+            [style.min-width]="imgSize().split('x')[0] + 'px'"
+            [style.min-height]="imgSize().split('x')[1] + 'px'"
           ></div>
         }
         @if (imageUrl()) {

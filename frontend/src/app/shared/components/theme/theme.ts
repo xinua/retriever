@@ -1,5 +1,5 @@
 import { TitleCasePipe } from '@angular/common';
-import { Component, DestroyRef, inject, OnInit, output, viewChild } from '@angular/core';
+import { Component, DestroyRef, inject, OnInit, output, viewChild, ViewEncapsulation } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatCard, MatCardContent, MatCardHeader, MatCardTitle } from '@angular/material/card';
@@ -13,11 +13,11 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { NotifierService } from 'angular-notifier';
 import { catchError, debounceTime, distinctUntilChanged, filter, from, Observable, switchMap, take, tap } from 'rxjs';
 import { ThemeConfigFormModel } from '../../models/theme.model';
-import { ThemeColors } from '../../models/ui-config.model';
+import { BgType, ThemeColors } from '../../models/ui-config.model';
 import { HttpService } from '../../services/http.service';
 import { UiConfigService } from '../../services/ui-config.service';
-import { SECTION_OPTIONS } from './theme.constants';
 import { TargetIconPipe } from './target-icon.pipe';
+import { SECTION_OPTIONS } from './theme.constants';
 
 @Component({
   selector: 'rt-theme',
@@ -42,6 +42,7 @@ import { TargetIconPipe } from './target-icon.pipe';
   ],
   templateUrl: './theme.html',
   styleUrls: ['./theme.css'],
+  encapsulation: ViewEncapsulation.None,
 })
 export class Theme implements OnInit {
   private readonly _fb = new FormBuilder();
@@ -50,6 +51,7 @@ export class Theme implements OnInit {
   private readonly _uiConfig = inject(UiConfigService);
   private readonly _notifier = inject(NotifierService);
 
+  readonly bgType = BgType;
   readonly sectionOptions = SECTION_OPTIONS;
   readonly themeColorOptions = Object.values(ThemeColors);
 

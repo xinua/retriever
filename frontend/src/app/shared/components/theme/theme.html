@@ -1,4 +1,4 @@
-<mat-card class="p-4 shadow-xl!">
+<mat-card class="p-4 shadow-xl! theme-card">
   <mat-card-header class="mb-5">
     <mat-card-title>UI Configuration</mat-card-title>
     <!-- <mat-card-subtitle class="font-thin!"> Configure the UI of the app </mat-card-subtitle> -->
@@ -17,7 +17,7 @@
 
       <mat-form-field appearance="outline" class="section-bg">
         <mat-label>Sections background</mat-label>
-        <mat-select formControlName="sectionsBg">
+        <mat-select formControlName="sectionsBg" panelClass="section-bg-panel">
           <mat-select-trigger class="flex items-end gap-2 w-fit h-full py-0!">
             @let selectedBg = form.controls.sectionsBg.value | targetIcon;
             <mat-icon
@@ -31,7 +31,24 @@
 
           @for (option of sectionOptions; track option.value) {
             <mat-option [value]="option.value">
-              <mat-icon [fontIcon]="option.fontIcon" [svgIcon]="option.svgIcon" [class]="option.color" />
+              @if (option.value === bgType.FIRE) {
+                <div class="relative flex">
+                  <mat-icon
+                    [fontIcon]="option.fontIcon"
+                    [svgIcon]="option.svgIcon"
+                    [class]="option.color"
+                    class="absolute inline-flex h-full w-full animate-ping opacity-75"
+                  />
+                  <mat-icon
+                    [fontIcon]="option.fontIcon"
+                    [svgIcon]="option.svgIcon"
+                    [class]="option.color"
+                    class="relative inline-flex w-full h-full"
+                  />
+                </div>
+              } @else {
+                <mat-icon [fontIcon]="option.fontIcon" [svgIcon]="option.svgIcon" [class]="option.color" />
+              }
               {{ option.label }}
             </mat-option>
           }

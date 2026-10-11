@@ -36,4 +36,5 @@ export const iconRegistry: string[] = [
   'telegram',
   'homeassistant',
   'extension',
+  'loading',
 ];

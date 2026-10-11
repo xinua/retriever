@@ -1,7 +1,28 @@
 {
-  "version": "1.2.2",
-  "releaseDate": "2026-10-09",
+  "version": "1.2.3",
+  "releaseDate": "2026-10-12",
   "changelog": [
+    {
+      "version": "1.2.3",
+      "releaseDate": "2026-10-12",
+      "changelog": {
+        "bugfixes": [],
+        "features": [
+          "Show extension icon for downloads from browser extension"
+        ],
+        "improvements": [
+          "Support for the extension has been improved",
+          "- Hide download records made from the extension in Incognito mode",
+          "- Use specified directory for Incognito downloads"
+        ],
+        "other": [
+          "Other UI fixes and improvements"
+        ],
+        "images": [
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.2.3/1.webp"
+        ]
+      }
+    },
     {
       "version": "1.2.2",
       "releaseDate": "2026-10-09",

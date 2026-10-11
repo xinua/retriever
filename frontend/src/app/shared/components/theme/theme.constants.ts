@@ -32,7 +32,7 @@ export const SECTION_OPTIONS: SectionIcon[] = [
   {
     svgIcon: null,
     fontIcon: 'local_fire_department',
-    color: 'text-orange-500! animate-ping',
+    color: 'text-orange-500!',
     label: 'Fire',
     value: BgType.FIRE,
   },

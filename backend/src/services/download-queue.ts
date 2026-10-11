@@ -206,6 +206,11 @@ export type ManualOptions = {
   // Set when a subscription re-downloads its last video ("Download again"):
   // the row stays manual, but the subscription's player finds it as its own.
   watcherId: number | null;
+  // Who asked: the Download-now form or the browser extension. A Telegram
+  // request is told apart by `telegram` below instead.
+  source?: "manual" | "extension";
+  // Keeps the rows out of the Downloads list — see `hidden` in the schema.
+  hidden?: boolean;
   // Set when the Telegram bot queued the download: the row is then a
   // "telegram" one, and is sent to this chat once it is done.
   telegram?: {
@@ -238,7 +243,8 @@ export async function enqueueManual(
       duration: entry.duration,
       status: "queued",
       platform: entry.platform,
-      source: options.telegram ? "telegram" : "manual",
+      source: options.telegram ? "telegram" : (options.source ?? "manual"),
+      hidden: options.hidden ?? false,
       telegramChatId: options.telegram?.chatId ?? null,
       telegramMessageId: options.telegram?.messageId ?? null,
       telegramDelivery: options.telegram?.delivery ?? null,

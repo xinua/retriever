@@ -1,17 +1,19 @@
-:ng-deep {
-  --mat-dialog-container-shape: 0;
-}
-
-::ng-deep .mat-mdc-slide-toggle .mat-internal-form-field.mdc-form-field--align-end {
+.theme-card .mat-mdc-slide-toggle .mat-internal-form-field.mdc-form-field--align-end {
   width: 100%;
   justify-content: space-between;
 }
 
-::ng-deep .mat-mdc-slide-toggle .mat-internal-form-field.mdc-form-field--align-end .mdc-label {
+.theme-card .mat-mdc-slide-toggle .mat-internal-form-field.mdc-form-field--align-end .mdc-label {
   margin: 0;
 }
 
-::ng-deep .section-bg .mat-mdc-form-field-infix {
+.theme-card .section-bg .mat-mdc-form-field-infix {
   /* --mat-form-field-container-vertical-padding: 0; */
   padding-bottom: 0;
+}
+
+/* The options panel is rendered in the CDK overlay on <body>, not inside the
+   card, so it is targeted through the select's panelClass. */
+.section-bg-panel .mdc-list-item__primary-text {
+  display: flex;
 }

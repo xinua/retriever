@@ -1,12 +1,16 @@
 .animate-zoom {
+  backface-visibility: hidden;
+  transform: none;
   &:hover img {
-    transform: rotate(0.01deg) scale(1.25);
+    transform: translateZ(0) rotate(0.01deg) scale(1.25);
+    -moz-transform: translateZ(0) rotate(0.01deg) scale(1.45);
     transition-delay: 0s;
   }
 
   img {
     transition: transform 2.5s ease-out 1s;
+    -moz-transition: transform 0.3s ease-out 0s;
     will-change: transform;
-    transform: rotate(0.01deg);
+    transform: translateZ(0);
   }
 }

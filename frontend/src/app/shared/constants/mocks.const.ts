@@ -11,6 +11,7 @@ export const DownloadRecordMock: DownloadModel = {
   url: 'https://example.com/video/abc123',
   status: DownloadStatus.QUEUED,
   source: DownloadSource.MANUAL,
+  hidden: false,
   platform: Platform.YOUTUBE,
   type: Types.VIDEO,
   format: VideoFormats.MP4,

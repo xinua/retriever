@@ -132,6 +132,7 @@ export function initSchema() {
       status TEXT NOT NULL DEFAULT 'queued',
       platform TEXT NOT NULL DEFAULT 'unknown',
       source TEXT NOT NULL DEFAULT 'watcher',
+      hidden INTEGER NOT NULL DEFAULT 0,
       type TEXT,
       format TEXT,
       codec TEXT,
@@ -382,6 +383,8 @@ function migrateDownloadChannelColumns() {
   ensureColumn("download", "telegramChatId", "TEXT");
   ensureColumn("download", "telegramMessageId", "INTEGER");
   ensureColumn("download", "telegramDelivery", "TEXT");
+
+  ensureColumn("download", "hidden", "INTEGER NOT NULL DEFAULT 0");
 
   backfillDownloadPlatform();
 

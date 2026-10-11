@@ -14,7 +14,7 @@
     <div
       class="grid grid-cols-1 lg:grid-cols-[calc(100%-238px)_230px] xl:grid-cols-[75%_25%] justify-between gap-2 w-full"
     >
-      <div class="flex lg:grid lg:grid-cols-[auto_calc(100%-96px)] gap-4 col-span-1 w-[calc(100%-56px)] sm:w-full">
+      <div class="grid grid-cols-[auto_minmax(0,100%)] lg:grid-cols-[auto_calc(100%-96px)] gap-2 lg:gap-4 col-span-1">
         <div class="relative h-min col-span-1">
           <rt-avatar
             [sourceImg]="download().avatarPath"
@@ -49,7 +49,7 @@
                 #titleEl
                 [href]="download().url"
                 target="_blank"
-                class="text-lg truncate w-fit"
+                class="text-lg truncate w-full"
                 [matTooltip]="title"
                 [matTooltipDisabled]="!(titleEl.scrollWidth > titleEl.clientWidth)"
               >
@@ -68,31 +68,38 @@
             </div>
           </div>
 
-          @if (download().channelName) {
-            @let isTelegram = download().source === downloadSource.TELEGRAM;
-            @let isWatcher = download().source === downloadSource.WATCHER;
-            <div
-              class="text-gray-500 truncate hidden lg:flex gap-2"
-              [class]="isTelegram ? 'items-center' : 'items-start'"
-            >
-              {{ download().channelName }}
+          @let isWatcher = download().source === downloadSource.WATCHER;
+          @let isTelegram = download().source === downloadSource.TELEGRAM;
+          @let isExtension = download().source === downloadSource.EXTENSION;
 
-              @if (isWatcher) {
-                <mat-icon
-                  class="text-sm! h-4! w-4! align-middle"
-                  matTooltip="Downloaded by subscription"
-                  fontIcon="subscriptions"
-                />
-              }
-              @if (isTelegram) {
-                <mat-icon
-                  class="text-sm! h-4! w-4! align-middle"
-                  matTooltip="Downloaded from Telegram"
-                  svgIcon="telegram"
-                />
-              }
-            </div>
-          }
+          <div
+            class="text-gray-500 truncate hidden lg:flex gap-2"
+            [class]="isTelegram ? 'items-center' : 'items-start'"
+          >
+            {{ download().channelName || 'Unknown source' }}
+
+            @if (isWatcher) {
+              <mat-icon
+                class="text-sm! h-4! w-4! align-middle"
+                matTooltip="Downloaded by subscription"
+                fontIcon="subscriptions"
+              />
+            }
+            @if (isTelegram) {
+              <mat-icon
+                class="text-sm! h-4! w-4! align-middle"
+                matTooltip="Downloaded from Telegram"
+                svgIcon="telegram"
+              />
+            }
+            @if (isExtension) {
+              <mat-icon
+                class="text-sm! h-4! w-4! align-middle"
+                matTooltip="Downloaded from extension"
+                svgIcon="extension"
+              />
+            }
+          </div>
 
           @if (download().playlistTitle) {
             <div class="text-xs text-gray-600 truncate hidden lg:flex lg:h-0 lg:overflow-visible">

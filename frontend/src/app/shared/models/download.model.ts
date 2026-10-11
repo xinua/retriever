@@ -26,6 +26,7 @@ export enum DownloadSource {
   WATCHER = 'watcher',
   TELEGRAM = 'telegram',
   MANUAL = 'manual',
+  EXTENSION = 'extension',
 }
 
 export interface DownloadModel {
@@ -38,6 +39,8 @@ export interface DownloadModel {
   url: string;
   status: DownloadStatus;
   source: DownloadSource;
+  /** Queued by the extension with "don't show": never part of the list. */
+  hidden: boolean;
   /** Which site the video came from; drives platform-specific links/artwork. */
   platform: Platform;
   /** Snapshot of the channel's settings when the download was queued. */

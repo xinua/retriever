@@ -392,7 +392,7 @@ describe('ManualFormComponent', () => {
       expect(http['createDownload']).toHaveBeenCalledTimes(1);
       expect(component.isPending()).toBe(true);
       expect(component.form.controls.url.disabled).toBe(true);
-      expect(icon('radar')).not.toBeNull();
+      expect(el().querySelector('mat-icon[svgicon="loading"]')).not.toBeNull();
     });
 
     it('does not send an invalid url', async () => {

@@ -175,7 +175,8 @@ async function listDownloads(settings: Settings, query: {
   const statuses = parseStatuses(query.statuses);
   const types = parseTypes(query.types);
   const search = parseSearch(query.name);
-  const where = buildFilter(statuses, types, search);
+  // Hidden rows were asked to stay out of the list — see the schema.
+  const where = and(eq(download.hidden, false), buildFilter(statuses, types, search));
 
   const [counted] = await db
     .select({ total: sql<number>`COUNT(*)` })
@@ -360,6 +361,10 @@ function parseManualBody(body: any):
 
   const watcherId = body?.watcherId ?? null;
 
+  // Only the sources an HTTP caller can honestly be: "watcher" and
+  // "telegram" rows are queued by the server itself.
+  const source = body?.source === "extension" ? "extension" : "manual";
+
   if (watcherId !== null && !Number.isInteger(watcherId)) {
     return { ok: false, error: "watcherId must be a number" };
   }
@@ -389,7 +394,9 @@ function parseManualBody(body: any):
       removeSponsors:
         body?.removeSponsors === true || body?.removeSponsor === true,
       splitChapters: body?.splitChapters === true,
-      watcherId
+      watcherId,
+      source,
+      hidden: body?.hidden === true
     }
   };
 }
@@ -430,9 +437,10 @@ export async function downloadsRoutes(app: FastifyInstance) {
     // The counts size the paginator and label the filter chips, so they have
     // to be counts of the same rows the list is showing. A search that is not
     // reflected here would offer pages of results that do not exist.
+    // Hidden rows are left out for the same reason: the list never shows them.
     const scope = search
-      ? sql`WHERE ${SEARCHABLE_NAME} LIKE ${search} ESCAPE '\\'`
-      : sql.empty();
+      ? sql`WHERE hidden = 0 AND ${SEARCHABLE_NAME} LIKE ${search} ESCAPE '\\'`
+      : sql`WHERE hidden = 0`;
 
     const rows = db.all<{ status: string; count: number }>(sql`
       SELECT status, COUNT(*) AS count

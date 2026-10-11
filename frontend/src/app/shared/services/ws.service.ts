@@ -46,8 +46,13 @@ export class WsService {
     );
   }
 
+  /**
+   * Hidden rows are still broadcast — the browser extension follows its own
+   * downloads over this socket — but the app never shows them, so they stop
+   * here rather than in every list that listens.
+   */
   downloadUpdated$(): Observable<DownloadModel> {
-    return this.wsMessage$<DownloadModel>('download-updated');
+    return this.wsMessage$<DownloadModel>('download-updated').pipe(filter((row) => !row.hidden));
   }
 
   /**
@@ -56,7 +61,10 @@ export class WsService {
    * event per row, which at 500 downloads would flood every open tab.
    */
   downloadsBatch$(): Observable<DownloadModel[]> {
-    return this.wsMessage$<DownloadModel[]>('downloads-batch');
+    return this.wsMessage$<DownloadModel[]>('downloads-batch').pipe(
+      map((rows) => rows.filter((row) => !row.hidden)),
+      filter((rows) => rows.length > 0),
+    );
   }
 
   downloadRemoved$(): Observable<DownloadRemovedPayload> {
