@@ -81,7 +81,7 @@ export const DefaultSettings: SettingsModel = {
 };
 
 export const DefaultUiConfig: UiConfig = {
-  sectionsBg: BgType.GLASS,
+  sectionsBg: BgType.DOTTED,
   themeColor: ThemeColors.RED,
   enableAnimations: true,
   autoPaste: false,

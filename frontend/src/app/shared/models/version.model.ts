@@ -4,6 +4,7 @@ export interface ChangelogModel {
   improvements: string[];
   other: string[];
   images?: string[];
+  videos?: string[];
   developerMessage?: string;
 }
 

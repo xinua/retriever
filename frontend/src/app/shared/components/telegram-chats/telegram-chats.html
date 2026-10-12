@@ -154,7 +154,8 @@
           <button
             mat-icon-button
             type="button"
-            matTooltip="Allow notifications"
+            [matTooltip]="!chat.notify ? 'Allow notifications' : 'Disallow notifications'"
+            [aria-label]="!chat.notify ? 'Allow notifications' : 'Disallow notifications'"
             (click)="setNotify(chat, !chat.notify)"
           >
             <mat-icon
@@ -165,18 +166,30 @@
         }
 
         @if (chat.status !== 'approved') {
-          <button mat-icon-button type="button" matTooltip="Approve" (click)="setChatStatus(chat, 'approved')">
+          <button
+            mat-icon-button
+            type="button"
+            matTooltip="Approve/Unblock"
+            aria-label="Approve/Unblock"
+            (click)="setChatStatus(chat, 'approved')"
+          >
             <mat-icon class="text-green-400!">check</mat-icon>
           </button>
         }
 
         @if (chat.status !== 'blocked') {
-          <button mat-icon-button type="button" matTooltip="Block" (click)="setChatStatus(chat, 'blocked')">
+          <button
+            mat-icon-button
+            type="button"
+            matTooltip="Block"
+            aria-label="Block"
+            (click)="setChatStatus(chat, 'blocked')"
+          >
             <mat-icon class="text-white!">block</mat-icon>
           </button>
         }
 
-        <button mat-icon-button type="button" matTooltip="Remove" (click)="remove(chat)">
+        <button mat-icon-button type="button" matTooltip="Remove" aria-label="Remove" (click)="remove(chat)">
           <mat-icon class="text-red-500!">delete</mat-icon>
         </button>
       </div>

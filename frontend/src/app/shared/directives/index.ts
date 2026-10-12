@@ -5,3 +5,4 @@ export * from './click-outside';
 export * from './swipe';
 export * from './disable-step.directive';
 export * from './temp-class';
+export * from './click';

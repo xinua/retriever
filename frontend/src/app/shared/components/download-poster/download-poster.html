@@ -29,6 +29,7 @@
         <video
           #previewVideo
           [src]="mediaUrl()"
+          (rtLongPress)="togglePlay(download(), true, $event)"
           (click)="togglePlay(download(), true, $event)"
           controls
           autoplay
@@ -43,6 +44,7 @@
           #posterImage
           [src]="download()?.thumbnailPath"
           (click)="togglePlay(download(), true, $event)"
+          (rtLongPress)="togglePlay(download(), true, $event)"
           (error)="posterImage.src = 'https://mockimage.tw/photo/257x145/1f1f1f/ff8800/Poster%20not%20found'"
           alt="Poster"
           class="w-full h-full aspect-video object-cover cursor-pointer"

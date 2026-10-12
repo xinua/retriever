@@ -1,7 +1,24 @@
 {
-  "version": "1.2.3",
-  "releaseDate": "2026-10-12",
+  "version": "1.2.4",
+  "releaseDate": "2026-10-13",
   "changelog": [
+    {
+      "version": "1.2.4",
+      "releaseDate": "2026-10-13",
+      "changelog": {
+        "bugfixes": [],
+        "features": [
+          "Rename download record and file",
+          "- Long press on the download record name"
+        ],
+        "improvements": [
+          "Close the video player on mobile with a long press"
+        ],
+        "other": [],
+        "images": [],
+        "videos": ["https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.2.4/1.mp4"]
+      }
+    },
     {
       "version": "1.2.3",
       "releaseDate": "2026-10-12",

@@ -12,7 +12,7 @@ import {
 } from '@angular/forms';
 import { MatAutocomplete, MatAutocompleteTrigger, MatOption } from '@angular/material/autocomplete';
 import { MatButton, MatButtonModule } from '@angular/material/button';
-import { MatCard, MatCardContent, MatCardHeader, MatCardSubtitle, MatCardTitle } from '@angular/material/card';
+import { MatCard, MatCardContent, MatCardHeader, MatCardTitle } from '@angular/material/card';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatIcon } from '@angular/material/icon';
 import { MatError, MatFormField, MatHint, MatInput, MatLabel, MatSuffix } from '@angular/material/input';
@@ -109,7 +109,6 @@ const codeExamples: CodeExamples = {
     MatCard,
     MatCardContent,
     MatCardHeader,
-    MatCardSubtitle,
     MatCardTitle,
     MatFormField,
     MatHint,

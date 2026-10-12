@@ -1,0 +1,22 @@
+:host {
+  width: 100%;
+}
+
+input {
+  outline: none;
+}
+
+.edit-input {
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: calc(100% - 2rem);
+    height: 1px;
+    background-color: var(--rt-accent);
+    animation: fadeIn 0.3s ease-in-out forwards;
+  }
+}

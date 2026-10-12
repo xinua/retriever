@@ -23,12 +23,13 @@ import { DropArea } from '../drop-area/drop-area';
 import { RtSteamCard } from '../steam-card/steam-card';
 import { NgTemplateOutlet } from '@angular/common';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { LongPress } from '../../directives/long-press';
 
 const UNSUPPORTED_FORMATS = [NoEmbedFormats.WEBM, NoEmbedFormats.MOV, NoEmbedFormats.OPUS, NoEmbedFormats.WAV];
 
 @Component({
   selector: 'rt-download-poster',
-  imports: [RtSteamCard, AudioPlayer, DropArea, NgTemplateOutlet, MatTooltipModule],
+  imports: [RtSteamCard, AudioPlayer, DropArea, NgTemplateOutlet, MatTooltipModule, LongPress],
   templateUrl: './download-poster.html',
   styleUrl: './download-poster.css',
 })

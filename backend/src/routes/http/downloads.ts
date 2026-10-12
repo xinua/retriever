@@ -11,6 +11,7 @@ import * as Poster from "../../services/poster.js";
 import * as Notify from "../../services/notify.js";
 import * as MediaQuality from "../../services/media-quality.js";
 import * as ArtworkReplace from "../../services/artwork-replace.js";
+import { renameDownload } from "../../services/rename-download.js";
 import * as TelegramBot from "../../services/telegram/bot.js";
 import * as TelegramChats from "../../services/telegram/chats.js";
 import * as TelegramSend from "../../services/telegram/send.js";
@@ -845,6 +846,41 @@ export async function downloadsRoutes(app: FastifyInstance) {
     broadcast("download-updated", decorated);
 
     return decorated;
+  });
+
+  /**
+   * Renames a download: its title, and the file on disk to match — see
+   * services/rename-download.ts. `fileRenamed` is false when the row has no
+   * file to rename, and only the title changed.
+   */
+  app.patch("/api/downloads/:id/title", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const rowId = Number(id);
+
+    if (!Number.isInteger(rowId)) {
+      return reply.code(400).send({ error: "id must be a number" });
+    }
+
+    const { title } = (req.body ?? {}) as { title?: unknown };
+
+    const [row] = await db
+      .select()
+      .from(download)
+      .where(eq(download.id, rowId));
+
+    if (!row) return reply.code(404).send({ error: "Not found" });
+
+    const appSettings = await loadSettings();
+
+    if (!appSettings) {
+      return reply.code(500).send({ error: "Settings unavailable" });
+    }
+
+    const result = await renameDownload(row, title, appSettings);
+
+    if (!result.ok) return reply.code(result.status).send({ error: result.error });
+
+    return { ...result.download, fileRenamed: result.fileRenamed };
   });
 
   /**

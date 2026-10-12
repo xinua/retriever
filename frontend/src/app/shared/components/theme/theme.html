@@ -1,7 +1,6 @@
 <mat-card class="p-4 shadow-xl! theme-card">
   <mat-card-header class="mb-5">
-    <mat-card-title>UI Configuration</mat-card-title>
-    <!-- <mat-card-subtitle class="font-thin!"> Configure the UI of the app </mat-card-subtitle> -->
+    <mat-card-title>Theme</mat-card-title>
   </mat-card-header>
 
   <mat-card-content class="mt-2">
@@ -55,12 +54,7 @@
         </mat-select>
       </mat-form-field>
 
-      <mat-slide-toggle
-        formControlName="enableAnimations"
-        matTooltip="Scroll animations"
-        matTooltipPosition="left"
-        labelPosition="before"
-      >
+      <mat-slide-toggle formControlName="enableAnimations" matTooltipPosition="left" labelPosition="before">
         <div class="flex items-center">
           <mat-icon fontIcon="animation" />
           <span class="mx-2">Animations</span>

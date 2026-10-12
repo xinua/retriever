@@ -322,6 +322,10 @@ export class HttpService {
     return this._http.patch<DownloadModel>(`/api/downloads/${id}/path`, { path });
   }
 
+  renameDownload(id: number, title: string): Observable<DownloadModel & { fileRenamed: boolean }> {
+    return this._http.patch<DownloadModel & { fileRenamed: boolean }>(`/api/downloads/${id}/title`, { title });
+  }
+
   updateSubAvatar(id: number, avatar: File): Observable<SubscriptionModel> {
     return this._http.put<SubscriptionModel>(`/api/channels/${id}/avatar`, avatar);
   }

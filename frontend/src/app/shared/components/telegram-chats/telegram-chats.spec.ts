@@ -93,7 +93,7 @@ describe('TelegramChats', () => {
   const el = (): HTMLElement => fixture.nativeElement;
   const text = (): string => el().textContent.replace(/\s+/g, ' ');
   const button = (tooltip: string, root: ParentNode = el()): HTMLButtonElement | null =>
-    root.querySelector(`button[mattooltip="${tooltip}"]`);
+    root.querySelector(`button[mattooltip="${tooltip}"], button[aria-label="${tooltip}"]`);
   const rows = (): HTMLElement[] =>
     Array.from(el().querySelectorAll<HTMLElement>('.border-gray-800')).filter((row) => row.querySelector('input[id]'));
   const nameInput = (chatId: string): HTMLInputElement => el().querySelector(`#chat-name-${chatId}`)!;
@@ -229,9 +229,9 @@ describe('TelegramChats', () => {
     });
 
     it.each([
-      ['approved', ['Allow notifications', 'Block', 'Remove'], ['Approve']],
-      ['pending', ['Approve', 'Block', 'Remove'], ['Allow notifications']],
-      ['blocked', ['Approve', 'Remove'], ['Allow notifications', 'Block']],
+      ['approved', ['Disallow notifications', 'Block', 'Remove'], ['Approve/Unblock']],
+      ['pending', ['Approve/Unblock', 'Block', 'Remove'], ['Allow notifications', 'Disallow notifications']],
+      ['blocked', ['Approve/Unblock', 'Remove'], ['Allow notifications', 'Disallow notifications', 'Block']],
     ] as const)('offers the right actions for a %s chat', async (status, shown, hidden) => {
       await render([chat({ status })]);
       const row = rows()[0];
@@ -243,7 +243,7 @@ describe('TelegramChats', () => {
     it('shows whether notifications are on for an approved chat', async () => {
       await render([chat({ notify: true }), chat({ chatId: '200', notify: false })]);
 
-      expect(button('Allow notifications', rows()[0])!.querySelector('mat-icon')!.getAttribute('fonticon')).toBe(
+      expect(button('Disallow notifications', rows()[0])!.querySelector('mat-icon')!.getAttribute('fonticon')).toBe(
         'notifications',
       );
       expect(button('Allow notifications', rows()[1])!.querySelector('mat-icon')!.getAttribute('fonticon')).toBe(
@@ -258,7 +258,7 @@ describe('TelegramChats', () => {
       const saved = vi.fn();
       component.saved.subscribe(saved);
 
-      button('Approve')!.click();
+      button('Approve/Unblock')!.click();
       await refresh();
 
       expect(http['updateTelegramChat']).toHaveBeenCalledWith('100', { status: 'approved' });
@@ -279,7 +279,7 @@ describe('TelegramChats', () => {
     it('toggles notifications', async () => {
       await render([chat({ notify: true })]);
 
-      button('Allow notifications')!.click();
+      button('Disallow notifications')!.click();
 
       expect(http['updateTelegramChat']).toHaveBeenCalledWith('100', { notify: false });
       expect(component.chats()[0].notify).toBe(false);

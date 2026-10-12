@@ -45,16 +45,28 @@
             <div class="flex items-center col-span-1 gap-2">
               @let title = (download().prefix ?? '') + ' ' + (download().title || download().url);
               <rt-status-indicator [download]="download()" class="contents" />
-              <a
-                #titleEl
-                [href]="download().url"
-                target="_blank"
-                class="text-lg truncate w-full"
-                [matTooltip]="title"
-                [matTooltipDisabled]="!(titleEl.scrollWidth > titleEl.clientWidth)"
+
+              <rt-text-input
+                class="truncate"
+                [value]="download().title"
+                [isEditing]="isEditing()"
+                (save)="updateTitle($event)"
+                (cancel)="isEditing.set(false)"
+                inputClass="text-lg"
               >
-                {{ title }}
-              </a>
+                <a
+                  #titleEl
+                  target="_blank"
+                  class="text-lg cursor-pointer select-none"
+                  (rtLongPress)="setEditing()"
+                  [rtThreshold]="250"
+                  [href]="download().url"
+                  [matTooltip]="title"
+                  [matTooltipDisabled]="!(titleEl.scrollWidth > titleEl.clientWidth)"
+                >
+                  {{ title }}
+                </a>
+              </rt-text-input>
             </div>
 
             <div class="col-span-1 lg:hidden">

@@ -70,10 +70,11 @@ describe('ManualFormComponent', () => {
       ],
     }).compileComponents();
 
-    // The select triggers use registered SVG icons; register blanks so they resolve.
+    // The select triggers and the pending spinner use registered SVG icons; register blanks so they resolve.
     const sanitizer = TestBed.inject(DomSanitizer);
     const registry = TestBed.inject(MatIconRegistry);
     const svgIcons = new Set([
+      'loading',
       ...Object.values(CODEC_ICONS),
       ...Object.values(FORMAT_ICONS),
       ...Object.values(QUALITY_ICONS),

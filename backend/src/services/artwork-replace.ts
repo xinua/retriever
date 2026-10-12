@@ -55,6 +55,14 @@ export type ReplaceError = { ok: false; status: number; error: string };
 const embedding = new Set<number>();
 
 /**
+ * Whether this download's file is being rewritten with new cover art. Renaming
+ * it meanwhile would let the embed's final rename recreate the old name.
+ */
+export function isEmbedding(id: number): boolean {
+  return embedding.has(id);
+}
+
+/**
  * Stores `image` as the avatar of the YouTube channel `channelId`, and tells
  * every client about each subscription and download now showing it.
  */

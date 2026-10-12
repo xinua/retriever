@@ -1,5 +1,5 @@
 import { DatePipe, TitleCasePipe } from '@angular/common';
-import { Component, computed, ElementRef, inject, input, output } from '@angular/core';
+import { Component, computed, ElementRef, inject, input, output, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialogConfig } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
@@ -7,8 +7,9 @@ import { MatTableModule } from '@angular/material/table';
 import { MatTooltip } from '@angular/material/tooltip';
 import { DownloadStatusLabels } from '../../constants/labels.const';
 import { AppearDirective } from '../../directives/appear.directive';
-import { DownloadModel, DownloadSource, DownloadStatus } from '../../models/download.model';
+import { LongPress } from '../../directives/long-press';
 import { PaginatorModel } from '../../models/common.model';
+import { DownloadModel, DownloadSource, DownloadStatus } from '../../models/download.model';
 import { SizePipe } from '../../pipes/size.pipe';
 import { HttpService } from '../../services/http.service';
 import { RtAvatar } from '../avatar/avatar';
@@ -20,6 +21,7 @@ import { DownloadPoster } from '../download-poster/download-poster';
 import { DropArea } from '../drop-area/drop-area';
 import { ProgressInfo } from '../progress-info/progress-info';
 import { StatusIndicator } from '../status-indicator/status-indicator';
+import { TextInput } from '../text-input/text-input';
 
 const DEFAULT_AVATARS = 'default.webp';
 const DIALOG_DATA: MatDialogConfig = {
@@ -50,6 +52,8 @@ const DIALOG_DATA: MatDialogConfig = {
     RtAvatar,
     DownloadPoster,
     DropArea,
+    TextInput,
+    LongPress,
   ],
   templateUrl: './download-record.html',
   styleUrl: './download-record.css',
@@ -72,6 +76,7 @@ export class DownloadRecord {
   readonly downloadStatus = DownloadStatus;
   readonly downloadSource = DownloadSource;
   readonly statusLabels = DownloadStatusLabels;
+  isEditing = signal(false);
   defaultImage = computed<boolean>(() => this.download().avatarPath?.includes(DEFAULT_AVATARS));
 
   private hostElement = inject(ElementRef).nativeElement;
@@ -89,5 +94,18 @@ export class DownloadRecord {
   updateAvatar(event: { file: File; decision: Decision }) {
     if (event.decision === Decision.ALTERNATIVE || !event.decision) return;
     this._httpService.updateDownloadAvatar(this.download().id, event.file).subscribe();
+  }
+
+  updateTitle(title: string) {
+    this.isEditing.set(false);
+
+    const trimmed = title?.trim();
+    if (!trimmed || trimmed === this.download().title) return;
+
+    this._httpService.renameDownload(this.download().id, trimmed).subscribe();
+  }
+
+  setEditing() {
+    this.isEditing.set(!this.isEditing());
   }
 }
