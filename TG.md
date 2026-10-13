@@ -1,6 +1,7 @@
 ## <img src="demo/icons/telegram.svg" width="20" height="20"> Telegram
 
 ![Webhook payload](demo/6.webp)
+![Webhook payload](demo/tg_bot.gif)
 
 ### Setup
 
