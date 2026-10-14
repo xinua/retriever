@@ -1,0 +1,133 @@
+name: Release gate
+
+# Before anything reaches GitHub: verify, build and publish an
+# amd64 image to this Gitea's registry, then push main and the tag to GitHub,
+# where .github/workflows/release.yml builds the multi-arch image for ghcr.
+on:
+  push:
+    tags:
+      - 'v*'
+  # Lets you re-run the gate for an existing tag without cutting a new one.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to release (e.g. v1.2.5)'
+        required: true
+
+env:
+  IMAGE_NAME: ${{ github.repository }}
+  GITHUB_REPO: xinua/retriever
+  SRC_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SRC_TAG }}
+          fetch-depth: 0
+
+      # GitHub only ever receives main and the tag together, so a tag cut on a
+      # release branch that was never merged would publish code main lacks.
+      - name: Check the tag is on main
+        run: |
+          if ! git merge-base --is-ancestor "$SRC_TAG" origin/main; then
+            echo "::error::$SRC_TAG is not on main - merge the release branch into main first"
+            exit 1
+          fi
+
+      # Same check as the GitHub workflow, so a forgotten version bump fails
+      # here instead of after the tag is already public.
+      - name: Check versions match the tag
+        run: |
+          expected="${SRC_TAG#v}"
+          declare -A found=(
+            [package.json]="$(jq -r .version package.json)"
+            [frontend/package.json]="$(jq -r .version frontend/package.json)"
+            [backend/package.json]="$(jq -r .version backend/package.json)"
+            [backend/package-lock.json]="$(jq -r '.packages[""].version' backend/package-lock.json)"
+            [frontend/src/app/shared/constants/version.const.ts]="$(sed -nE "s/.*APP_VERSION = '([^']+)'.*/\1/p" frontend/src/app/shared/constants/version.const.ts)"
+            [Dockerfile]="$(sed -nE 's/.*org\.opencontainers\.image\.version="([^"]+)".*/\1/p' Dockerfile)"
+          )
+          failed=0
+          for file in "${!found[@]}"; do
+            if [ "${found[$file]}" != "$expected" ]; then
+              echo "::error file=$file::version is '${found[$file]}', tag expects '$expected'"
+              failed=1
+            fi
+          done
+          exit $failed
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      # No dependency cache: it needs the runner's cache server reachable from
+      # the job container, which is one more thing to get wrong on the NAS.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint and test
+        working-directory: frontend
+        run: pnpm run verify
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SRC_TAG }}
+
+      # Plain docker against the NAS's own daemon: amd64 only (arm64 is left to
+      # GitHub), and layers stay cached on the NAS between releases.
+      - name: Resolve the registry host
+        run: |
+          host="${GITHUB_SERVER_URL#*://}"
+          echo "REGISTRY=${host%/}" >> "$GITHUB_ENV"
+
+      - name: Log in to the Gitea registry
+        run: echo "${{ secrets.REGISTRY_TOKEN }}" | docker login "$REGISTRY" -u "${{ github.repository_owner }}" --password-stdin
+
+      - name: Build and push
+        run: |
+          image="$REGISTRY/$IMAGE_NAME"
+          docker build --pull -t "$image:${SRC_TAG#v}" -t "$image:latest" .
+          docker push "$image:${SRC_TAG#v}"
+          docker push "$image:latest"
+
+  push-to-github:
+    needs: publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SRC_TAG }}
+          fetch-depth: 0
+
+      # The tag is fetched explicitly so an annotated tag goes out as one, not
+      # as the lightweight ref checkout may leave behind. --atomic means GitHub
+      # gets both refs or neither; without --force a main that moved on GitHub
+      # makes this fail rather than get overwritten.
+      - name: Push main and the tag
+        env:
+          GH_PUSH_TOKEN: ${{ secrets.GH_PUSH_TOKEN }}
+        run: |
+          git fetch --force origin "refs/tags/$SRC_TAG:refs/tags/$SRC_TAG"
+          git push --atomic "https://x-access-token:$GH_PUSH_TOKEN@github.com/$GITHUB_REPO.git" \
+            "refs/remotes/origin/main:refs/heads/main" \
+            "refs/tags/$SRC_TAG:refs/tags/$SRC_TAG"
