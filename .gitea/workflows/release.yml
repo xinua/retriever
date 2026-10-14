@@ -131,3 +131,34 @@ jobs:
           git push --atomic "https://x-access-token:$GH_PUSH_TOKEN@github.com/$GITHUB_REPO.git" \
             "refs/remotes/origin/main:refs/heads/main" \
             "refs/tags/$SRC_TAG:refs/tags/$SRC_TAG"
+
+  # always() so a failure is reported too; a job skipped because an earlier one
+  # failed is not the cause, so the message names the first job that did not
+  # succeed.
+  notify:
+    needs: [test, publish, push-to-github]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send the result to Telegram
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          RESULTS: >-
+            test=${{ needs.test.result }}
+            publish=${{ needs.publish.result }}
+            push-to-github=${{ needs.push-to-github.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_number }}
+        run: |
+          text="✅ $SRC_TAG passed, handed to GitHub"
+          for entry in $RESULTS; do
+            if [ "${entry#*=}" != "success" ]; then
+              text="❌ $SRC_TAG: ${entry%%=*} ${entry#*=}"
+              break
+            fi
+          done
+          curl -sS --fail -o /dev/null "https://api.telegram.org/bot$TG_BOT_TOKEN/sendMessage" \
+            --data-urlencode "chat_id=$TG_CHAT_ID" \
+            --data-urlencode "text=$text
+          $RUN_URL"

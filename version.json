@@ -16,8 +16,12 @@
           "Enhance \"Update file path\" feature"
         ],
         "other": [],
-        "videos": ["https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.2.4/1.mp4"],
-        "images": ["https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.2.5/1.webp"]
+        "videos": [
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.2.4/1.mp4"
+        ],
+        "images": [
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.2.5/1.webp"
+        ]
       }
     },
     {
