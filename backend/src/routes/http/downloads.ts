@@ -1,6 +1,8 @@
 import { FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import fs from "node:fs";
+import fsp from "node:fs/promises";
+import path from "node:path";
 
 import { db } from "../../db/index.js";
 import { channel, download, settings } from "../../db/schema.js";
@@ -11,7 +13,7 @@ import * as Poster from "../../services/poster.js";
 import * as Notify from "../../services/notify.js";
 import * as MediaQuality from "../../services/media-quality.js";
 import * as ArtworkReplace from "../../services/artwork-replace.js";
-import { renameDownload } from "../../services/rename-download.js";
+import { renameDownloadFile, retitleDownload } from "../../services/rename-download.js";
 import * as TelegramBot from "../../services/telegram/bot.js";
 import * as TelegramChats from "../../services/telegram/chats.js";
 import * as TelegramSend from "../../services/telegram/send.js";
@@ -215,6 +217,56 @@ async function listDownloads(settings: Settings, query: {
     types,
     name: typeof query.name === "string" ? query.name.trim() : ""
   };
+}
+
+/**
+ * Where `row` sits in the unfiltered list — 0 for the newest — so a client can
+ * work out the page it is on for whatever page size it uses. Counts the rows
+ * that sort before it under listDownloads' order; SQLite puts a missing
+ * createdAt last in a descending sort. Null for a hidden row, which the list
+ * never shows.
+ */
+async function listIndexOf(row: Download): Promise<number | null> {
+  if (row.hidden) return null;
+
+  const before = row.createdAt
+    ? sql`createdAt > ${row.createdAt} OR (createdAt = ${row.createdAt} AND id > ${row.id})`
+    : sql`createdAt IS NOT NULL OR id > ${row.id}`;
+
+  const [counted] = db.all<{ count: number }>(sql`
+    SELECT COUNT(*) AS count FROM download WHERE hidden = 0 AND (${before})
+  `);
+
+  return Number(counted?.count) || 0;
+}
+
+/**
+ * Another row already pointing at `realFile`, the realpath of a file — the
+ * visible one first, as that is the one a user can be shown.
+ *
+ * Stored paths are not all realpaths (yt-dlp writes the folder as configured),
+ * so the match is by realpath. Only rows ending in the same file name are
+ * resolved, which keeps it to a handful of stat calls on any table size.
+ */
+async function otherRowForFile(realFile: string, exceptId: number): Promise<Download | null> {
+  const escaped = path.basename(realFile).replace(/[\\%_]/g, (char) => `\\${char}`);
+
+  const candidates = await db
+    .select()
+    .from(download)
+    .where(and(
+      sql`id != ${exceptId}`,
+      sql`TRIM(filePath) LIKE ${`%${escaped}`} ESCAPE '\\'`
+    ))
+    .orderBy(download.hidden);
+
+  for (const candidate of candidates) {
+    const real = await fsp.realpath(candidate.filePath!.trim()).catch(() => null);
+
+    if (real === realFile) return candidate;
+  }
+
+  return null;
 }
 
 /**
@@ -784,6 +836,12 @@ export async function downloadsRoutes(app: FastifyInstance) {
    * Refused while the job is queued or running, because the worker writes
    * `filePath` itself when it finishes and would overwrite the new value a
    * moment later.
+   *
+   * A file another row already points at is refused with 409 and `conflict`
+   * naming that row — its id, title and `index` in the unfiltered list (null
+   * when hidden) — unless the request says `force: true`. Two rows on one
+   * file is rarely meant, and renaming or deleting it through one of them
+   * leaves the other pointing at nothing.
    */
   app.patch("/api/downloads/:id/path", async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -793,7 +851,7 @@ export async function downloadsRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "id must be a number" });
     }
 
-    const { path: wanted } = (req.body ?? {}) as { path?: unknown };
+    const { path: wanted, force } = (req.body ?? {}) as { path?: unknown; force?: unknown };
 
     if (typeof wanted !== "string") {
       return reply.code(400).send({ error: "path is required" });
@@ -825,6 +883,15 @@ export async function downloadsRoutes(app: FastifyInstance) {
       return reply.code(file.status).send({ error: file.error });
     }
 
+    const other = force === true ? null : await otherRowForFile(file.path, rowId);
+
+    if (other) {
+      return reply.code(409).send({
+        error: "Another record already points to this file",
+        conflict: { id: other.id, title: other.title, index: await listIndexOf(other) }
+      });
+    }
+
     const media = await MediaQuality.probe(file.path, row.type);
 
     // The resolved realpath rather than what was typed, so the column keeps
@@ -849,9 +916,8 @@ export async function downloadsRoutes(app: FastifyInstance) {
   });
 
   /**
-   * Renames a download: its title, and the file on disk to match — see
-   * services/rename-download.ts. `fileRenamed` is false when the row has no
-   * file to rename, and only the title changed.
+   * Renames a download's title. The file on disk keeps its name — renaming
+   * it is the separate `/file-name` endpoint below.
    */
   app.patch("/api/downloads/:id/title", async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -876,11 +942,46 @@ export async function downloadsRoutes(app: FastifyInstance) {
       return reply.code(500).send({ error: "Settings unavailable" });
     }
 
-    const result = await renameDownload(row, title, appSettings);
+    const result = await retitleDownload(row, title, appSettings);
 
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
 
-    return { ...result.download, fileRenamed: result.fileRenamed };
+    return result.download;
+  });
+
+  /**
+   * Renames a download's file on disk to exactly `fileName` — same folder,
+   * same extension — and points the row at it. The title is left alone; see
+   * services/rename-download.ts.
+   */
+  app.patch("/api/downloads/:id/file-name", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const rowId = Number(id);
+
+    if (!Number.isInteger(rowId)) {
+      return reply.code(400).send({ error: "id must be a number" });
+    }
+
+    const { fileName } = (req.body ?? {}) as { fileName?: unknown };
+
+    const [row] = await db
+      .select()
+      .from(download)
+      .where(eq(download.id, rowId));
+
+    if (!row) return reply.code(404).send({ error: "Not found" });
+
+    const appSettings = await loadSettings();
+
+    if (!appSettings) {
+      return reply.code(500).send({ error: "Settings unavailable" });
+    }
+
+    const result = await renameDownloadFile(row, fileName, appSettings);
+
+    if (!result.ok) return reply.code(result.status).send({ error: result.error });
+
+    return result.download;
   });
 
   /**

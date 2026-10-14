@@ -1,7 +1,25 @@
 {
-  "version": "1.2.4",
-  "releaseDate": "2026-10-13",
+  "version": "1.2.5",
+  "releaseDate": "2026-10-14",
   "changelog": [
+    {
+      "version": "1.2.5",
+      "releaseDate": "2026-10-14",
+      "changelog": {
+        "bugfixes": [],
+        "features": [
+          "Update Firefox extension button in settings",
+          "- It's available to install from Firefox store now"
+        ],
+        "improvements": [
+          "Split rename entry and rename file",
+          "Enhance \"Update file path\" feature"
+        ],
+        "other": [],
+        "videos": ["https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.2.4/1.mp4"],
+        "images": ["https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.2.5/1.webp"]
+      }
+    },
     {
       "version": "1.2.4",
       "releaseDate": "2026-10-13",
@@ -16,7 +34,9 @@
         ],
         "other": [],
         "images": [],
-        "videos": ["https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.2.4/1.mp4"]
+        "videos": [
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.2.4/1.mp4"
+        ]
       }
     },
     {

@@ -14,14 +14,8 @@ import { ClickOutside } from '../../directives/click-outside';
       <div class="flex items-center gap-2 w-full edit-input" (clickOutside)="cancel.emit()">
         <input #input type="text" [(ngModel)]="_value" [class]="inputClass()" class="w-full" />
 
-        <button
-          matIconButton
-          (click)="save.emit(_value)"
-          class="h-7! w-7! p-0!"
-          animate.enter="fadeIn"
-          animate.leave="fadeOut"
-        >
-          <mat-icon fontIcon="done" class="text-sm! w-4! h-4!" />
+        <button matIconButton (click)="save.emit(_value)" class="h-7! w-7! p-0! animate-fadeIn">
+          <mat-icon fontIcon="done" class="text-sm! w-4! h-4! text-white!" />
         </button>
       </div>
     }

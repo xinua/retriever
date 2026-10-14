@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import { spawn } from "node:child_process";
 
 import * as Ffmpeg from "./ffmpeg.js";
@@ -65,6 +66,7 @@ export function posterFor(row: Download): string | null {
 
 /** A row as a client sees it: stored columns plus the resolved extras. */
 export type Decorated<T extends Download> = T & {
+  fileName: string | null;
   avatarPath: string | null;
   authorUrl: string | null;
 };
@@ -85,6 +87,8 @@ export type Decorated<T extends Download> = T & {
 export function decorate<T extends Download>(row: T): Decorated<T> {
   return {
     ...row,
+    // Without the extension: that is fixed, and renaming the file never changes it.
+    fileName: row.filePath?.trim() ? path.parse(row.filePath.trim()).name : null,
     thumbnailPath: posterFor(row),
     avatarPath: avatarFor(row),
     authorUrl: authorUrlFor(row)

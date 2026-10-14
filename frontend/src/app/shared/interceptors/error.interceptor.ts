@@ -35,7 +35,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
 
       const status = error.status || 'unknown';
       // const message = error.error?.message || error.statusText || 'Request failed';
-      const message = error.error?.error || error.error?.message || error.statusText || 'Request failed';
+      const message = error.error?.error || error.error?.message || 'Request failed';
 
       notifier.notify('error', `${message} (status: ${status})`);
 

@@ -75,6 +75,7 @@ export interface DownloadModel {
   /** "converting" while ffmpeg re-encodes into the requested codec; null otherwise. */
   phase: Nullable<'converting'>;
   filePath: Nullable<string>;
+  fileName: Nullable<string>;
   /**
    * Whether the server can serve `filePath` right now. Checked on disk when
    * the row is answered over HTTP; rows pushed over the websocket leave it

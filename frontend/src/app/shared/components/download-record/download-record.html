@@ -72,6 +72,7 @@
             <div class="col-span-1 lg:hidden">
               <rt-download-controls
                 [download]="download()"
+                [paginatorLimit]="paginator().limit"
                 (retry)="retry.emit(download())"
                 (remove)="remove.emit({ download: download(), elementRef: record })"
                 (saveAs)="saveAs.emit(download())"
@@ -134,6 +135,7 @@
         <div class="hidden lg:block">
           <rt-download-controls
             [download]="download()"
+            [paginatorLimit]="paginator().limit"
             (retry)="retry.emit(download())"
             (remove)="remove.emit({ download: download(), elementRef: record })"
             (saveAs)="saveAs.emit(download())"

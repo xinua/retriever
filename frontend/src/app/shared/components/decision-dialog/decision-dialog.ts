@@ -29,6 +29,16 @@ export enum Decision {
 
     <mat-dialog-content>
       <p class="text-white">{{ data.message }}</p>
+
+      <div class="mt-2">
+        @if (isDetailsArray) {
+          @for (detail of data.details; track $index) {
+            <p class="text-white">{{ detail }}</p>
+          }
+        } @else {
+          <p class="text-white">{{ data.details }}</p>
+        }
+      </div>
     </mat-dialog-content>
 
     <mat-dialog-actions>
@@ -55,6 +65,7 @@ export class DecisionDialog {
   readonly data = inject(MAT_DIALOG_DATA);
   readonly dialogRef = inject(MatDialogRef<DecisionDialog>);
   readonly decision = Decision;
+  readonly isDetailsArray = Array.isArray(this.data.details);
 
   @HostListener('keydown.enter', ['$event'])
   onEnter(event: Event) {

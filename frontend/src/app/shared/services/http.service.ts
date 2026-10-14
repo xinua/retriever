@@ -319,11 +319,15 @@ export class HttpService {
   }
 
   setDownloadPath(id: number, path: string): Observable<DownloadModel> {
-    return this._http.patch<DownloadModel>(`/api/downloads/${id}/path`, { path });
+    return this._http.patch<DownloadModel>(`/api/downloads/${id}/path`, { path, force: false }, { context: silent() });
   }
 
-  renameDownload(id: number, title: string): Observable<DownloadModel & { fileRenamed: boolean }> {
-    return this._http.patch<DownloadModel & { fileRenamed: boolean }>(`/api/downloads/${id}/title`, { title });
+  setDownloadPathForce(id: number, path: string): Observable<DownloadModel> {
+    return this._http.patch<DownloadModel>(`/api/downloads/${id}/path`, { path, force: true });
+  }
+
+  renameDownload(id: number, title: string): Observable<DownloadModel> {
+    return this._http.patch<DownloadModel>(`/api/downloads/${id}/title`, { title });
   }
 
   updateSubAvatar(id: number, avatar: File): Observable<SubscriptionModel> {
@@ -362,5 +366,9 @@ export class HttpService {
     return this._http.get<{ version: string | null; available: boolean }>(
       'https://raw.githubusercontent.com/xinua/rt-ext/main/version.json',
     );
+  }
+
+  setFileName(id: number, fileName: string): Observable<DownloadModel> {
+    return this._http.patch<DownloadModel>(`/api/downloads/${id}/file-name`, { fileName });
   }
 }

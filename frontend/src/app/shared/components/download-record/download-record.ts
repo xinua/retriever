@@ -22,6 +22,7 @@ import { DropArea } from '../drop-area/drop-area';
 import { ProgressInfo } from '../progress-info/progress-info';
 import { StatusIndicator } from '../status-indicator/status-indicator';
 import { TextInput } from '../text-input/text-input';
+import { finalize } from 'rxjs';
 
 const DEFAULT_AVATARS = 'default.webp';
 const DIALOG_DATA: MatDialogConfig = {
@@ -97,12 +98,16 @@ export class DownloadRecord {
   }
 
   updateTitle(title: string) {
-    this.isEditing.set(false);
-
     const trimmed = title?.trim();
-    if (!trimmed || trimmed === this.download().title) return;
+    if (!trimmed || trimmed === this.download().title) {
+      this.isEditing.set(false);
+      return;
+    }
 
-    this._httpService.renameDownload(this.download().id, trimmed).subscribe();
+    this._httpService
+      .renameDownload(this.download().id, trimmed)
+      .pipe(finalize(() => this.isEditing.set(false)))
+      .subscribe();
   }
 
   setEditing() {

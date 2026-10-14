@@ -1,7 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { NotifierService } from 'angular-notifier';
+import { of } from 'rxjs';
+import { Decision } from '../decision-dialog/decision-dialog';
 import { DownloadModel, DownloadStatus } from '../../models/download.model';
 import { DownloadRecordMock } from '../../constants/mocks.const';
 import { DownloadControls } from './download-controls';
@@ -74,11 +77,64 @@ describe('DownloadControls', () => {
 
     const request = httpMock.expectOne('/api/downloads/5/path');
     expect(request.request.method).toBe('PATCH');
-    expect(request.request.body).toEqual({ path: 'moved/video.mp4' });
+    expect(request.request.body).toEqual({ path: 'moved/video.mp4', force: false });
 
     request.flush({ ...DownloadRecordMock, id: 5 });
     expect(notify).toHaveBeenCalledWith('success', 'File path successfully updated.');
     expect(component.filePath).toBe('');
+  });
+
+  describe('when another record already points at the file', () => {
+    const conflict = {
+      error: 'Another record already points to this file',
+      conflict: { id: 9, title: 'Other', index: 3 },
+    };
+
+    function answerWith(decision: Decision | undefined) {
+      vi.spyOn(TestBed.inject(MatDialog), 'open').mockReturnValue({
+        afterClosed: () => of(decision),
+      } as unknown as MatDialogRef<unknown, Decision>);
+    }
+
+    it('saves again with force once confirmed', async () => {
+      const notify = vi.spyOn(TestBed.inject(NotifierService), 'notify');
+      answerWith(Decision.CONFIRM);
+      await render({ id: 5, status: DownloadStatus.DONE });
+
+      component.setFilePath('moved/video.mp4', component.download());
+      httpMock.expectOne('/api/downloads/5/path').flush(conflict, { status: 409, statusText: 'Conflict' });
+
+      const forced = httpMock.expectOne('/api/downloads/5/path');
+      expect(forced.request.body).toEqual({ path: 'moved/video.mp4', force: true });
+
+      forced.flush({ ...DownloadRecordMock, id: 5 });
+      expect(notify).toHaveBeenCalledWith('success', 'File path successfully updated.');
+      expect(notify).not.toHaveBeenCalledWith('error', expect.anything());
+    });
+
+    it('changes nothing when cancelled', async () => {
+      const notify = vi.spyOn(TestBed.inject(NotifierService), 'notify');
+      answerWith(undefined);
+      await render({ id: 5, status: DownloadStatus.DONE });
+
+      component.setFilePath('moved/video.mp4', component.download());
+      httpMock.expectOne('/api/downloads/5/path').flush(conflict, { status: 409, statusText: 'Conflict' });
+
+      httpMock.expectNone('/api/downloads/5/path');
+      expect(notify).not.toHaveBeenCalled();
+    });
+  });
+
+  it('reports any other failure of the silent request itself', async () => {
+    const notify = vi.spyOn(TestBed.inject(NotifierService), 'notify');
+    await render({ id: 5, status: DownloadStatus.DONE });
+
+    component.setFilePath('nowhere.mp4', component.download());
+    httpMock
+      .expectOne('/api/downloads/5/path')
+      .flush({ error: 'No file at that path' }, { status: 404, statusText: 'Not Found' });
+
+    expect(notify).toHaveBeenCalledWith('error', 'No file at that path (status: 404)');
   });
 
   it('does not save a blank file path', async () => {

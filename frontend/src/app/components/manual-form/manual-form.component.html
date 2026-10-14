@@ -97,7 +97,7 @@
           @let unsupportedFormats = ['opus', 'wav'];
           @let isUnsupportedFormat = unsupportedFormats.includes(form.controls.format.value);
           @let isTooltipDisabled = form.controls.format.value === 'auto';
-          @let audioFormatTooltip = isUnsupportedFormat ? 'Embedded image not supported' : 'Image supported';
+          @let audioFormatTooltip = isUnsupportedFormat ? 'Embedded image not supported' : 'Poster supported';
 
           <mat-form-field appearance="outline" class="w-full col-span-1">
             <mat-label>Format</mat-label>

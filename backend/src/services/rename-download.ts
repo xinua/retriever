@@ -6,27 +6,26 @@ import { db } from "../db/index.js";
 import { download } from "../db/schema.js";
 import { broadcast } from "../routes/ws/websockets.js";
 import { isEmbedding } from "./artwork-replace.js";
-import { resolveDownloadFile } from "./download-file.js";
+import { resolveDownloadFile, withFileExists } from "./download-file.js";
 import * as Poster from "./poster.js";
 import * as ytdlp from "./ytdlp.js";
 
 import type { Download, Settings } from "../db/types.js";
 
 /**
- * Renames a download: the title the list shows, and the file on disk with it.
+ * Renames a download — two separate actions, never one implying the other.
  *
- * The file keeps its folder, its extension and whatever sits around the title
- * in its name — the channel or manual prefix, a " (2)" copy number — so only
- * the part that *was* the title changes. That part is found by sanitising the
- * old title the way yt-dlp did when it named the file (`sanitizeTitle`). A
- * file renamed by hand no longer contains it, and is then named
- * `<prefix><title>` from scratch.
+ * `retitleDownload` changes the title the list shows and nothing else. The
+ * file on disk is named `<prefix><title>< (N)>.<ext>`, a mapping the user
+ * never sees, so deriving one from the other made renames that could not be
+ * undone.
  *
- * The move is a `rename` within one folder: no bytes are copied, which
- * matters on the NAS, and Plex sees one file disappear and one appear.
- *
- * A row with no file — failed before writing anything, or the file is gone —
- * only has its title changed; `fileRenamed` says which of the two happened.
+ * `renameDownloadFile` renames the file to exactly the name typed, given
+ * without the extension — the file keeps its own. Nothing else is added,
+ * stripped or substituted, so what the user saw is what lands on disk.
+ * A name that cannot be used as typed is refused rather than fixed up. The
+ * move is a `rename` within one folder: no bytes are copied, which matters on
+ * the NAS, and Plex sees one file disappear and one appear.
  */
 
 /** Longer than any real video title; keeps a pasted essay out of the column. */
@@ -35,14 +34,22 @@ const MAX_TITLE_LENGTH = 300;
 /** What ext4, btrfs and most SMB shares allow for one name, in bytes. */
 const MAX_NAME_BYTES = 255;
 
+/**
+ * Characters no file name may hold here: path separators and NUL, plus what
+ * Windows refuses over SMB. yt-dlp never writes the latter either — see
+ * `ytdlp.sanitizeTitle` — so a file renamed here stays readable from every
+ * client the share has.
+ */
+const FORBIDDEN_CHARS = /[\\/\0"*:<>?|\x01-\x1f\x7f]/;
+
 export type RenameResult =
-  | { ok: true; download: Download & { fileExists: boolean }; fileRenamed: boolean }
+  | { ok: true; download: Download & { fileExists: boolean } }
   | { ok: false; status: number; error: string };
 
 /** Downloads mid-rename, so a double submit cannot race itself. */
 const renaming = new Set<number>();
 
-export async function renameDownload(
+export async function retitleDownload(
   row: Download,
   value: unknown,
   appSettings: Settings
@@ -59,7 +66,31 @@ export async function renameDownload(
     return { ok: false, status: 400, error: `title must be at most ${MAX_TITLE_LENGTH} characters` };
   }
 
-  // The worker writes both title and filePath when the job finishes.
+  // The worker writes the title when the job finishes.
+  if (row.status === "queued" || row.status === "running") {
+    return { ok: false, status: 409, error: "Download is still active" };
+  }
+
+  const [checked] = await withFileExists([await update(row.id, { title })], appSettings);
+
+  return { ok: true, download: publish(checked) };
+}
+
+export async function renameDownloadFile(
+  row: Download,
+  value: unknown,
+  appSettings: Settings
+): Promise<RenameResult> {
+  if (typeof value !== "string") {
+    return { ok: false, status: 400, error: "fileName is required" };
+  }
+
+  // Only the ends: spaces inside a name are part of it.
+  const stem = value.trim();
+
+  if (!stem) return { ok: false, status: 400, error: "fileName is required" };
+
+  // The worker writes filePath when the job finishes.
   if (row.status === "queued" || row.status === "running") {
     return { ok: false, status: 409, error: "Download is still active" };
   }
@@ -73,68 +104,59 @@ export async function renameDownload(
   try {
     const file = await resolveDownloadFile(row, appSettings);
 
-    // No file to follow the title: nothing written, deleted, or an unmounted
-    // volume. The kept filePath still points where the file was.
-    if (!file.ok) {
-      if (file.status === 403) return file;
+    if (!file.ok) return file;
 
-      return { ok: true, download: await save(row.id, { title }, false), fileRenamed: false };
-    }
+    // The extension is what players and Plex go by, so it is never changed.
+    const name = stem + path.extname(file.filename);
+    const invalid = invalidName(name);
 
-    const target = path.join(path.dirname(file.path), renamedFile(file.filename, row, title));
+    if (invalid) return { ok: false, status: 400, error: invalid };
+
+    const dir = path.dirname(file.path);
+    const target = path.join(dir, name);
 
     if (target === file.path) {
-      return { ok: true, download: await save(row.id, { title }, true), fileRenamed: false };
+      return { ok: true, download: publish({ ...row, fileExists: true }) };
     }
 
-    if (Buffer.byteLength(path.basename(target)) > MAX_NAME_BYTES) {
-      return { ok: false, status: 400, error: "title is too long for a file name" };
-    }
-
-    if (await takenByAnother(target, file.path)) {
-      return { ok: false, status: 409, error: "Another file with that name already exists" };
+    if ((await ytdlp.isFilenameClaimed(dir, name)) || (await takenByAnother(target, file.path))) {
+      return { ok: false, status: 409, error: `"${name}" already exists` };
     }
 
     await fsp.rename(file.path, target);
 
+    let updated: Download;
+
     try {
-      return {
-        ok: true,
-        download: await save(row.id, { title, filePath: target }, true),
-        fileRenamed: true
-      };
+      updated = await update(row.id, { filePath: target });
     } catch (e) {
       // The row still names the old path, so put the file back under it.
       await fsp.rename(target, file.path).catch(() => {});
       throw e;
     }
+
+    return { ok: true, download: publish({ ...updated, fileExists: true }) };
   } finally {
     renaming.delete(row.id);
   }
 }
 
-/**
- * The new file name: the old one with its title part swapped, or
- * `<prefix><title>.<ext>` when the old title cannot be found in it.
- */
-function renamedFile(filename: string, row: Download, title: string): string {
-  const { name: stem, ext } = path.parse(filename);
-  const next = ytdlp.sanitizeTitle(title);
-  const previous = row.title?.trim() ? ytdlp.sanitizeTitle(row.title) : "";
-
-  // Last occurrence: a prefix can repeat a word of the title, a suffix after
-  // the title is only ever a copy number or a chapter marker.
-  const at = previous ? stem.lastIndexOf(previous) : -1;
-
-  if (at === -1) {
-    return `${ytdlp.sanitizeSegment(row.prefix, { keepTrailingSpace: true })}${next}${ext}`;
+/** Why `name` cannot be used as a file name as typed, or null when it can. */
+function invalidName(name: string): string | null {
+  if (FORBIDDEN_CHARS.test(name)) {
+    return 'File name cannot contain / \\ " * : < > ? | or control characters';
   }
 
-  // The copy number only told this file apart from another of the old title;
-  // under the new one it is noise. A name that is taken is refused instead.
-  const suffix = stem.slice(at + previous.length).replace(/^ \(\d+\)/, "");
+  // Also covers "." and "..". A leading dot hides the file from Plex and
+  // from most file browsers.
+  if (name.startsWith(".")) return "File name cannot start with a dot";
 
-  return `${stem.slice(0, at)}${next}${suffix}${ext}`;
+  // Windows drops these silently, so the share would show a different name.
+  if (/[. ]$/.test(name)) return "File name cannot end with a dot or a space";
+
+  if (Buffer.byteLength(name) > MAX_NAME_BYTES) return "File name is too long";
+
+  return null;
 }
 
 /**
@@ -152,18 +174,19 @@ async function takenByAnother(target: string, source: string): Promise<boolean> 
   }
 }
 
-async function save(
-  id: number,
-  values: { title: string; filePath?: string },
-  fileExists: boolean
-) {
+async function update(id: number, values: { title: string } | { filePath: string }) {
   const [updated] = await db
     .update(download)
     .set(values)
     .where(eq(download.id, id))
     .returning();
 
-  const decorated = { ...Poster.decorate(updated), fileExists };
+  return updated;
+}
+
+/** The row as clients see it, pushed to every open tab and returned. */
+function publish(row: Download & { fileExists: boolean }) {
+  const decorated = { ...Poster.decorate(row), fileExists: row.fileExists };
 
   broadcast("download-updated", decorated);
 

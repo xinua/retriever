@@ -20,6 +20,11 @@
     </button>
   }
 
+  <button mat-menu-item (click)="retry.emit()">
+    <mat-icon class="text-white!">refresh</mat-icon>
+    <span>Download again</span>
+  </button>
+
   @if (webhookUrl() && download().fileExists && download().type !== types.THUMBNAIL) {
     <button mat-menu-item (click)="sendToHomeAssistant(download())">
       <mat-icon class="text-white!" svgIcon="homeassistant" />
@@ -55,22 +60,35 @@
     }
   }
 
-  <button mat-menu-item (click)="retry.emit()">
-    <mat-icon class="text-white!">refresh</mat-icon>
-    <span>Download again</span>
-  </button>
-
-  <!-- Offered for a missing file too: the old path is where fixing it starts. -->
-  @if (download().filePath) {
-    <button mat-menu-item (click)="copyFilePath.emit(download())">
-      <mat-icon class="text-white!">content_copy</mat-icon>
-      <span>Copy file path</span>
+  @if (download().fileName && download().fileExists) {
+    <!-- Filled on open, so it shows the name on disk now, not when the list loaded. -->
+    <button mat-menu-item [matMenuTriggerFor]="fileNameMenu" (menuOpened)="fileName = download().fileName ?? ''">
+      <mat-icon class="text-white!">edit</mat-icon>
+      <span>Rename file</span>
     </button>
   }
 
-  <button mat-menu-item [matMenuTriggerFor]="pathMenu">
+  <!-- Offered for a missing file too: the old path is where fixing it starts. -->
+  @if (download().filePath) {
+    <button
+      mat-menu-item
+      matTooltip="Old file path"
+      matTooltipPosition="left"
+      [matTooltipDisabled]="download().fileExists"
+      (click)="copyFilePath.emit(download())"
+    >
+      <mat-icon class="text-white!">content_copy</mat-icon>
+      <span>Copy path</span>
+    </button>
+  }
+
+  <button
+    mat-menu-item
+    [matMenuTriggerFor]="pathMenu"
+    matTooltip="Doesn't move the file — only updates the record's target path"
+  >
     <mat-icon class="text-white!">signpost</mat-icon>
-    <span>Set file path</span>
+    <span>Update path</span>
   </button>
 </mat-menu>
 
@@ -91,6 +109,30 @@
     </mat-form-field>
 
     <button mat-flat-button color="primary" class="mr-2 mt-2" (click)="setFilePath(filePath, download())">
+      <mat-icon>save</mat-icon>
+      <span>Save</span>
+    </button>
+  </div>
+</mat-menu>
+
+<mat-menu #fileNameMenu class="pt-0! overflow-visible! w-70 max-w-full!">
+  <div class="flex flex-col items-end file-name" (click)="$event.stopPropagation()">
+    <mat-form-field appearance="fill" class="w-full">
+      <input
+        matInput
+        [(ngModel)]="fileName"
+        class="text-sm! file-name-input"
+        placeholder="<fileName>"
+        (keydown)="$event.stopPropagation()"
+        (keydown.escape)="closeActionsMenu()"
+        (keydown.enter)="setFileName(fileName, download())"
+      />
+      <span matSuffix class="text-gray-400 text-sm select-none pr-2"
+        >.{{ download().mediaFormat || download().format }}</span
+      >
+    </mat-form-field>
+
+    <button mat-flat-button color="primary" class="mr-2 mt-2" (click)="setFileName(fileName, download())">
       <mat-icon>save</mat-icon>
       <span>Save</span>
     </button>

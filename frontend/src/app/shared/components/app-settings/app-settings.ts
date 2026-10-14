@@ -62,7 +62,7 @@ enum Browser {
 
 const EXTENSION_URLS: Record<Browser, string> = {
   [Browser.Chrome]: 'https://github.com/xinua/rt-ext/releases/latest/download/chrome.zip',
-  [Browser.Firefox]: 'https://github.com/xinua/rt-ext/releases/latest/download/firefox.zip',
+  [Browser.Firefox]: 'https://addons.mozilla.org/en-US/firefox/addon/retriever-ext/',
   [Browser.Other]: 'https://github.com/xinua/rt-ext',
 };
 

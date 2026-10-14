@@ -37,6 +37,7 @@ export const DownloadRecordMock: DownloadModel = {
   totalBytes: 10240000,
   phase: null,
   filePath: '/downloads/Sample Title.mp4',
+  fileName: 'Sample Title',
   avatarPath: null,
   thumbnailPath: null,
   authorUrl: 'https://youtube.com/channel/ChannelId',

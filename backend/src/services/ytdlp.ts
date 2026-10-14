@@ -616,6 +616,26 @@ export function releaseFilename(jobId: number): void {
 }
 
 /**
+ * Whether a running job has claimed `name` in the real folder `dir` for the
+ * file it is still downloading. Nothing is on disk yet, but when the job
+ * finishes its file is moved there over whatever then holds the name.
+ */
+export async function isFilenameClaimed(dir: string, name: string): Promise<boolean> {
+  const stem = stemOf(name);
+
+  for (const claim of [...claimedNames.values()]) {
+    // `dir` is a realpath; a claim holds the folder as configured.
+    const claimDir = await fsp.realpath(claim.dir).catch(() => claim.dir);
+
+    if (claimDir !== dir) continue;
+
+    if (stem === (claim.index ? `${claim.stem} (${claim.index})` : claim.stem)) return true;
+  }
+
+  return false;
+}
+
+/**
  * yt-dlp's own filename sanitiser, as it runs on Linux with default options:
  * every `%(field)s` value goes through it before it reaches the path, while
  * literal text in the template does not.
