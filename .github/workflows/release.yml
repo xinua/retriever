@@ -75,6 +75,17 @@ jobs:
         working-directory: frontend
         run: pnpm run verify
 
+      # verify runs prettier --write, so unformatted sources pass it silently;
+      # any file it (or anything else) changed means the commit wasn't clean.
+      - name: Check nothing changed
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            git --no-pager diff
+            echo "::error::Files changed during verify - run 'pnpm run verify' in frontend and commit the result"
+            exit 1
+          fi
+
   publish:
     needs: test
     runs-on: ubuntu-latest

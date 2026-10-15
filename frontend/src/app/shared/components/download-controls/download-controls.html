@@ -1,10 +1,19 @@
 @let isActive = download().status === downloadStatus.RUNNING || download().status === downloadStatus.QUEUED;
+@let isUnavailable = download().status === downloadStatus.FAILED || download().status === downloadStatus.CANCELED;
 
 <div class="flex items-center justify-end gap-3 shrink-0">
-  @if (!isActive) {
-    <button mat-icon-button matTooltip="Remove from list" (click)="remove.emit()">
-      <mat-icon class="text-red-500!">delete</mat-icon>
-    </button>
+  <!-- While a move copies the file, every action here would race it. -->
+  @if (!isActive && !download().move) {
+    <div (click)="removeRecord()">
+      <button
+        mat-icon-button
+        matTooltip="Hold to delete file as well"
+        [matTooltipDisabled]="!download().fileExists"
+        (rtLongPress)="removeFile()"
+      >
+        <mat-icon class="text-red-500!">delete</mat-icon>
+      </button>
+    </div>
 
     <button mat-icon-button [matMenuTriggerFor]="actionsMenu">
       <mat-icon class="text-white!">more_horiz</mat-icon>
@@ -38,7 +47,7 @@
         mat-menu-item
         (click)="sendToTelegram(download())"
         [disabled]="!isBelowTelegramLimit()"
-        matTooltip="File is too large for Telegram"
+        matTooltip="File is too big for Telegram"
         matTooltipPosition="left"
         [matTooltipDisabled]="isBelowTelegramLimit()"
       >
@@ -50,7 +59,7 @@
         mat-menu-item
         [matMenuTriggerFor]="tgMenu"
         [disabled]="!isBelowTelegramLimit()"
-        matTooltip="File is too large for Telegram"
+        matTooltip="File is too big for Telegram"
         matTooltipPosition="left"
         [matTooltipDisabled]="isBelowTelegramLimit()"
       >
@@ -61,18 +70,26 @@
   }
 
   @if (download().fileName && download().fileExists) {
-    <!-- Filled on open, so it shows the name on disk now, not when the list loaded. -->
     <button mat-menu-item [matMenuTriggerFor]="fileNameMenu" (menuOpened)="fileName = download().fileName ?? ''">
       <mat-icon class="text-white!">edit</mat-icon>
       <span>Rename file</span>
     </button>
   }
 
+  @if (download().fileExists && !isActive) {
+    <!-- The trailing slash makes the field list what is inside, not the folder itself; the root is "/". -->
+    @let folder = (download().filePath | folderOf) + '/';
+    <button mat-menu-item [matMenuTriggerFor]="moveFileMenu" (menuOpened)="dirPath = folder">
+      <mat-icon class="text-white!">drive_file_move</mat-icon>
+      <span>Move file</span>
+    </button>
+  }
+
   <!-- Offered for a missing file too: the old path is where fixing it starts. -->
-  @if (download().filePath) {
+  @if (download().filePath && !isUnavailable) {
     <button
       mat-menu-item
-      matTooltip="Old file path"
+      matTooltip="Last known path"
       matTooltipPosition="left"
       [matTooltipDisabled]="download().fileExists"
       (click)="copyFilePath.emit(download())"
@@ -82,33 +99,51 @@
     </button>
   }
 
-  <button
-    mat-menu-item
-    [matMenuTriggerFor]="pathMenu"
-    matTooltip="Doesn't move the file — only updates the record's target path"
-  >
-    <mat-icon class="text-white!">signpost</mat-icon>
-    <span>Update path</span>
-  </button>
+  @if (!download().fileExists && !isUnavailable) {
+    <button mat-menu-item [matMenuTriggerFor]="pathMenu">
+      <mat-icon class="text-white!">signpost</mat-icon>
+      <span>Fix path</span>
+    </button>
+  }
 </mat-menu>
 
 <mat-menu #pathMenu class="pt-0! overflow-visible!">
   <div class="flex flex-col items-end file-name" (click)="$event.stopPropagation()">
-    <mat-form-field appearance="fill" class="max-w-full">
-      <small matPrefix class="pl-2 whitespace-nowrap">{{ downloadsFolder() }}/</small>
+    <rt-path-input
+      class="w-80 max-w-full"
+      appearance="fill"
+      inputClass="text-sm! file-name-input"
+      placeholder="<dir?>/<fileName>.<ext>"
+      [files]="true"
+      [(ngModel)]="filePath"
+      (keydown)="$event.stopPropagation()"
+      (escape)="closeActionsMenu()"
+      (enter)="fixPath(filePath, download())"
+    />
 
-      <input
-        matInput
-        [(ngModel)]="filePath"
-        class="text-sm! file-name-input"
-        placeholder="<dir?>/<fileName>.<ext>"
-        (keydown)="$event.stopPropagation()"
-        (keydown.escape)="closeActionsMenu()"
-        (keydown.enter)="setFilePath(filePath, download())"
-      />
-    </mat-form-field>
+    <button mat-flat-button color="primary" class="mr-2 mt-2" (click)="fixPath(filePath, download())">
+      <mat-icon>save</mat-icon>
+      <span>Save</span>
+    </button>
+  </div>
+</mat-menu>
 
-    <button mat-flat-button color="primary" class="mr-2 mt-2" (click)="setFilePath(filePath, download())">
+<mat-menu #moveFileMenu class="pt-0! overflow-visible!">
+  <div class="flex flex-col items-end file-name" (click)="$event.stopPropagation()">
+    <rt-path-input
+      class="w-80 max-w-full"
+      appearance="fill"
+      position="above"
+      inputClass="text-sm! file-name-input"
+      placeholder="<dir> or / for the root"
+      hint="Amber folders are on another filesystem: the file is copied there"
+      [(ngModel)]="dirPath"
+      (keydown)="$event.stopPropagation()"
+      (escape)="closeActionsMenu()"
+      (enter)="moveFile(dirPath, download())"
+    />
+
+    <button mat-flat-button color="primary" class="mr-2 mt-2" (click)="moveFile(dirPath, download())">
       <mat-icon>save</mat-icon>
       <span>Save</span>
     </button>

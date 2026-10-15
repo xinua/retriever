@@ -5,6 +5,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { APP_VERSION } from '../../constants/version.const';
 import { VersionModel } from '../../models/version.model';
 import { HttpService } from '../../services/http.service';
+import { LocalStorage } from '../../services/local-storage.service';
 import { NotifierService } from 'angular-notifier';
 import { filter, tap } from 'rxjs';
 import { ReleaseNotesDialog } from '../release-notes-dialog/release-notes-dialog';
@@ -19,6 +20,7 @@ export class AppVersion implements OnInit {
   private readonly _http = inject(HttpService);
   private readonly _dialog = inject(MatDialog);
   private readonly _notifier = inject(NotifierService);
+  private readonly _localStorage = inject(LocalStorage);
 
   readonly version = signal<string>(APP_VERSION);
   versionInfo = signal<VersionModel | null>(null);
@@ -47,11 +49,11 @@ export class AppVersion implements OnInit {
 
   private saveUserNotified() {
     if (!this.versionInfo()?.latest) return;
-    window.localStorage.setItem(`app-version-${this.versionInfo()?.latest}-notified`, 'true');
+    this._localStorage.set('notifiedVersion', this.versionInfo().latest);
   }
 
   private getUserNotified(): boolean {
-    return JSON.parse(window.localStorage.getItem(`app-version-${this.versionInfo()?.latest}-notified`));
+    return this._localStorage.get('notifiedVersion') === this.versionInfo()?.latest;
   }
 
   showReleaseNotes() {

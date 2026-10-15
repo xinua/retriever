@@ -16,7 +16,7 @@ import { AppSettings } from './app-settings';
 const savedSettings: SettingsModel = {
   ...DefaultSettings,
   webhookUrl: 'https://ha.local/webhook',
-  downloadsDir: '/downloads',
+  downloadsDir: 'downloads',
   cookiesPath: null,
   ytdlpArgs: '--no-mtime',
   ytdlpConcurrency: 3,
@@ -45,6 +45,7 @@ describe('AppSettings', () => {
       saveSettings: vi.fn((settings: SettingsModel) => of(settings)),
       uploadCookies: vi.fn(),
       removeCookies: vi.fn(),
+      validateYtdlp: vi.fn(() => of({ status: true, version: '2025.01.01', error: null })),
       getYtdlpVersion: vi.fn(() => of({ version: '2025.01.01', available: true })),
       getPotStatus: vi.fn(() => of(potStatus({ configured: false }))),
       updateYtdlp: vi.fn(),
@@ -86,6 +87,11 @@ describe('AppSettings', () => {
     await fixture.whenStable();
   }
 
+  /** The downloads folder is checked by the server after a debounce; the form is pending until then. */
+  async function settleYtdlpCheck() {
+    await vi.waitFor(() => expect(component.form.controls.downloadsDir.pending).toBe(false), { timeout: 2000 });
+  }
+
   const storage = () => TestBed.inject(StorageService);
   const text = (): string => fixture.nativeElement.textContent.replace(/\s+/g, ' ');
   const saveButtons = (): HTMLButtonElement[] =>
@@ -101,7 +107,7 @@ describe('AppSettings', () => {
 
       expect(component.form.value).toMatchObject({
         webhookUrl: 'https://ha.local/webhook',
-        downloadsDir: '/downloads',
+        downloadsDir: 'downloads',
         ytdlpArgs: '--no-mtime',
         ytdlpConcurrency: 3,
         timeZone: 'UTC',
@@ -149,6 +155,7 @@ describe('AppSettings', () => {
   describe('save button', () => {
     it('is disabled until something changes', async () => {
       await render();
+      await settleYtdlpCheck();
 
       expect(component.form.errors).toEqual({ unchanged: true });
       expect(saveButtons().every((b) => b.disabled)).toBe(true);
@@ -257,6 +264,7 @@ describe('AppSettings', () => {
 
     it('treats the saved values as the new baseline', async () => {
       await render();
+      await settleYtdlpCheck();
       component.form.controls.ytdlpArgs.setValue('--no-part');
       expect(component.form.valid).toBe(true);
 

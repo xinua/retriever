@@ -1,6 +1,6 @@
 import { CdkDragDrop } from '@angular/cdk/drag-drop';
 import { ComponentFixture, DeferBlockBehavior, TestBed } from '@angular/core/testing';
-import { DefaultSectionOrder, MockSubscription, SectionOrderStorageKey } from '@shared/constants';
+import { DefaultSectionOrder, MockSubscription } from '@shared/constants';
 import {
   DownloadInfoModel,
   DownloadModel,
@@ -41,7 +41,7 @@ class IntersectionObserverStub {
 const nextCheck = (overrides: Partial<NextCheckModel> = {}): NextCheckModel => ({
   ok: true,
   nextCheckAt: '2024-01-01T12:00:00Z',
-  channel: { id: MockSubscription.id, name: MockSubscription.name },
+  subscription: { id: MockSubscription.id, name: MockSubscription.name },
   ...overrides,
 });
 
@@ -57,7 +57,7 @@ describe('HomePage', () => {
   let subscriptionUpdated$: Subject<SubscriptionPayload>;
 
   beforeEach(async () => {
-    localStorage.removeItem(SectionOrderStorageKey);
+    localStorage.removeItem('sectionOrder');
     vi.stubGlobal('IntersectionObserver', IntersectionObserverStub);
 
     notifications$ = new Subject();
@@ -93,7 +93,7 @@ describe('HomePage', () => {
   });
 
   afterEach(() => {
-    localStorage.removeItem(SectionOrderStorageKey);
+    localStorage.removeItem('sectionOrder');
     vi.unstubAllGlobals();
   });
 
@@ -227,18 +227,7 @@ describe('HomePage', () => {
   });
 
   describe('section handles', () => {
-    it('hides the downloads grip while the queue is empty', async () => {
-      await render();
-
-      expect(component.hasContent()).toEqual({
-        [HomeSection.SUBSCRIPTIONS]: true,
-        [HomeSection.DOWNLOADS]: false,
-      });
-      expect(handles().map((h) => h.getAttribute('aria-label'))).toEqual(['Reorder Subscriptions section']);
-    });
-
-    it('shows the downloads grip once there are downloads', async () => {
-      storage.downloads.set([{ id: 1 } as DownloadModel]);
+    it('shows a grip for every section, even while the queue is empty', async () => {
       await render();
 
       expect(handles().map((h) => h.getAttribute('aria-label'))).toEqual([
@@ -354,7 +343,7 @@ describe('HomePage', () => {
       await render();
 
       const changed = subscription({ name: 'Renamed' });
-      subscriptionUpdated$.next({ channel: changed });
+      subscriptionUpdated$.next({ subscription: changed });
 
       expect(storage.subscriptions()).toEqual([changed, other]);
       expect(storage.subscriptions()[1]).toBe(other);
@@ -365,7 +354,7 @@ describe('HomePage', () => {
       fixture.destroy();
 
       notifications$.next({ type: 'info', message: 'late' } as NotificationPayload);
-      subscriptionUpdated$.next({ channel: subscription({ name: 'late' }) });
+      subscriptionUpdated$.next({ subscription: subscription({ name: 'late' }) });
 
       expect(notify).not.toHaveBeenCalled();
       expect(notifications$.observed).toBe(false);

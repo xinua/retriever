@@ -111,7 +111,8 @@ export class SubscriptionDetails {
       format: value.format,
       codec: value.codec,
       quality: VideoQuality.BEST,
-      folder: trim(value.tag),
+      // The stored folder is already settled; empty there is the root, which the API takes as "/".
+      folder: value.folder || '/',
       prefix: value.prefix?.length ? value.prefix : null,
       ytdlpArgs: trim(value.ytdlpArgs),
       clipStart: null,

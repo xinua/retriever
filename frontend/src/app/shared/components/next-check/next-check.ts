@@ -8,7 +8,7 @@ import { defaultIfEmpty, filter, interval, map, Observable, takeWhile } from 'rx
 interface NextCheckIn {
   totalSeconds: number;
   isChecking: boolean;
-  channel: string;
+  subscription: string;
   displayTime: string;
 }
 
@@ -25,7 +25,7 @@ export class NextCheckComponent implements OnInit {
 
   readonly nextCheck = this._storage.nextCheck;
   settings = this._storage.settings;
-  activeChannels = computed(() => this._storage.subscriptions().filter((c) => c.enabled));
+  activeSubscriptions = computed(() => this._storage.subscriptions().filter((c) => c.enabled));
   timer$: Observable<NextCheckIn> = this._getTimer();
 
   constructor() {
@@ -43,7 +43,7 @@ export class NextCheckComponent implements OnInit {
       filter(() => this.nextCheck()?.ok),
       map(() => this._formatTime()),
       takeWhile(({ totalSeconds }) => totalSeconds >= 0),
-      defaultIfEmpty({ displayTime: '—', isChecking: false, channel: '', totalSeconds: 0 }),
+      defaultIfEmpty({ displayTime: '—', isChecking: false, subscription: '', totalSeconds: 0 }),
       takeUntilDestroyed(this._destroyRef),
     );
   }
@@ -58,7 +58,7 @@ export class NextCheckComponent implements OnInit {
     return {
       totalSeconds,
       isChecking: totalSeconds > 0,
-      channel: this.nextCheck().channel.name,
+      subscription: this.nextCheck().subscription.name,
       displayTime:
         totalSeconds > 0
           ? `${hours ? `${hours}h ` : ''}${minutes ? `${minutes}m ` : ''}${seconds ? `${seconds}s` : '0s'}`

@@ -1,5 +1,4 @@
 @let pot = potStatus();
-@let ytdlpControl = form.get('downloadsDir');
 
 <mat-card class="p-4 shadow-xl! settings-card">
   <mat-card-header>
@@ -78,24 +77,14 @@
           <ng-template matStepLabel>App settings</ng-template>
 
           <div class="flex flex-col gap-4 rounded-xl border border-gray-800 p-4">
-            <mat-form-field appearance="outline">
-              <mat-label>Downloads folder</mat-label>
-              <input matInput formControlName="downloadsDir" rtYtdlpValidator placeholder="./" />
-
-              @if (ytdlpControl.pending) {
-                <mat-icon matSuffix fontIcon="radar" class="animated-loading" />
-              } @else if (!ytdlpControl.pending && ytdlpControl.valid) {
-                <mat-icon matSuffix fontIcon="check" class="text-green-500!" />
-              } @else if (!ytdlpControl.pending && ytdlpControl.invalid) {
-                <mat-icon matSuffix fontIcon="close" class="text-red-500!" />
-              }
-
-              @if (ytdlpControl?.errors?.['invalidYtdlp']) {
-                <mat-error>{{ ytdlpControl.errors['message'] }}</mat-error>
-              }
-
-              <mat-hint>Must be a writable path inside the container</mat-hint>
-            </mat-form-field>
+            <rt-path-input
+              formControlName="downloadsDir"
+              rtYtdlpValidator
+              label="Downloads folder"
+              placeholder="/"
+              hint="Default folder for new downloads. Leave empty to use the root folder."
+              [showStatus]="true"
+            />
 
             <mat-form-field appearance="outline" subscriptSizing="dynamic">
               <mat-label>Parallel downloads</mat-label>

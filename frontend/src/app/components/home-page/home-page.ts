@@ -81,17 +81,14 @@ export class HomePage implements OnInit {
   subscriptions = viewChild<ElementRef<SubscriptionsViewComponent>>('subscriptions');
   downloads = viewChild<ElementRef<Downloads>>('downloads');
 
-  sectionOrder = this._layout.sectionOrder;
-
   /**
    * Every section stays mounted whatever the order, because the components
    * do more than render: Downloads loads the queue and subscribes to the
    * websocket from its own ngOnInit. Dropping it from the template would
    * mean the queue is never fetched, so an empty list could never fill.
-   *
-   * Downloads hides itself while the queue is empty, leaving a zero-height
-   * item — so the grip is hidden too rather than offering a drag of nothing.
    */
+  sectionOrder = this._layout.sectionOrder;
+
   /**
    * Queued or running — what a stop-all would actually affect. Read from the
    * whole-table counts, not the loaded rows: those are one page, so they would
@@ -104,11 +101,6 @@ export class HomePage implements OnInit {
   });
 
   stopping = signal(false);
-
-  hasContent = computed(() => ({
-    [HomeSection.SUBSCRIPTIONS]: true,
-    [HomeSection.DOWNLOADS]: this._storage.downloads().length > 0,
-  }));
 
   ngOnInit() {
     this._serverNotifications().subscribe();
@@ -172,7 +164,9 @@ export class HomePage implements OnInit {
       takeUntilDestroyed(this._destroyRef),
       tap((data) => {
         this._storage.subscriptions.update((subscriptions) =>
-          subscriptions.map((subscription) => (subscription.id === data.channel.id ? data.channel : subscription)),
+          subscriptions.map((subscription) =>
+            subscription.id === data.subscription.id ? data.subscription : subscription,
+          ),
         );
       }),
     );
@@ -185,7 +179,7 @@ export class HomePage implements OnInit {
 
     this._storage.subscriptions.update((subscriptions) =>
       subscriptions.map((subscription) =>
-        subscription.id === nextCheck.channel.id
+        subscription.id === nextCheck.subscription.id
           ? {
               ...subscription,
               lastCheckedAt: previousCheckAt ? new Date(previousCheckAt) : subscription.lastCheckedAt,

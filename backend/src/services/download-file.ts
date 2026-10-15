@@ -1,9 +1,10 @@
 import fsp from "node:fs/promises";
 import path from "node:path";
 
-import * as ytdlp from "./ytdlp.js";
+import { moveProgress, type MoveProgress } from "./file-busy.js";
+import { isInside, ROOT, toAbsolute } from "./paths.js";
 
-import type { Download, Settings } from "../db/types.js";
+import type { Download } from "../db/types.js";
 
 export type ResolvedFile =
   | { ok: true; path: string; size: number; filename: string }
@@ -20,10 +21,7 @@ export type ResolvedFile =
  * through realpath so a symlink planted inside the folder cannot be used to
  * step out of it either.
  */
-export async function resolveDownloadFile(
-  row: Download,
-  settings: Settings
-): Promise<ResolvedFile> {
+export async function resolveDownloadFile(row: Download): Promise<ResolvedFile> {
   // A path, not a status, is what says a file exists: a job that downloaded
   // the video and then failed in postprocessing keeps the file it produced,
   // and the row that points at it is "failed". Rows still in flight have no
@@ -32,7 +30,7 @@ export async function resolveDownloadFile(
     return { ok: false, status: 409, error: "This download has no file on disk" };
   }
 
-  const realRoot = await realDownloadsRoot(settings);
+  const realRoot = await realDownloadsRoot();
 
   if (!realRoot) {
     return { ok: false, status: 500, error: "Downloads folder is not available" };
@@ -41,28 +39,30 @@ export async function resolveDownloadFile(
   return resolveInsideRoot(row.filePath.trim(), realRoot);
 }
 
-async function realDownloadsRoot(settings: Settings): Promise<string | null> {
+async function realDownloadsRoot(): Promise<string | null> {
   try {
-    return await fsp.realpath(ytdlp.downloadsRoot(settings));
+    return await fsp.realpath(ROOT);
   } catch {
     return null;
   }
 }
 
+/**
+ * Takes the stored form (relative to the root) as well as the absolute one,
+ * since rows reach this both straight from the table and already decorated
+ * for a client.
+ */
 async function resolveInsideRoot(filePath: string, realRoot: string): Promise<ResolvedFile> {
   let realFile: string;
 
   try {
-    realFile = await fsp.realpath(filePath);
+    realFile = await fsp.realpath(toAbsolute(filePath));
   } catch {
     // Deleted, moved, or on an unmounted volume since the download finished.
     return { ok: false, status: 410, error: "File is no longer on disk" };
   }
 
-  const contained =
-    realFile === realRoot || realFile.startsWith(realRoot + path.sep);
-
-  if (!contained) {
+  if (!isInside(realFile, realRoot)) {
     return {
       ok: false,
       status: 403,
@@ -91,7 +91,7 @@ async function resolveInsideRoot(filePath: string, realRoot: string): Promise<Re
   };
 }
 
-export type WithFileExists<T> = T & { fileExists: boolean };
+export type WithFileExists<T> = T & { fileExists: boolean; move: MoveProgress | null };
 
 /**
  * Tells each row whether the file endpoint would serve it right now, so a
@@ -113,18 +113,18 @@ export type WithFileExists<T> = T & { fileExists: boolean };
  *
  * Queued and running rows are never checked — a file that is still being
  * written, or about to be, is not missing.
+ *
+ * `move` rides along for the same reason: a copy to another filesystem is
+ * state of the moment, and a page loaded halfway through has to show it.
  */
-export async function withFileExists<T extends Download>(
-  rows: T[],
-  settings: Settings
-): Promise<WithFileExists<T>[]> {
+export async function withFileExists<T extends Download>(rows: T[]): Promise<WithFileExists<T>[]> {
   const candidates = rows.filter(
     (row) => row.status !== "queued" && row.status !== "running" && row.filePath?.trim()
   );
 
   // One realpath of the root for the whole page rather than one per row; when
   // it is missing, nothing inside it can be served and no row is looked at.
-  const realRoot = candidates.length ? await realDownloadsRoot(settings) : null;
+  const realRoot = candidates.length ? await realDownloadsRoot() : null;
 
   const found = new Set<number>();
 
@@ -138,7 +138,7 @@ export async function withFileExists<T extends Download>(
     );
   }
 
-  return rows.map((row) => ({ ...row, fileExists: found.has(row.id) }));
+  return rows.map((row) => ({ ...row, fileExists: found.has(row.id), move: moveProgress(row.id) }));
 }
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -238,10 +238,12 @@ export function parseRange(
  * pointed at something unreadable would fail at the download endpoint
  * instead, long after the mistake was made.
  *
- * The value is taken relative to the downloads root — the shape `/api/folders`
- * suggests and the form's `<dir>/<fileName>.<ext>` placeholder asks for — but
- * an absolute path is accepted too, so the string that "copy file path" put on
- * the clipboard can be pasted back and edited.
+ * The value is always taken relative to the mounted root — the same shape
+ * "copy file path" puts on the clipboard — and a leading slash means nothing,
+ * just as it means nothing in a folder field. An absolute container path is
+ * deliberately not recognised: with a host folder that happens to share the
+ * mount point's name ("downloads" mounted at /downloads), "/downloads/x" would
+ * mean two different files depending on which reading won.
  *
  * Nothing here sanitizes: the target must match a real name on disk, and
  * yt-dlp's own names carry spaces, full-width look-alikes and non-latin
@@ -249,10 +251,7 @@ export function parseRange(
  * comparing realpaths instead, so neither `..` nor a planted symlink can
  * point the row outside the downloads folder.
  */
-export async function resolveNewFilePath(
-  value: string,
-  settings: Settings
-): Promise<ResolvedFile> {
+export async function resolveNewFilePath(value: string): Promise<ResolvedFile> {
   const wanted = value.trim();
 
   if (!wanted) {
@@ -265,17 +264,21 @@ export async function resolveNewFilePath(
     return { ok: false, status: 400, error: "File path contains invalid characters" };
   }
 
-  let realRoot: string;
+  const realRoot = await realDownloadsRoot();
 
-  try {
-    realRoot = await fsp.realpath(ytdlp.downloadsRoot(settings));
-  } catch {
+  if (!realRoot) {
     return { ok: false, status: 500, error: "Downloads folder is not available" };
   }
 
-  const candidate = path.isAbsolute(wanted)
-    ? path.resolve(wanted)
-    : path.resolve(realRoot, wanted);
+  const relative = wanted.replace(/^[\\/]+/, "");
+
+  // Resolved below by realpath, which would happily follow ".." out of the
+  // root and only then be refused; refusing it up front gives a clearer error.
+  if (relative.split(/[\\/]+/).some((segment) => segment === "..")) {
+    return { ok: false, status: 400, error: "File path must not contain \"..\"" };
+  }
+
+  const candidate = path.resolve(realRoot, relative);
 
   let realFile: string;
 
@@ -285,10 +288,7 @@ export async function resolveNewFilePath(
     return { ok: false, status: 404, error: "No file at that path" };
   }
 
-  const contained =
-    realFile === realRoot || realFile.startsWith(realRoot + path.sep);
-
-  if (!contained) {
+  if (!isInside(realFile, realRoot)) {
     return {
       ok: false,
       status: 403,

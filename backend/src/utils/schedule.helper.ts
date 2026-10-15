@@ -1,4 +1,4 @@
-import type { Channel } from "../db/types.js";
+import type { Subscription } from "../db/types.js";
 
 /** The hours the day is divided into; `end` may sit on 24, meaning midnight. */
 const DAY_START = 0;
@@ -205,7 +205,7 @@ function isSameZonedDay(a: Date, b: Date, timeZone: string): boolean {
  * Off for a subscription without the flag, so nothing else changes.
  */
 export function isHeldForToday(
-  ch: Channel,
+  ch: Subscription,
   now: Date,
   timeZone?: string | null
 ): boolean {
@@ -291,7 +291,7 @@ function nextIntervalCheck(
  * to tomorrow's first slot - see isHeldForToday.
  */
 export function calculateNextCheck(
-  ch: Channel,
+  ch: Subscription,
   now: Date,
   timeZone?: string | null
 ): string | null {

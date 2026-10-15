@@ -10,7 +10,6 @@ services:
       PORT: 8000
       HOST: 0.0.0.0
       DATA_DIR: /data
-      DOWNLOADS_DIR: ./downloads
       # Poll hours are read in the time zone saved in Settings, which the app
       # fills in from your browser the first time you open it. This is only
       # the fallback used until then, and the clock the logs are stamped in.
@@ -22,7 +21,8 @@ services:
 
     volumes:
       - ./data:/data
-      # Where yt-dlp writes finished files.
+      # The media folder the app sees and downloads into; Settings choose
+      # only where inside it new downloads land.
       - ./downloads:/downloads
 
     restart: unless-stopped

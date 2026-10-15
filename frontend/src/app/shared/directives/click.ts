@@ -1,15 +1,23 @@
 import { DestroyRef, Directive, inject, input, numberAttribute, output } from '@angular/core';
 
-export type ClickAction = 'single' | 'double';
+export enum ClickAction {
+  SINGLE = 'single',
+  DOUBLE = 'double',
+}
+
+export interface ClickEvent {
+  event: MouseEvent;
+  action: ClickAction;
+}
 
 @Directive({
   selector: '[rtClick]',
   host: {
-    '(click)': 'onClick()',
+    '(click)': 'onClick($event)',
   },
 })
-export class Click {
-  readonly rtClick = output<ClickAction>();
+export class DoubleClick {
+  readonly rtClick = output<ClickEvent>();
   readonly rtClickDelay = input(250, { transform: numberAttribute });
 
   private _timer?: ReturnType<typeof setTimeout>;
@@ -18,16 +26,16 @@ export class Click {
     inject(DestroyRef).onDestroy(() => clearTimeout(this._timer));
   }
 
-  onClick() {
+  onClick(event: MouseEvent) {
     if (this._timer !== undefined) {
       this._reset();
-      this.rtClick.emit('double');
+      this.rtClick.emit({ event, action: ClickAction.DOUBLE });
       return;
     }
 
     this._timer = setTimeout(() => {
       this._reset();
-      this.rtClick.emit('single');
+      this.rtClick.emit({ event, action: ClickAction.SINGLE });
     }, this.rtClickDelay());
   }
 

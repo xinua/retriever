@@ -6,6 +6,7 @@ import { avatarName } from "./avatar.js";
 import { YoutubeService } from "./youtube.service.js";
 import { resolveTarget, MAX_ITEMS } from "./resolve.js";
 import * as DownloadQueue from "./download-queue.js";
+import { downloadsFolder } from "./paths.js";
 
 import type { Download, Settings } from "../db/types.js";
 import type { ResolvedEntry, ResolvedTarget } from "./resolve.js";
@@ -49,10 +50,15 @@ export async function startManualDownload(
     throw new Error("No downloadable videos found at that URL");
   }
 
-  // Only a single video can stand in for a subscription's last download; a
-  // playlist linked to it would leave the player picking among its entries.
-  const options =
-    target.kind === "video" ? req.options : { ...req.options, watcherId: null };
+  const options: DownloadQueue.ManualOptions = {
+    ...req.options,
+    // Only a single video can stand in for a subscription's last download; a
+    // playlist linked to it would leave the player picking among its entries.
+    watcherId: target.kind === "video" ? req.options.watcherId : null,
+    // Settled now and stored on the row, so changing the setting later moves
+    // only what is queued after it.
+    folder: req.options.folder ?? downloadsFolder(settings.downloadsDir)
+  };
 
   const downloads = await DownloadQueue.enqueueManual(
     target.entries,

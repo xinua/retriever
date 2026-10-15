@@ -11,10 +11,9 @@ import { MatSelect, MatSelectTrigger } from '@angular/material/select';
 import { MatSlideToggle } from '@angular/material/slide-toggle';
 import { MatTooltip } from '@angular/material/tooltip';
 import { NotifierService } from 'angular-notifier';
-import { catchError, debounceTime, distinctUntilChanged, filter, from, Observable, switchMap, take, tap } from 'rxjs';
+import { catchError, filter, from, Observable, switchMap, take, tap } from 'rxjs';
 import { ThemeConfigFormModel } from '../../models/theme.model';
 import { BgType, ThemeColors } from '../../models/ui-config.model';
-import { HttpService } from '../../services/http.service';
 import { UiConfigService } from '../../services/ui-config.service';
 import { TargetIconPipe } from './target-icon.pipe';
 import { SECTION_OPTIONS } from './theme.constants';
@@ -46,7 +45,6 @@ import { SECTION_OPTIONS } from './theme.constants';
 })
 export class Theme implements OnInit {
   private readonly _fb = new FormBuilder();
-  private readonly _http = inject(HttpService);
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _uiConfig = inject(UiConfigService);
   private readonly _notifier = inject(NotifierService);
@@ -59,11 +57,6 @@ export class Theme implements OnInit {
 
   autoPasteToggle = viewChild<MatSlideToggle>('autoPasteToggle');
 
-  /**
-   * Seeded from the live config rather than from fixed defaults, so reopening
-   * the dialog shows what is actually applied instead of resetting the selects
-   * to values the user never picked.
-   */
   form = this._fb.group<ThemeConfigFormModel>({
     themeColor: this._fb.control(this._uiConfig.config().themeColor, { nonNullable: true }),
     sectionsBg: this._fb.control(this._uiConfig.config().sectionsBg, { nonNullable: true }),
@@ -72,20 +65,9 @@ export class Theme implements OnInit {
   });
 
   ngOnInit() {
-    /**
-     * One subscription for the whole form instead of one per control: every
-     * field feeds the same config object, and applying the change immediately
-     * makes the dialog a live preview - you see the colour before committing.
-     */
     this.form.valueChanges
-      .pipe(
-        takeUntilDestroyed(this._destroyRef),
-        tap((value) => this._uiConfig.update(value)),
-        debounceTime(600),
-        distinctUntilChanged((a, b) => JSON.stringify(a.enableAnimations) === JSON.stringify(b.enableAnimations)),
-        switchMap((value) => this._http.saveUiConfig(value)),
-      )
-      .subscribe();
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe((value) => this._uiConfig.update(value));
   }
 
   trackAutoPaste(checked: boolean) {
@@ -117,7 +99,7 @@ export class Theme implements OnInit {
     return from(navigator.permissions.query({ name: 'clipboard-read' as PermissionName }));
   }
 
-  /** Config is already applied; this only dismisses. Persisting waits for the BE. */
+  /** Config is already applied and persisted; this only dismisses. */
   saveConfig() {
     this.closeDialog.emit();
   }

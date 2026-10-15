@@ -46,7 +46,7 @@ Perfect if you:
 - ✂️ **Clip** a time range without fetching the whole video
 - 📑 **Split by chapters** — one file per chapter
 - 🚫 **SponsorBlock** — cut sponsor segments automatically
-- 📂 **Destination folder** with autocomplete over folders you already use, plus filename prefixes
+- 📂 **Destination folder** with autocomplete that browses your media folder, plus filename prefixes
 - ⚙️ **Extra** `yt-dlp` **arguments** per download, per channel, or globally
 
 ### Watch channels
@@ -95,7 +95,7 @@ docker run -d \
   --name retriever \
   -p 31080:8000 \
   -v /your-directory/data:/data \
-  -v /your-media/youtube:/downloads \
+  -v /your-media:/downloads \
   ghcr.io/xinua/retriever:latest
 ```
 
@@ -120,7 +120,7 @@ docker run -d \
   -p 31080:8000 \
   -e POT_BASE_URL=http://pot:4416 \
   -v /your-directory/data:/data \
-  -v /your-media/youtube:/downloads \
+  -v /your-media:/downloads \
   ghcr.io/xinua/retriever:latest
 ```
 
@@ -145,7 +145,7 @@ services:
       - "31080:8000"
     volumes:
       - /mnt/tank/apps/retriever/data:/data
-      - /mnt/tank/media/youtube:/downloads
+      - /mnt/tank/media:/downloads
     restart: unless-stopped
 ```
 
@@ -162,7 +162,7 @@ services:
       - "31080:8000"
     volumes:
       - /mnt/tank/apps/retriever/data:/data
-      - /mnt/tank/media/youtube:/downloads
+      - /mnt/tank/media:/downloads
     environment:
       POT_BASE_URL: http://pot:4416
     restart: unless-stopped
@@ -184,8 +184,12 @@ Two volumes matter:
 | Mount        | What lives there                                                    |
 | ------------ | ------------------------------------------------------------------- |
 | `/data`      | Database, cached artwork, the download archive, the staged `yt-dlp` |
-| `/downloads` | Your media                                                          |
+| `/downloads` | Your media library                                                  |
 
+
+Mount the whole media library at `/downloads`, not just a folder for new downloads. Retriever can see, play and point records only at files inside this mount: if you later move a file from `youtube/` to `movies/`, **Fix path** can follow it there only when both are inside. Where new downloads land within the mount is the **Downloads folder** in Settings.
+
+Datasets, subvolumes or disks mounted inside `/downloads` work too. The autocomplete marks them, since moving a file onto another filesystem is a copy rather than a rename.
 
 ---
 
@@ -201,7 +205,6 @@ Most settings live in the UI (⚙️ in the header). These environment variables
 | `PORT`                  | `8000`                     | Port inside the container                                 |
 | `HOST`                  | `0.0.0.0`                  | Bind address                                              |
 | `DATA_DIR`              | `/data`                    | Database, images, archive                                 |
-| `DOWNLOADS_DIR`         | `/downloads`               | Default download root                                     |
 | `YTDLP_BIN`             | `/usr/local/bin/yt-dlp`    | The bundled binary to stage from                          |
 | `MAX_MANUAL_ITEMS`      | `500`                      | Cap on how many videos one pasted channel/playlist queues |
 | `POT_BASE_URL`          | *(unset)*                  | POT provider server to use — see below. Unset = disabled  |
@@ -217,7 +220,7 @@ Most settings live in the UI (⚙️ in the header). These environment variables
 
 Once a day Retriever reads its published `version.json` from GitHub to see whether a newer release exists, and serves the answer from `/api/version`. The check runs at a random moment inside `VERSION_CHECK_WINDOW` — a different one per install, so every Retriever in the world does not knock at the same second — and the result is cached in the database on your `/data` volume. Restarting the container replays that schedule rather than starting a new day, so restarts never cost a request; a failed check keeps yesterday's answer and retries in an hour. Nothing is sent: it is a plain GET of a public file. Set `VERSION_CHECK_ENABLED=false` to turn it off entirely.
 
-In the **Settings** dialog you can set the downloads folder, a cookies file, global `yt-dlp` arguments, how many downloads run at once, your webhook URL and the Telegram bot — plus update `yt-dlp` itself with one click.
+In the **Settings** dialog you can set the default downloads folder, a cookies file, global `yt-dlp` arguments, how many downloads run at once, your webhook URL and the Telegram bot — plus update `yt-dlp` itself with one click.
 
 ---
 
@@ -231,6 +234,20 @@ Finished files are written to your `/downloads` mount, using the **Folder** and 
 /downloads/<folder>/<prefix><video title>.<ext>
 ```
 
+Every path in Retriever is relative to the mount — the folder fields, the paths you copy, the ones sent in webhooks. The folder field autocompletes one level at a time from the root of the mount, listing the **Downloads folder** — or the folder it is inside — first, and missing folders are created on the first download.
+
+| Folder field      | Where the download goes                                     |
+| ----------------- | ----------------------------------------------------------- |
+| empty             | the **Downloads folder** from Settings                      |
+| `/`               | the root of the mount                                       |
+| `podcasts/tech`   | `/downloads/podcasts/tech`                                  |
+
+The Downloads folder in Settings is only the default: it is empty (the root) unless you set it. A subscription keeps the folder it was saved with, so changing the default affects new downloads and subscriptions, not existing ones.
+
+Moved or renamed a file yourself? Open the download's **⋯** menu and use **Fix path** to point the record at its new location — the autocomplete there lists files as well as folders.
+
+To move a file from Retriever, use **Move file** in the same menu and pick a folder inside the mount (`/` is the root); missing folders are created. The file keeps its name, and a file already sitting there under that name is never replaced — the move is refused instead. Within one filesystem the move is an instant rename. A folder on another filesystem (shown in amber) means a full copy: the card shows its progress and can cancel it, and the original is deleted only after the copy is in place. Only the file itself is ever deleted, never a folder, even one the move leaves empty. Files split by chapters are separate files, so move those yourself.
+
 Already-downloaded videos from watched channels are recorded in a per-subscription archive, `/data/archive/watcher-<id>.txt`, and are never fetched twice by that subscription. Deleting a subscription removes its archive too. (Manual downloads deliberately skip the archive — if you asked for a file explicitly, you get it.)
 
 Download the same video into the same folder again and the new copy is numbered rather than overwriting the old one:
@@ -240,7 +257,7 @@ Never Gonna Give You Up.mp4
 Never Gonna Give You Up (1).mp4
 ```
 
-In-progress downloads live in `/downloads/.retriever-tmp/<id>/` and only move into place once complete. The directory is removed when the download settles, and abandoned ones are swept at boot.
+In-progress downloads live in a hidden `.retriever-tmp/<id>/` folder and only move into place once complete. It sits at the top of the filesystem the download is headed for — `/downloads/.retriever-tmp/` usually, or the top of a dataset mounted inside `/downloads` — so a finished file moves into place by rename, never by copy. The directory is removed when the download settles, and abandoned ones are swept at boot.
 
 Want the video id in the filename — useful when two videos in one folder share a title and would otherwise overwrite? Put your own template in **Extra yt-dlp arguments**; a later `-o` wins:
 
@@ -257,10 +274,13 @@ Want the video id in the filename — useful when two videos in one folder share
 Angular 21 + Tailwind on the front, Fastify + SQLite (Drizzle) on the back.
 
 ```bash
-pnpm setup    # install everything
-pnpm dev      # frontend on :4200, backend on :8000
-pnpm build    # production build of both
+pnpm setup                               # install everything
+cp backend/.env.example backend/.env     # local settings for the backend
+pnpm dev                                 # frontend on :4200, backend on :8000
+pnpm build                               # production build of both
 ```
+
+`DOWNLOADS_DIR` in `backend/.env` is the local stand-in for the `/downloads` mount (`./downloads` inside `backend/` by default).
 
 You'll want `yt-dlp` and `ffmpeg` on your `PATH` locally — the app falls back to them when the bundled binary isn't there.
 

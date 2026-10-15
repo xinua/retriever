@@ -1,4 +1,6 @@
 import { BgType, ThemeColors, UiConfig } from '../models/ui-config.model';
+import { LocalStorageModel } from '../models/local-storage.model';
+import { DefaultSectionOrder } from './layout.const';
 import { Codecs, Types, VideoFormats, VideoQuality } from '../models/subscription.model';
 import { DownloadStatus } from '../models/download.model';
 import { FilterGroupModel, FilterModel, PaginatorModel } from '../models/common.model';
@@ -25,7 +27,7 @@ export const DefaultSubscription: SubscriptionModel = {
   notifyTelegram: false,
   webhookOverride: '',
   prefix: '',
-  tag: '',
+  folder: '',
   pollType: PollType.INTERVAL,
   pollInterval: null,
   pollTime: [],
@@ -54,7 +56,7 @@ export const MockSubscription: SubscriptionModel = {
   pollInterval: 30,
   pollTime: null,
   prefix: 'Prefix',
-  tag: 'youtube',
+  folder: 'youtube',
   webhookOverride: 'https://homeassistant:8123/api/webhook/-a456-426614174000',
   lastVideoId: 'F43xPrFANw',
   lastCheckedAt: new Date('2024-01-01T10:00:00Z'),
@@ -67,7 +69,7 @@ export const MockSubscription: SubscriptionModel = {
 export const DefaultSettings: SettingsModel = {
   enabled: true,
   webhookUrl: null,
-  downloadsDir: '/downloads',
+  downloadsDir: '',
   cookiesPath: null,
   ytdlpArgs: null,
   ytdlpConcurrency: 2,
@@ -124,3 +126,12 @@ export const DefaultFilterGroups: readonly FilterGroupModel[] = Object.freeze([
     filters: Object.values(DownloadStatus).filter((status) => status !== DownloadStatus.TOTAL),
   },
 ]);
+
+export const DefaultLocalStorage: LocalStorageModel = {
+  uiConfig: DefaultUiConfig,
+  paginator: DefaultPaginator,
+  manualDownloadForm: DefaultManualForm,
+  sectionOrder: DefaultSectionOrder,
+  rememberChoise: false,
+  notifiedVersion: null,
+};

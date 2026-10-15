@@ -1,7 +1,8 @@
-import { Injectable, signal } from '@angular/core';
+import { inject, Injectable, signal } from '@angular/core';
 import { moveItemInArray } from '@angular/cdk/drag-drop';
-import { DefaultSectionOrder, SectionOrderStorageKey } from '../constants/layout.const';
+import { DefaultSectionOrder } from '../constants/layout.const';
 import { HomeSection, HomeSectionOrder } from '../models/layout.model';
+import { LocalStorage } from './local-storage.service';
 
 const KNOWN_SECTIONS = Object.values(HomeSection);
 
@@ -9,6 +10,8 @@ const KNOWN_SECTIONS = Object.values(HomeSection);
   providedIn: 'root',
 })
 export class LayoutService {
+  private readonly _localStorage = inject(LocalStorage);
+
   /** Current home page section order, restored from the last visit. */
   readonly sectionOrder = signal<HomeSectionOrder>(this._read());
 
@@ -47,32 +50,13 @@ export class LayoutService {
    * so a new section always appears instead of silently vanishing.
    */
   private _read(): HomeSectionOrder {
-    let stored: unknown;
-
-    try {
-      const raw = localStorage.getItem(SectionOrderStorageKey);
-
-      if (!raw) return [...DefaultSectionOrder];
-
-      stored = JSON.parse(raw);
-    } catch {
-      // Unparseable, or storage is unavailable (private mode, blocked data).
-      return [...DefaultSectionOrder];
-    }
-
-    if (!Array.isArray(stored)) return [...DefaultSectionOrder];
-
-    const known = stored.filter((id): id is HomeSection => KNOWN_SECTIONS.includes(id as HomeSection));
+    const known = this._localStorage.get('sectionOrder').filter((id) => KNOWN_SECTIONS.includes(id));
     const unique = [...new Set(known)];
 
     return [...unique, ...DefaultSectionOrder.filter((id) => !unique.includes(id))];
   }
 
   private _write(order: HomeSectionOrder): void {
-    try {
-      localStorage.setItem(SectionOrderStorageKey, JSON.stringify(order));
-    } catch {
-      // Persisting is a convenience; the order still applies for this visit.
-    }
+    this._localStorage.set('sectionOrder', order);
   }
 }

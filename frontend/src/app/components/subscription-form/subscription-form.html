@@ -269,27 +269,17 @@
               </mat-form-field>
 
               <!-- Folder -->
-              <mat-form-field appearance="outline" class="md:col-span-6" subscriptSizing="dynamic">
-                <mat-label>Destination folder</mat-label>
-                <input
-                  matInput
-                  formControlName="tag"
-                  placeholder="e.g. subscriptions"
-                  type="text"
-                  [matAutocomplete]="tag"
-                />
-
-                <mat-autocomplete #tag="matAutocomplete">
-                  @for (folder of folders(); track folder) {
-                    <mat-option [value]="folder">
-                      {{ folder }}
-                    </mat-option>
-                  }
-                </mat-autocomplete>
-              </mat-form-field>
+              <rt-path-input
+                class="md:col-span-6"
+                formControlName="folder"
+                label="Destination folder"
+                placeholder="e.g. subscriptions"
+                subscriptSizing="dynamic"
+                [defaultFolder]="downloadsFolder()"
+              />
 
               <!-- Extra yt-dlp args -->
-              <mat-form-field appearance="outline" class="md:col-span-6" subscriptSizing="dynamic">
+              <mat-form-field appearance="outline" class="md:col-span-6 h-min" subscriptSizing="dynamic">
                 <mat-label>Extra yt-dlp arguments</mat-label>
                 <input matInput formControlName="ytdlpArgs" placeholder="Appended to the global arguments" />
               </mat-form-field>

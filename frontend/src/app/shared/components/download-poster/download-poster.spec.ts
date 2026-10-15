@@ -71,11 +71,29 @@ describe('Poster', () => {
     expect(audio()).not.toBeNull();
   });
 
-  it('goes back to the poster when the video is clicked again', async () => {
+  it('keeps the video open when it is clicked, leaving the click to its controls', async () => {
     await render({ type: Types.VIDEO });
     await clickCard();
 
     video().click();
+    await fixture.whenStable();
+
+    expect(video()).not.toBeNull();
+    expect(card()).toBeNull();
+  });
+
+  it('goes back to the poster when the video is held', async () => {
+    await render({ type: Types.VIDEO });
+    await clickCard();
+
+    vi.useFakeTimers();
+    try {
+      // jsdom has no PointerEvent; the long press only reads `button`.
+      video().dispatchEvent(Object.assign(new Event('pointerdown', { cancelable: true }), { button: 0 }));
+      vi.advanceTimersByTime(500);
+    } finally {
+      vi.useRealTimers();
+    }
     await fixture.whenStable();
 
     expect(video()).toBeNull();

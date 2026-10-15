@@ -19,3 +19,4 @@ export * from './decision-dialog/decision-dialog';
 export * from './app-settings/app-settings';
 export * from './code/code';
 export * from './text-input/text-input';
+export * from './path-input/path-input';

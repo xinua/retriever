@@ -81,6 +81,17 @@ jobs:
         working-directory: frontend
         run: pnpm run verify
 
+      # verify runs prettier --write, so unformatted sources pass it silently;
+      # any file it (or anything else) changed means the commit wasn't clean.
+      - name: Check nothing changed
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            git --no-pager diff
+            echo "::error::Files changed during verify - run 'pnpm run verify' in frontend and commit the result"
+            exit 1
+          fi
+
   publish:
     needs: test
     runs-on: ubuntu-latest
@@ -149,7 +160,7 @@ jobs:
             test=${{ needs.test.result }}
             publish=${{ needs.publish.result }}
             push-to-github=${{ needs.push-to-github.result }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           text="✅ $SRC_TAG passed, handed to GitHub"
           for entry in $RESULTS; do

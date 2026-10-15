@@ -21,8 +21,12 @@
             </mat-form-field>
           </div>
 
-          <button mat-icon-button (click)="searchField.focus(); showSearch.set(true)" class="text-white!">
-            <mat-icon class="cursor-pointer relative z-1">search</mat-icon>
+          <button mat-icon-button (click)="toggleSearch(searchField)" class="text-white!">
+            <mat-icon
+              class="cursor-pointer relative z-1"
+              [class]="searchControl.value ? 'animate-spin-once' : 'animate-fadeIn'"
+              [fontIcon]="searchControl.value ? 'close' : 'search'"
+            />
           </button>
         </div>
 
@@ -48,7 +52,7 @@
     </mat-card-header>
 
     <mat-card-content class="mt-2 pb-0!">
-      @if (downloads().length || isAnimationInProgress()) {
+      @if (downloads().length || loadingDownloads()) {
         <div class="flex flex-col gap-5 overflow-hidden" #downloadsContainer>
           @for (download of downloads(); track trackById($index, download)) {
             <rt-download-record
@@ -57,7 +61,6 @@
               [paginator]="paginator()"
               (cancel)="cancel($event)"
               (retry)="retry($event)"
-              (remove)="remove($event.download, $event.elementRef, downloadsContainer)"
               (saveAs)="saveAs($event)"
               (copyFilePath)="copyFilePath($event)"
               [swipeDisabled]="paginator().limit !== 1"
@@ -66,7 +69,7 @@
           }
         </div>
 
-        @defer (when downloads().length > 0 || isAnimationInProgress()) {
+        @defer (when downloads().length > 0) {
           <div class="flex justify-between items-center flex-col md:flex-row">
             <div
               class="flex items-end gap-4 text-xs font-calculator font-bold whitespace-nowrap mx-auto md:mx-0 my-4 md:my-0"

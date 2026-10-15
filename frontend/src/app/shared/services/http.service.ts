@@ -2,7 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { catchError, EMPTY, Observable, tap } from 'rxjs';
 import { webhookExamplePayload } from '../components/webhook-snackbar/webhook-snackbar.constants';
-import { DefaultSettings, DefaultUiConfig } from '../constants/defaults.const';
+import { DefaultSettings } from '../constants/defaults.const';
 import { silent } from '../interceptors/error.interceptor';
 import {
   DownloadInfoModel,
@@ -14,7 +14,7 @@ import {
 } from '../models/download.model';
 import { FilterModel, Nullable } from '../models/common.model';
 import {
-  FoldersModel,
+  FolderListingModel,
   PotStatusModel,
   SettingsModel,
   YtdlpStatusModel,
@@ -25,7 +25,6 @@ import {
   TelegramTestResult,
 } from '../models/settings.model';
 import { NextCheckModel, SubscriptionModel } from '../models/subscription.model';
-import { UiConfig } from '../models/ui-config.model';
 import { VersionModel } from '../models/version.model';
 import { StorageService } from './storage.service';
 
@@ -83,22 +82,15 @@ export class HttpService {
       .pipe(tap((settings) => this._storage.settings.set(settings)));
   }
 
-  getUiConfig(): Observable<UiConfig> {
-    return this._http.get<UiConfig>('/api/ui-config').pipe(
-      tap((uiConfig) => this._storage.uiConfig.set(uiConfig)),
-      catchError(async () => DefaultUiConfig),
-    );
-  }
-
   getSubscriptions(): Observable<SubscriptionModel[]> {
-    return this._http.get<SubscriptionModel[]>('/api/channels').pipe(
-      tap((channels) => this._storage.subscriptions.set(channels)),
+    return this._http.get<SubscriptionModel[]>('/api/subscriptions').pipe(
+      tap((subscriptions) => this._storage.subscriptions.set(subscriptions)),
       catchError(async () => []),
     );
   }
 
   getSubscription(id: number): Observable<SubscriptionModel | null> {
-    return this._http.get<SubscriptionModel>(`/api/channels/${id}`).pipe(
+    return this._http.get<SubscriptionModel>(`/api/subscriptions/${id}`).pipe(
       tap((subscription) => {
         if (this._storage.subscriptions()?.length) {
           this._storage.subscriptions.update((subscriptions) =>
@@ -115,20 +107,20 @@ export class HttpService {
   getNextCheck(): Observable<NextCheckModel> {
     return this._http.get<NextCheckModel>('/api/next-check').pipe(
       tap((nextCheck) => this._storage.nextCheck.set(nextCheck)),
-      catchError(async () => ({ ok: false, nextCheckAt: null, channel: null })),
+      catchError(async () => ({ ok: false, nextCheckAt: null, subscription: null })),
     );
   }
 
   addSubscription(subscription: SubscriptionModel): Observable<SubscriptionModel> {
-    return this._http.post<SubscriptionModel>('/api/channels', { ...subscription, url: subscription.rssUrl });
+    return this._http.post<SubscriptionModel>('/api/subscriptions', { ...subscription, url: subscription.rssUrl });
   }
 
   updateSubscription(subscription: SubscriptionModel): Observable<SubscriptionModel> {
-    return this._http.put<SubscriptionModel>(`/api/channels/${subscription.id}`, subscription);
+    return this._http.put<SubscriptionModel>(`/api/subscriptions/${subscription.id}`, subscription);
   }
 
   deleteSubscription(id: number): Observable<void> {
-    return this._http.delete<void>(`/api/channels/${id}`);
+    return this._http.delete<void>(`/api/subscriptions/${id}`);
   }
 
   runOnceAll(): Observable<{ ok: boolean }> {
@@ -238,8 +230,14 @@ export class HttpService {
     return this._http.post<{ ok: boolean }>(`/api/downloads/${id}/cancel`, {});
   }
 
-  deleteDownload(id: number): Observable<{ ok: boolean }> {
+  removeRecord(id: number): Observable<{ ok: boolean }> {
     return this._http.delete<{ ok: boolean }>(`/api/downloads/${id}`);
+  }
+
+  removeFile(id: number): Observable<{ ok: boolean; fileDeleted: boolean }> {
+    return this._http.delete<{ ok: boolean; fileDeleted: boolean }>(`/api/downloads/${id}`, {
+      params: { withFile: true },
+    });
   }
 
   /** Emergency stop — cancels every queued and running download at once. */
@@ -302,20 +300,17 @@ export class HttpService {
       .pipe(tap(() => this._storage.telegramChats.update((chats) => chats.filter((c) => c.chatId !== chatId))));
   }
 
-  saveUiConfig(patch: Partial<UiConfig>): Observable<UiConfig> {
-    return this._http.post<UiConfig>('/api/ui-config', patch);
-  }
-
   /**
    * The folders that already exist inside the downloads root. Read from disk
    * rather than derived from the saved subscriptions, so folders created by
    * hand or by a manual download are offered by the autocompletes too.
    */
-  getFolders(): Observable<FoldersModel> {
-    return this._http.get<FoldersModel>('/api/folders').pipe(
-      tap(({ folders }) => this._storage.folders.set(folders)),
-      catchError(async () => ({ root: '', folders: [] })),
-    );
+  /** One level of the mounted root; a missing folder is an expected 404, so it stays silent. */
+  getFolder(path: string, files = false): Observable<FolderListingModel> {
+    let params = new HttpParams().set('path', path);
+    if (files) params = params.set('files', '1');
+
+    return this._http.get<FolderListingModel>('/api/folders', { params, context: silent() });
   }
 
   setDownloadPath(id: number, path: string): Observable<DownloadModel> {
@@ -331,7 +326,7 @@ export class HttpService {
   }
 
   updateSubAvatar(id: number, avatar: File): Observable<SubscriptionModel> {
-    return this._http.put<SubscriptionModel>(`/api/channels/${id}/avatar`, avatar);
+    return this._http.put<SubscriptionModel>(`/api/subscriptions/${id}/avatar`, avatar);
   }
 
   updateDownloadAvatar(id: number, avatar: File): Observable<DownloadModel> {
@@ -370,5 +365,18 @@ export class HttpService {
 
   setFileName(id: number, fileName: string): Observable<DownloadModel> {
     return this._http.patch<DownloadModel>(`/api/downloads/${id}/file-name`, { fileName });
+  }
+
+  /**
+   * Moves the file to `folder` ("/" for the root). The row comes back with
+   * `move` set when the file is being copied to another filesystem, which
+   * finishes in the background.
+   */
+  moveFile(id: number, folder: string): Observable<DownloadModel> {
+    return this._http.post<DownloadModel>(`/api/downloads/${id}/move`, { folder });
+  }
+
+  cancelMove(id: number): Observable<{ ok: boolean }> {
+    return this._http.post<{ ok: boolean }>(`/api/downloads/${id}/move/cancel`, {});
   }
 }

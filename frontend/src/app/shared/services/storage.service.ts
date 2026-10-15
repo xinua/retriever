@@ -1,22 +1,19 @@
-import { computed, effect, Injectable, signal } from '@angular/core';
-import {
-  DefaultFilters,
-  DefaultManualForm,
-  DefaultPaginator,
-  DefaultSettings,
-  DefaultUiConfig,
-} from '../constants/defaults.const';
+import { effect, inject, Injectable, signal } from '@angular/core';
+import { DefaultFilters, DefaultPaginator, DefaultSettings } from '../constants/defaults.const';
 import { DownloadInfoModel, DownloadModel } from '../models/download.model';
 import { FilterModel, Nullable, PaginatorModel } from '../models/common.model';
 import { ManualDownloadModel } from '../models/main-form.model';
 import { NextCheckModel, SubscriptionModel } from '../models/subscription.model';
 import { SettingsModel, TelegramChatModel, TelegramStatusModel } from '../models/settings.model';
 import { UiConfig } from '../models/ui-config.model';
+import { LocalStorage } from './local-storage.service';
 
 @Injectable({
   providedIn: 'root',
 })
 export class StorageService {
+  private readonly _localStorage = inject(LocalStorage);
+
   subscriptions = signal<SubscriptionModel[]>([]);
   settings = signal<SettingsModel>(DefaultSettings);
   editingSubscription = signal<Nullable<SubscriptionModel>>(null);
@@ -24,31 +21,18 @@ export class StorageService {
   nextCheck = signal<Nullable<NextCheckModel>>(null);
   downloads = signal<DownloadModel[]>([]);
   downloadInfo = signal<Nullable<DownloadInfoModel>>(null);
-  uiConfig = signal<UiConfig>(DefaultUiConfig);
+  uiConfig = signal<UiConfig>(this._localStorage.get('uiConfig'));
   filters = signal<FilterModel>(DefaultFilters);
-  paginator = signal<PaginatorModel>(DefaultPaginator);
-  manualDownloadForm = signal<ManualDownloadModel>(DefaultManualForm);
+  paginator = signal<PaginatorModel>(this._localStorage.get('paginator'));
+  manualDownloadForm = signal<ManualDownloadModel>(this._localStorage.get('manualDownloadForm'));
   telegramChats = signal<TelegramChatModel[]>([]);
   telegramStatus = signal<TelegramStatusModel | null>(null);
 
-  folders = signal<string[]>([]);
-
-  folderOptions = computed<string[]>(() =>
-    [...new Set([...this.folders(), ...this.subscriptions().map(({ tag }) => tag)])]
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b)),
-  );
-
   constructor() {
-    this.paginator.set((JSON.parse(localStorage.getItem('paginator')) as PaginatorModel) || DefaultPaginator);
-    this.manualDownloadForm.set(
-      (JSON.parse(localStorage.getItem('manualDownloadForm')) as ManualDownloadModel) || DefaultManualForm,
-    );
-
-    effect(() => {
-      localStorage.setItem('manualDownloadForm', JSON.stringify(this.manualDownloadForm()));
-      localStorage.setItem('paginator', JSON.stringify({ ...DefaultPaginator, limit: this.paginator().limit }));
-    });
+    effect(() => this._localStorage.set('uiConfig', this.uiConfig()));
+    effect(() => this._localStorage.set('manualDownloadForm', this.manualDownloadForm()));
+    // Only the page size is worth keeping; the page and total belong to this visit.
+    effect(() => this._localStorage.set('paginator', { ...DefaultPaginator, limit: this.paginator().limit }));
   }
 
   upsertDownloads(incoming: DownloadModel[]): void {

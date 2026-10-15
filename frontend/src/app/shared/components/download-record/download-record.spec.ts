@@ -116,16 +116,4 @@ describe('DownloadRecord', () => {
     query('rt-progress-info button').click();
     expect(cancel).toHaveBeenCalledWith(expect.objectContaining({ id: 9 }));
   });
-
-  it('passes remove up with the download and its card', async () => {
-    const remove = vi.fn();
-    component.remove.subscribe(remove);
-    await render({ id: 9, status: DownloadStatus.DONE });
-
-    query('rt-download-controls button').click();
-
-    const [{ download, elementRef }] = remove.mock.calls[0];
-    expect(download.id).toBe(9);
-    expect(elementRef).toBe(query('div'));
-  });
 });

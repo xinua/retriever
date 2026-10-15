@@ -110,23 +110,23 @@ describe('WidgetPage', () => {
     });
   });
 
-  describe('channel', () => {
+  describe('subscription', () => {
     it('picks the subscription matching the route id', async () => {
       await render();
 
-      expect(component.channel()?.id).toBe(MockSubscription.id);
+      expect(component.subscription()?.id).toBe(MockSubscription.id);
     });
 
     it('shows a placeholder when the subscription is unknown', async () => {
       storage.subscriptions.set([subscription({ id: 2 })]);
       await render();
 
-      expect(component.channel()).toBeUndefined();
+      expect(component.subscription()).toBeUndefined();
       expect(el().textContent).toContain('No subscription found...');
       expect(query('img')).toBeNull();
     });
 
-    it('renders the channel name, last video title and thumbnail', async () => {
+    it('renders the subscription name, last video title and thumbnail', async () => {
       await render();
 
       expect(el().textContent).toContain(MockSubscription.name);
@@ -136,7 +136,7 @@ describe('WidgetPage', () => {
       expect(img.alt).toBe('Latest Video');
     });
 
-    it('marks a disabled channel with a red dot', async () => {
+    it('marks a disabled subscription with a red dot', async () => {
       storage.subscriptions.set([subscription({ enabled: false })]);
       await render();
 

@@ -51,6 +51,7 @@ backend/dist
 backend/public
 backend/data
 backend/downloads
+backend/.env
 
 # Local-only release tooling (kept out of the repo); frontend/scripts is tracked.
 /scripts/

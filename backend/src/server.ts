@@ -17,8 +17,7 @@ import { eq } from "drizzle-orm";
 import { healthRoutes } from "./routes/http/public.js";
 import { versionRoutes } from "./routes/http/version.js";
 import { settingsRoutes } from "./routes/http/settings.js";
-import { uiConfigRoutes } from "./routes/http/ui-config.js";
-import { channelsRoutes } from "./routes/http/channels.js";
+import { subscriptionsRoutes } from "./routes/http/subscriptions.js";
 import { actionsRoutes } from "./routes/http/actions.js";
 import { ytdlpRoutes } from "./routes/http/ytdlp.js";
 import { downloadsRoutes } from "./routes/http/downloads.js";
@@ -28,6 +27,7 @@ import * as Telegram from "./services/telegram/bot.js";
 import * as TelegramDownload from "./services/telegram/download.js";
 import * as Notify from "./services/notify.js";
 import { initWebsockets } from "./routes/ws/websockets.js";
+import { ROOT } from "./services/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,12 +36,11 @@ const PORT = Number(process.env.PORT ?? 8000);
 const HOST = process.env.HOST ?? "0.0.0.0";
 const DATA_DIR = process.env.DATA_DIR ?? "./data";
 const IMAGES_DIR = path.join(DATA_DIR, "images");
-const DOWNLOADS_DIR = process.env.DOWNLOADS_DIR ?? "/downloads";
 
 // These live on mounted volumes, so anything created at image build time is
 // hidden once a host path is mounted over it. Create them at boot instead —
 // @fastify/static refuses to serve a root that does not exist yet.
-for (const dir of [IMAGES_DIR, DOWNLOADS_DIR]) {
+for (const dir of [IMAGES_DIR, ROOT]) {
   try {
     fs.mkdirSync(dir, { recursive: true });
   } catch (e) {
@@ -71,8 +70,7 @@ app.addContentTypeParser(
 await app.register(healthRoutes);
 await app.register(versionRoutes);
 await app.register(settingsRoutes);
-await app.register(uiConfigRoutes);
-await app.register(channelsRoutes);
+await app.register(subscriptionsRoutes);
 await app.register(actionsRoutes);
 await app.register(ytdlpRoutes);
 await app.register(downloadsRoutes);

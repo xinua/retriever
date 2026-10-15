@@ -47,6 +47,7 @@ import { NotifierService } from 'angular-notifier';
 import { catchError, filter, from, map, Observable, of, skip, tap } from 'rxjs';
 import { finalize, startWith, take } from 'rxjs/operators';
 import { CODEC_ICONS, FORMAT_ICONS, QUALITY_ICONS, TYPE_ICONS } from './manual-form.constants';
+import { PathInput } from '@shared/components';
 
 @Component({
   selector: 'rt-manual-form',
@@ -75,6 +76,7 @@ import { CODEC_ICONS, FORMAT_ICONS, QUALITY_ICONS, TYPE_ICONS } from './manual-f
     MatAutocompleteModule,
     MatCheckbox,
     MatButtonModule,
+    PathInput,
   ],
 })
 export class ManualFormComponent implements OnInit, AfterViewInit {
@@ -112,7 +114,7 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
   urlInput = viewChild<ElementRef<HTMLInputElement>>('urlInput');
   urlMatInput = viewChild<MatFormField>('urlMatInput');
 
-  folders = this._storage.folderOptions;
+  downloadsFolder = computed(() => this._storage.settings().downloadsDir);
   currentColor = computed(() => this._storage.uiConfig().themeColor);
 
   constructor() {
@@ -143,7 +145,6 @@ export class ManualFormComponent implements OnInit, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    this._http.getFolders().subscribe();
     this.trackFormChanges();
     this._trackTypeChange().subscribe((type) => this._syncFormats(type));
   }

@@ -5,11 +5,12 @@ import { db } from "../../db/index.js";
 import { settings } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
 import * as ytdlp from "../../services/ytdlp.js";
+import { parseFolder } from "../../services/paths.js";
 import { publishDownloaderStatus } from "../ws/downloader-status.js";
 import * as Telegram from "../../services/telegram/bot.js";
 import {
   normalizeTimeZone,
-  rescheduleAllChannels
+  rescheduleAllSubscriptions
 } from "../../utils/time-zone.helper.js";
 
 /**
@@ -58,7 +59,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     return row;
   });
 
-  app.post("/api/settings", async (req) => {
+  app.post("/api/settings", async (req, reply) => {
     const body = req.body as {
       enabled: boolean | null;
       webhookUrl?: string | null;
@@ -87,6 +88,15 @@ export async function settingsRoutes(app: FastifyInstance) {
         ? normalizeTimeZone(body.timeZone)
         : previous?.timeZone ?? null;
 
+    // Relative to the mounted root; "" is the root itself. Checked here as
+    // well as by the form, since an API caller never saw the form's rules.
+    const downloadsDir =
+      "downloadsDir" in body ? parseFolder(body.downloadsDir) : null;
+
+    if (downloadsDir && !downloadsDir.ok) {
+      return reply.code(400).send({ error: downloadsDir.error });
+    }
+
     const concurrency = Math.min(
       Math.max(Number(body.ytdlpConcurrency) || 2, 1),
       10
@@ -97,8 +107,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       .set({
         enabled: body.enabled ?? true,
         webhookUrl: body.webhookUrl ?? null,
-        downloadsDir:
-          body.downloadsDir?.trim() || ytdlp.DEFAULT_DOWNLOADS_DIR,
+        ...(downloadsDir ? { downloadsDir: downloadsDir.folder } : {}),
         ytdlpArgs: body.ytdlpArgs?.trim() || null,
         ytdlpConcurrency: concurrency,
         timeZone,
@@ -131,7 +140,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     );
 
     if ((previous?.timeZone ?? null) !== timeZone) {
-      await rescheduleAllChannels(timeZone);
+      await rescheduleAllSubscriptions(timeZone);
     }
 
     const telegramChanged =
@@ -223,7 +232,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       .set({ timeZone, updatedAt: new Date().toISOString() })
       .where(eq(settings.id, 1));
 
-    await rescheduleAllChannels(timeZone);
+    await rescheduleAllSubscriptions(timeZone);
 
     const [updated] = await db
       .select()

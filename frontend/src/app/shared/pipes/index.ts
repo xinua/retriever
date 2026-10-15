@@ -4,3 +4,5 @@ export * from './size.pipe';
 export * from './array.pipe';
 export * from './list-item.pipe';
 export * from './poll-counter.pipe';
+export * from './filter.pipe';
+export * from './sort.pipe';

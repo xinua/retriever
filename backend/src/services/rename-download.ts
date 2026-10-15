@@ -5,12 +5,12 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { download } from "../db/schema.js";
 import { broadcast } from "../routes/ws/websockets.js";
-import { isEmbedding } from "./artwork-replace.js";
 import { resolveDownloadFile, withFileExists } from "./download-file.js";
+import { busyError, claimFile, releaseFile } from "./file-busy.js";
 import * as Poster from "./poster.js";
 import * as ytdlp from "./ytdlp.js";
 
-import type { Download, Settings } from "../db/types.js";
+import type { Download } from "../db/types.js";
 
 /**
  * Renames a download — two separate actions, never one implying the other.
@@ -46,13 +46,9 @@ export type RenameResult =
   | { ok: true; download: Download & { fileExists: boolean } }
   | { ok: false; status: number; error: string };
 
-/** Downloads mid-rename, so a double submit cannot race itself. */
-const renaming = new Set<number>();
-
 export async function retitleDownload(
   row: Download,
-  value: unknown,
-  appSettings: Settings
+  value: unknown
 ): Promise<RenameResult> {
   if (typeof value !== "string") {
     return { ok: false, status: 400, error: "title is required" };
@@ -71,15 +67,14 @@ export async function retitleDownload(
     return { ok: false, status: 409, error: "Download is still active" };
   }
 
-  const [checked] = await withFileExists([await update(row.id, { title })], appSettings);
+  const [checked] = await withFileExists([await update(row.id, { title })]);
 
   return { ok: true, download: publish(checked) };
 }
 
 export async function renameDownloadFile(
   row: Download,
-  value: unknown,
-  appSettings: Settings
+  value: unknown
 ): Promise<RenameResult> {
   if (typeof value !== "string") {
     return { ok: false, status: 400, error: "fileName is required" };
@@ -95,14 +90,13 @@ export async function renameDownloadFile(
     return { ok: false, status: 409, error: "Download is still active" };
   }
 
-  if (renaming.has(row.id) || isEmbedding(row.id)) {
-    return { ok: false, status: 409, error: "The file is already being updated" };
+  // Also keeps a double submit from racing itself.
+  if (!claimFile(row.id, "renaming")) {
+    return { ok: false, status: 409, error: busyError(row.id) };
   }
 
-  renaming.add(row.id);
-
   try {
-    const file = await resolveDownloadFile(row, appSettings);
+    const file = await resolveDownloadFile(row);
 
     if (!file.ok) return file;
 
@@ -137,7 +131,7 @@ export async function renameDownloadFile(
 
     return { ok: true, download: publish({ ...updated, fileExists: true }) };
   } finally {
-    renaming.delete(row.id);
+    releaseFile(row.id);
   }
 }
 

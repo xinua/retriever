@@ -1,6 +1,6 @@
 import { ImagesService } from "./images.service.js";
 
-import type { Channel, Download } from "../db/types.js";
+import type { Subscription, Download } from "../db/types.js";
 
 /**
  * Which picture stands for the uploader of a download row.
@@ -41,7 +41,7 @@ const SITE_MARK: Partial<Record<Download["platform"], string>> = {
  * produced, and every subscription watching it — two subscriptions on one
  * channel read this one file. That makes it shared artwork like
  * `video-<id>.jpg` (see manual-download.ts), so no single reader may delete
- * it; channels.ts drops it only once the last one is gone.
+ * it; subscriptions.ts drops it only once the last one is gone.
  */
 export function avatarName(channelId: string): string {
   return `channel-${channelId}.jpg`;
@@ -71,6 +71,6 @@ export function avatarFor(row: Download): string | null {
  * version attached, so a replaced avatar reaches every open tab (see
  * ImagesService.urlFor). The column itself keeps the bare path.
  */
-export function decorateChannel<T extends Pick<Channel, "channelAvatarPath">>(row: T): T {
+export function decorateSubscription<T extends Pick<Subscription, "channelAvatarPath">>(row: T): T {
   return { ...row, channelAvatarPath: ImagesService.versioned(row.channelAvatarPath) };
 }

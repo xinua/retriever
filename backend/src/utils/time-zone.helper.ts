@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { channel, settings } from "../db/schema.js";
+import { subscription, settings } from "../db/schema.js";
 import { broadcast } from "../routes/ws/websockets.js";
 import { getLastCheck } from "./last-check.helper.js";
 import { calculateNextCheck, isValidTimeZone } from "./schedule.helper.js";
@@ -28,15 +28,15 @@ export function normalizeTimeZone(value: unknown): string | null {
  * Every booked check was worked out in the old zone, so a "09:00" row would
  * keep firing at the old 09:00 until its next scan. Re-book them all now.
  */
-export async function rescheduleAllChannels(timeZone: string | null): Promise<void> {
-  const rows = await db.select().from(channel);
+export async function rescheduleAllSubscriptions(timeZone: string | null): Promise<void> {
+  const rows = await db.select().from(subscription);
   const now = new Date();
 
   db.transaction((tx) => {
     for (const row of rows) {
-      tx.update(channel)
+      tx.update(subscription)
         .set({ nextCheckAt: calculateNextCheck(row, now, timeZone) })
-        .where(eq(channel.id, row.id))
+        .where(eq(subscription.id, row.id))
         .run();
     }
   });

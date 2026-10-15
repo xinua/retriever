@@ -1,11 +1,16 @@
-<button
-  mat-icon-button
-  [class]="hasActiveFilters() ? 'text-(--rt-accent)!' : 'text-white!'"
-  [matMenuTriggerFor]="filterMenu"
-  aria-label="Download filters"
->
-  <mat-icon [fontIcon]="hasActiveFilters() ? 'filter_alt' : 'filter_alt_off'" />
-</button>
+<div [matMenuTriggerFor]="filterMenu">
+  <button
+    mat-icon-button
+    [class]="hasActiveFilters() ? 'text-(--rt-accent)!' : 'text-white!'"
+    [class.animate-shake]="animateShake()"
+    (rtLongPress)="resetFilters()"
+    aria-label="Download filters"
+    matTooltip="Hold to reset filters"
+    [matTooltipDisabled]="!hasActiveFilters()"
+  >
+    <mat-icon [fontIcon]="hasActiveFilters() ? 'filter_alt' : 'filter_alt_off'" />
+  </button>
+</div>
 
 <mat-menu #filterMenu>
   @for (group of filterGroups(); track group) {

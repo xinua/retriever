@@ -23,7 +23,7 @@ describe('SubscriptionForm', () => {
 
   beforeEach(async () => {
     http = {
-      getFolders: vi.fn(() => of({ root: '/downloads', folders: [] })),
+      getFolder: vi.fn(() => of({ path: '', entries: [], truncated: false })),
       addSubscription: vi.fn((sub: SubscriptionModel) => of({ ...sub, id: 99 })),
       updateSubscription: vi.fn((sub: SubscriptionModel) => of(sub)),
       sendWebhook: vi.fn(() => of({ ok: true })),
@@ -73,14 +73,13 @@ describe('SubscriptionForm', () => {
   const icon = (name: string): HTMLElement | null => el().querySelector(`mat-icon[fonticon="${name}"]`);
 
   describe('adding a subscription', () => {
-    it('renders the add form with defaults and loads folders', async () => {
+    it('renders the add form with defaults', async () => {
       await render();
 
       expect(component.isEditing()).toBe(false);
       expect(text()).toContain('Add subscription');
       expect(buttonByText('Subscribe')).toBeDefined();
       expect(buttonByText('Reset')).toBeDefined();
-      expect(http['getFolders']).toHaveBeenCalledTimes(1);
       expect(component.form.getRawValue()).toMatchObject({
         rssUrl: '',
         type: Types.VIDEO,
@@ -144,8 +143,15 @@ describe('SubscriptionForm', () => {
         rssUrl: 'https://youtube.com/rss/url/test',
         pollInterval: 30,
         pollTime: [],
-        tag: 'youtube',
+        folder: 'youtube',
       });
+    });
+
+    it('shows a subscription stored at the root as "/", since empty means the downloads folder', async () => {
+      await renderEditing(subscription({ folder: '' }));
+
+      expect(component.form.getRawValue().folder).toBe('/');
+      expect(component.form.errors).toEqual({ unchanged: true });
     });
 
     it('hides the add hints and offers to copy the url', async () => {
@@ -188,7 +194,7 @@ describe('SubscriptionForm', () => {
 
       expect(component.isEditing()).toBe(false);
       expect(component.form.errors).toBeNull();
-      expect(component.form.getRawValue()).toMatchObject({ id: null, name: null, rssUrl: '', tag: '' });
+      expect(component.form.getRawValue()).toMatchObject({ id: null, name: null, rssUrl: '', folder: '' });
     });
   });
 

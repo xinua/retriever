@@ -99,7 +99,7 @@ export interface SubscriptionModel {
   pollTime: Nullable<string[]>;
   pollOnce?: Nullable<boolean>;
   prefix: Nullable<string>;
-  tag: Nullable<string>;
+  folder: Nullable<string>;
   webhookOverride: Nullable<string>;
   channelAvatarPath?: Nullable<string>;
   lastVideoThumbnailPath?: Nullable<string>;
@@ -114,7 +114,7 @@ export interface SubscriptionModel {
   updatedAt?: Date;
 }
 
-export interface ChannelFormModel {
+export interface SubscriptionFormModel {
   id: FormControl<SubscriptionModel['id']>;
   name: FormControl<SubscriptionModel['name']>;
   rssUrl: FormControl<SubscriptionModel['rssUrl']>;
@@ -128,7 +128,7 @@ export interface ChannelFormModel {
   notifyTelegram: FormControl<boolean>;
   webhookOverride: FormControl<SubscriptionModel['webhookOverride']>;
   prefix: FormControl<SubscriptionModel['prefix']>;
-  tag: FormControl<SubscriptionModel['tag']>;
+  folder: FormControl<SubscriptionModel['folder']>;
   pollType: FormControl<SubscriptionModel['pollType']>;
   pollInterval: FormControl<SubscriptionModel['pollInterval']>;
   pollTime: FormControl<string[]>;
@@ -141,7 +141,7 @@ export interface ChannelFormModel {
 export type NextCheckModel = {
   ok: boolean;
   nextCheckAt: string;
-  channel: {
+  subscription: {
     id: number;
     name: string;
   };

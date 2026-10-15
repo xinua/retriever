@@ -19,7 +19,7 @@ export type WebSocketMessageType =
   | 'notification'
   | 'downloader-status'
   | 'next-check'
-  | 'channel-updated'
+  | 'subscription-updated'
   | 'download-updated'
   | 'downloads-batch'
   | 'download-removed'
@@ -35,7 +35,7 @@ export interface NotificationPayload {
 }
 
 export interface SubscriptionPayload {
-  channel: SubscriptionModel;
+  subscription: SubscriptionModel;
 }
 
 export interface DownloaderStatusPayload {

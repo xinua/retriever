@@ -4,9 +4,10 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import type { Channel, Settings } from "../db/types.js";
+import type { Subscription, Settings } from "../db/types.js";
 import * as Ffmpeg from "./ffmpeg.js";
 import * as MediaOptions from "../models/media-options.js";
+import { isInside, mountsInside, parseFolder, ROOT, TEMP_DIR_NAME, tempRootFor } from "./paths.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -38,8 +39,6 @@ export async function removeArchive(watcherId: number): Promise<void> {
   await fsp.rm(archiveFile(watcherId), { force: true }).catch(() => {});
 }
 
-const TEMP_DIR_NAME = ".retriever-tmp";
-
 /**
  * Where the bundled bgutil POT provider plugin lives, and the provider server
  * to point it at. Both are opt-in — see potArgs().
@@ -56,8 +55,6 @@ const POT_BASE_URL = process.env.POT_BASE_URL?.trim();
  * since the user's extra args are appended after ours.
  */
 const FRAGMENT_CONCURRENCY = "8";
-
-export const DEFAULT_DOWNLOADS_DIR = process.env.DOWNLOADS_DIR ?? "/downloads";
 
 // Sentinels let us pick our own structured lines out of yt-dlp's stdout.
 export const PROGRESS_PREFIX = "@@P@@";
@@ -358,7 +355,7 @@ export async function potStatus(): Promise<PotStatus> {
 
 /**
  * Everything `buildArgs` needs to describe one download, decoupled from where
- * it came from. Watcher downloads derive this from their channel row, manual
+ * it came from. Watcher downloads derive this from their subscription row, manual
  * ones from the download row's own snapshot.
  */
 export type JobOptions = {
@@ -366,7 +363,7 @@ export type JobOptions = {
   format: string;
   codec: string | null;
   quality: string | null;
-  /** Sub-directory of the downloads root; the channel's `tag` for watchers. */
+  /** Folder relative to the mounted root; the subscription's `folder` for watchers. */
   folder: string | null;
   prefix: string | null;
   ytdlpArgs: string | null;
@@ -392,13 +389,13 @@ export type JobOptions = {
   keepVideo?: boolean;
 };
 
-export function optionsFromChannel(ch: Channel): JobOptions {
+export function optionsFromSubscription(ch: Subscription): JobOptions {
   return {
     type: ch.type,
     format: ch.format,
     codec: ch.codec,
     quality: null,
-    folder: ch.tag,
+    folder: ch.folder,
     prefix: ch.prefix,
     ytdlpArgs: ch.ytdlpArgs,
     clipStart: null,
@@ -581,18 +578,17 @@ function buildSectionArg(opts: JobOptions): string | null {
   return `*${start || "0"}-${end || "inf"}`;
 }
 
-export function downloadsRoot(settings: Settings): string {
-  return path.resolve(settings.downloadsDir?.trim() || DEFAULT_DOWNLOADS_DIR);
-}
-
-/** Absolute directory a job's finished files are moved into. */
-export function buildHomeDir(opts: JobOptions, settings: Settings): string {
-  const root = downloadsRoot(settings);
-  const dir = path.resolve(root, sanitizeFolder(opts.folder));
+/**
+ * Absolute directory a job's finished files are moved into. The folder is
+ * relative to the mounted root; the downloads folder setting was already
+ * applied when the job was created, so an empty one here means the root.
+ */
+export function buildHomeDir(opts: JobOptions): string {
+  const dir = path.resolve(ROOT, sanitizeFolder(opts.folder));
 
   // Belt and braces: sanitizeFolder already drops "..", but never let a
   // crafted folder value write outside the download root.
-  return dir === root || dir.startsWith(root + path.sep) ? dir : root;
+  return isInside(dir) ? dir : ROOT;
 }
 
 /**
@@ -774,7 +770,7 @@ export async function buildFilenameTemplate(
   // only what this did before numbering existed.
   if (!title?.trim()) return `${template}.%(ext)s`;
 
-  const dir = buildHomeDir(opts, settings);
+  const dir = buildHomeDir(opts);
   const stem = `${prefix}${sanitizeTitle(title)}`;
   const index = await nextCopyIndex(dir, stem, jobId);
 
@@ -788,30 +784,28 @@ export async function buildFilenameTemplate(
  * itself wrote from what was there before it started. Empty when the folder
  * does not exist yet, which says the same thing.
  */
-export async function listHome(
-  opts: JobOptions,
-  settings: Settings
-): Promise<Set<string>> {
+export async function listHome(opts: JobOptions): Promise<Set<string>> {
   try {
-    return new Set(await fsp.readdir(buildHomeDir(opts, settings)));
+    return new Set(await fsp.readdir(buildHomeDir(opts)));
   } catch {
     return new Set();
   }
 }
 
 /**
- * Per-download scratch space for `.part` and fragment files. It lives under
- * the downloads root so the finished file is a rename rather than a copy, and
- * is dot-prefixed so media scanners skip it. Deleting this directory is the
- * whole of cleanup — no filename guessing.
+ * Per-download scratch space for `.part` and fragment files. It lives on the
+ * destination folder's filesystem so the finished file is a rename rather
+ * than a copy — see tempRootFor(). The same destination always gives the same
+ * directory, which is what lets a retry resume. Deleting it is the whole of
+ * cleanup — no filename guessing.
  */
-export function buildTempDir(settings: Settings, jobId: number): string {
-  return path.join(downloadsRoot(settings), TEMP_DIR_NAME, String(jobId));
+export async function buildTempDir(opts: JobOptions, jobId: number): Promise<string> {
+  return path.join(await tempRootFor(buildHomeDir(opts)), String(jobId));
 }
 
-export function cleanupTemp(settings: Settings, jobId: number): void {
+export async function cleanupTemp(opts: JobOptions, jobId: number): Promise<void> {
   try {
-    fs.rmSync(buildTempDir(settings, jobId), {
+    await fsp.rm(await buildTempDir(opts, jobId), {
       recursive: true,
       force: true,
       maxRetries: 2
@@ -845,10 +839,9 @@ const PARTIAL_FILE = /\.(part|ytdl|temp|ytdlp)$|\.part-Frag\d+$|\.f\d+\.[^.]+$/i
  */
 export async function rescueTemp(
   opts: JobOptions,
-  settings: Settings,
   jobId: number
 ): Promise<string | null> {
-  const temp = buildTempDir(settings, jobId);
+  const temp = await buildTempDir(opts, jobId);
 
   let names: string[];
 
@@ -862,7 +855,7 @@ export async function rescueTemp(
 
   if (!finished.length) return null;
 
-  const home = buildHomeDir(opts, settings);
+  const home = buildHomeDir(opts);
 
   await fsp.mkdir(home, { recursive: true });
 
@@ -877,12 +870,12 @@ export async function rescueTemp(
 
       if (!stat.isFile() || stat.size === 0) continue;
 
-      // Same filesystem by design — the scratch dir lives under the download
-      // root — so this is a rename, but fall back for an exotic mount.
+      // Same filesystem by design — see buildTempDir — so this is a rename,
+      // but fall back for an exotic mount.
       try {
         await fsp.rename(from, to);
       } catch {
-        await fsp.copyFile(from, to);
+        await copyFile(from, to);
         await fsp.rm(from, { force: true });
       }
 
@@ -918,14 +911,24 @@ export async function rescueTemp(
  * whose row was deleted or has long since been dealt with. Run at boot, when
  * nothing is running yet and every surviving directory is by definition
  * abandoned unless its download is still queued.
+ *
+ * Scratch space is per filesystem (see buildTempDir), so every filesystem
+ * mounted inside the root is looked at, not just the root itself.
  */
-export async function sweepTemp(
-  settings: Settings,
-  keepIds: Iterable<number>
-): Promise<number> {
-  const root = path.join(downloadsRoot(settings), TEMP_DIR_NAME);
+export async function sweepTemp(keepIds: Iterable<number>): Promise<number> {
   const keep = new Set(Array.from(keepIds, String));
+  const tops = [ROOT, ...(await mountsInside())];
 
+  let removed = 0;
+
+  for (const top of tops) {
+    removed += await sweepTempDir(path.join(top, TEMP_DIR_NAME), keep);
+  }
+
+  return removed;
+}
+
+async function sweepTempDir(root: string, keep: Set<string>): Promise<number> {
   let names: string[];
 
   try {
@@ -951,6 +954,10 @@ export async function sweepTemp(
       // best effort only
     }
   }
+
+  // Not rmdir'd on an error: an empty scratch folder costs nothing, and one
+  // that is not empty must not go.
+  if (removed === names.length) await fsp.rmdir(root).catch(() => {});
 
   return removed;
 }
@@ -988,8 +995,8 @@ export async function buildArgs(
     "--print", `video:${DURATION_PREFIX}%(duration)s`,
     "--print", `after_move:${FILE_PREFIX}%(filepath)s`,
     "--no-simulate",
-    "-P", `home:${buildHomeDir(opts, settings)}`,
-    "-P", `temp:${buildTempDir(settings, jobId)}`,
+    "-P", `home:${buildHomeDir(opts)}`,
+    "-P", `temp:${await buildTempDir(opts, jobId)}`,
     "-o", await buildFilenameTemplate(opts, settings, title, jobId),
     ...buildFormatArgs(opts)
   ];
@@ -1107,7 +1114,7 @@ export async function fetchFrameClip(
   /** Seconds into the media to start the clip at. */
   start: number
 ): Promise<string | null> {
-  const dir = frameClipDir(settings, jobId);
+  const dir = frameClipDir(jobId);
 
   await fsp.mkdir(dir, { recursive: true });
 
@@ -1165,9 +1172,9 @@ export async function fetchFrameClip(
   return clip ? path.join(dir, clip) : null;
 }
 
-export async function cleanupFrameClip(settings: Settings, jobId: number): Promise<void> {
+export async function cleanupFrameClip(jobId: number): Promise<void> {
   await fsp
-    .rm(frameClipDir(settings, jobId), { recursive: true, force: true, maxRetries: 2 })
+    .rm(frameClipDir(jobId), { recursive: true, force: true, maxRetries: 2 })
     .catch(() => {});
 }
 
@@ -1176,12 +1183,26 @@ export async function cleanupFrameClip(settings: Settings, jobId: number): Promi
  * the destination folder. Same filesystem as that folder, so getting there and
  * back is a rename.
  */
-export function artworkStageDir(settings: Settings, jobId: number): string {
-  return path.join(downloadsRoot(settings), TEMP_DIR_NAME, `${jobId}-art`);
+export async function artworkStageDir(homeDir: string, jobId: number): Promise<string> {
+  return path.join(await tempRootFor(homeDir), `${jobId}-art`);
 }
 
-function frameClipDir(settings: Settings, jobId: number): string {
-  return path.join(downloadsRoot(settings), TEMP_DIR_NAME, `${jobId}-frame`);
+/**
+ * A clip is read for one frame and thrown away; which filesystem it sits on
+ * makes no difference, so it always goes under the root.
+ */
+function frameClipDir(jobId: number): string {
+  return path.join(ROOT, TEMP_DIR_NAME, `${jobId}-frame`);
+}
+
+/**
+ * A copy for when a rename cannot be done — across filesystems, or an exotic
+ * mount. Asks for a reflink first: on ZFS with block cloning, btrfs or XFS
+ * that shares the blocks instead of writing them again, so a "copy" between
+ * datasets of one pool costs no I/O. Falls back to a plain copy by itself.
+ */
+export async function copyFile(from: string, to: string): Promise<void> {
+  await fsp.copyFile(from, to, fs.constants.COPYFILE_FICLONE);
 }
 
 /**
@@ -1200,6 +1221,24 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 const FS_CHECK_TIMEOUT_MS = 5000;
 
+/**
+ * `dir` if it is a folder, otherwise the closest folder above it inside the
+ * root. Throws when something in the way is a file, or the root is missing.
+ */
+async function nearestFolder(dir: string): Promise<string> {
+  for (let current = dir; ; current = path.dirname(current)) {
+    const stats = await fsp.stat(current).catch(() => null);
+
+    if (stats) {
+      if (!stats.isDirectory()) throw new Error(`${current} is not a folder`);
+
+      return current;
+    }
+
+    if (current === ROOT || !isInside(current)) throw new Error("Root is missing");
+  }
+}
+
 export async function checkHealth(settings: Settings): Promise<{
   ok: boolean;
   version: string | null;
@@ -1211,17 +1250,29 @@ export async function checkHealth(settings: Settings): Promise<{
     return { ok: false, version: null, error: "yt-dlp binary not available" };
   }
 
-  const dir = settings.downloadsDir?.trim() || DEFAULT_DOWNLOADS_DIR;
+  const folder = parseFolder(settings.downloadsDir);
 
+  if (!folder.ok) {
+    return { ok: false, version, error: folder.error };
+  }
+
+  // Nothing is created here: this runs on every keystroke of the settings
+  // field, and "dow", "down", "downl" would each be left behind as a folder.
+  // The nearest folder that exists is what the first download will create
+  // the rest in, so that is the one that has to be writable.
   try {
     await withTimeout(
-      fsp
-        .mkdir(dir, { recursive: true })
-        .then(() => fsp.access(dir, fs.constants.W_OK)),
+      nearestFolder(path.resolve(ROOT, folder.folder)).then((dir) =>
+        fsp.access(dir, fs.constants.W_OK)
+      ),
       FS_CHECK_TIMEOUT_MS
     );
   } catch {
-    return { ok: false, version, error: `Downloads dir not writable: ${dir}` };
+    return {
+      ok: false,
+      version,
+      error: `Downloads folder not writable: /${folder.folder}`
+    };
   }
 
   const cookies = settings.cookiesPath?.trim();

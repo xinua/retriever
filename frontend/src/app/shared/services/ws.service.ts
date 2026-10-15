@@ -80,7 +80,7 @@ export class WsService {
   }
 
   subscriptionUpdated$(): Observable<SubscriptionPayload> {
-    return this.wsMessage$<SubscriptionPayload>('channel-updated');
+    return this.wsMessage$<SubscriptionPayload>('subscription-updated');
   }
 
   telegramStatus$(): Observable<TelegramStatusModel> {

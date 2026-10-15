@@ -69,3 +69,17 @@ export function supportedTimeZones(): string[] {
   // UTC is missing from some engines' list, and it is the server default.
   return [...new Set([own, 'UTC', ...zones])].sort();
 }
+
+/** A folder as the server compares it: no empty segments, no slash at either end. */
+export function normalizeFolder(folder: string): string {
+  return folder
+    .split(/[\\/]+/)
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .join('/');
+}
+
+/** The folder part of a root-relative file path; "" for the root. */
+export function folderOf(filePath: Nullable<string>): string {
+  return normalizeFolder((filePath ?? '').split(/[\\/]/).slice(0, -1).join('/'));
+}

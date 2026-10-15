@@ -4,7 +4,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { NotifierService } from 'angular-notifier';
 import { HighlightJS } from 'ngx-highlightjs';
 
-// Matches placeholders like <webhook_id> or <:downloads_dir> after hljs escaped them
+// Matches placeholders like <webhook_id> or <media_folder> after hljs escaped them
 const PLACEHOLDER_RE = /&lt;:?\w+&gt;/g;
 
 @Component({

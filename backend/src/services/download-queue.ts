@@ -5,11 +5,11 @@ import path from "node:path";
 import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "../db/index.js";
-import { channel, download, settings } from "../db/schema.js";
+import { subscription, download, settings } from "../db/schema.js";
 import { broadcast } from "../routes/ws/websockets.js";
 import * as ytdlp from "./ytdlp.js";
 
-import type { Channel, Download, NewDownload, Settings } from "../db/types.js";
+import type { Subscription, Download, NewDownload, Settings } from "../db/types.js";
 import type { ResolvedEntry } from "./resolve.js";
 import { platformFromUrl } from "./platform.js";
 import * as InfoCache from "./info-cache.js";
@@ -83,7 +83,7 @@ export const events = new EventEmitter<{
 }>();
 
 export type DownloadRequest = {
-  channel: Channel;
+  subscription: Subscription;
   settings: Settings;
   video: {
     videoId?: string | null;
@@ -112,17 +112,10 @@ async function emit(id: number) {
  * row whose file had since been deleted back into a playable card.
  *
  * Queued and running rows are never checked (see withFileExists), so the
- * per-progress emits cost nothing but the settings read, and skip even that.
+ * per-progress emits cost nothing.
  */
 async function decorateWithFile(rows: Download[]) {
-  const decorated = Poster.decorateAll(rows);
-
-  const settled = rows.some((r) => r.status !== "queued" && r.status !== "running");
-  const appSettings = settled ? await getSettings() : undefined;
-
-  return appSettings
-    ? withFileExists(decorated, appSettings)
-    : decorated.map((row) => ({ ...row, fileExists: false }));
+  return withFileExists(Poster.decorateAll(rows));
 }
 
 /**
@@ -161,9 +154,9 @@ export async function enqueue(req: DownloadRequest): Promise<Download | null> {
   const [row] = await db
     .insert(download)
     .values({
-      watcherId: req.channel.id,
-      channelId: req.channel.channelId,
-      channelName: req.channel.name,
+      watcherId: req.subscription.id,
+      channelId: req.subscription.channelId,
+      channelName: req.subscription.name,
       videoId: req.video.videoId ?? null,
       title: req.video.title ?? null,
       url,
@@ -171,11 +164,11 @@ export async function enqueue(req: DownloadRequest): Promise<Download | null> {
       // Watchers are YouTube RSS today, but read it off the link rather than
       // hardcoding it, so the row stays honest if that ever widens.
       platform: platformFromUrl(url),
-      type: req.channel.type,
-      format: req.channel.format,
-      codec: req.channel.codec,
-      removeSponsors: req.channel.removeSponsors,
-      splitChapters: req.channel.splitChapters,
+      type: req.subscription.type,
+      format: req.subscription.format,
+      codec: req.subscription.codec,
+      removeSponsors: req.subscription.removeSponsors,
+      splitChapters: req.subscription.splitChapters,
       // Written explicitly: the column default is SQLite's "YYYY-MM-DD HH:MM:SS"
       // while retry() and every other timestamp use ISO 8601. Both orderings
       // below are text comparisons, so one row in the other format sorts wrong.
@@ -190,12 +183,17 @@ export async function enqueue(req: DownloadRequest): Promise<Download | null> {
   return row;
 }
 
-/** The per-download settings a manual request carries instead of a channel. */
+/** The per-download settings a manual request carries instead of a subscription. */
 export type ManualOptions = {
   type: string;
   format: string;
   codec: string | null;
   quality: string | null;
+  /**
+   * Relative to the mounted root, "" for the root itself. Null when the
+   * caller did not choose one — the Telegram bot, an API call without the
+   * field — which takes the downloads folder setting.
+   */
   folder: string | null;
   prefix: string | null;
   ytdlpArgs: string | null;
@@ -287,9 +285,9 @@ export async function enqueueManual(
 }
 
 /**
- * Manual and Telegram rows have no channel to read options from, so they
+ * Manual and Telegram rows have no subscription to read options from, so they
  * carry their own.
- * Watcher rows still read the live channel, which means editing a channel
+ * Watcher rows still read the live subscription, which means editing one
  * keeps affecting the downloads it has already queued.
  */
 function optionsFromRow(row: Download): ytdlp.JobOptions {
@@ -380,17 +378,17 @@ async function start(id: number) {
     return;
   }
 
-  let ch: Channel | undefined;
+  let ch: Subscription | undefined;
 
   if (row.watcherId != null) {
-    [ch] = await db.select().from(channel).where(eq(channel.id, row.watcherId));
+    [ch] = await db.select().from(subscription).where(eq(subscription.id, row.watcherId));
   }
 
   const opts =
     row.source !== "watcher"
       ? optionsFromRow(row)
       : ch
-        ? ytdlp.optionsFromChannel(ch)
+        ? ytdlp.optionsFromSubscription(ch)
         : null;
 
   if (!opts) {
@@ -423,7 +421,7 @@ async function start(id: number) {
   if (keepVideo) opts.keepVideo = true;
 
   const homeBefore = keepVideo
-    ? await ytdlp.listHome(opts, appSettings)
+    ? await ytdlp.listHome(opts)
     : new Set<string>();
 
   // Probed once and cached, so only the first download of a run waits on it.
@@ -504,12 +502,12 @@ async function start(id: number) {
     const current = await getRow(id);
 
     if (current?.status === "canceled" || signal === "SIGTERM") {
-      ytdlp.cleanupTemp(appSettings, id);
+      await ytdlp.cleanupTemp(opts, id);
       autoRetries.delete(id);
       await finish(id, "canceled", { error: null });
     } else if (code === 0) {
       // Already empty on success — yt-dlp moved the finished file out of it.
-      ytdlp.cleanupTemp(appSettings, id);
+      await ytdlp.cleanupTemp(opts, id);
       autoRetries.delete(id);
 
       let output = resolveOutputPath(opts, filePath);
@@ -603,7 +601,7 @@ async function start(id: number) {
       // sweeps whatever is left over — see sweepAbandonedTemp().
       if (isFfmpegFailure(error)) {
         autoRetries.delete(id);
-        await failFfmpeg(id, error, opts, appSettings, current, ch);
+        await failFfmpeg(id, error, opts, current, ch);
         return;
       }
 
@@ -716,11 +714,10 @@ async function failFfmpeg(
   id: number,
   error: string,
   opts: ytdlp.JobOptions,
-  appSettings: Settings,
   row: Download | undefined,
-  ch: Channel | undefined
+  ch: Subscription | undefined
 ) {
-  const rescued = await ytdlp.rescueTemp(opts, appSettings, id);
+  const rescued = await ytdlp.rescueTemp(opts, id);
   const media = rescued ? await MediaQuality.probe(rescued, opts.type) : null;
 
   const message = rescued
@@ -762,37 +759,30 @@ async function failFfmpeg(
  * is running yet, so every directory without a pending row is abandoned.
  */
 async function sweepAbandonedTemp(): Promise<void> {
-  const appSettings = await getSettings();
-
-  if (!appSettings) return;
-
   const pending = await db
     .select({ id: download.id })
     .from(download)
     .where(inArray(download.status, ["queued", "running"]));
 
-  const removed = await ytdlp.sweepTemp(
-    appSettings,
-    pending.map((r) => r.id)
-  );
+  const removed = await ytdlp.sweepTemp(pending.map((r) => r.id));
 
   if (removed) console.log(`download temp: cleared ${removed} abandoned folders`);
 }
 
 /** Manual downloads have no watcher, so the channel name may be all we have. */
-function subtitleFor(row: Download | undefined, ch: Channel | undefined): string {
+function subtitleFor(row: Download | undefined, ch: Subscription | undefined): string {
   const name = row?.channelName ?? ch?.name;
 
   return name ? `Channel: ${name}` : "Manual download";
 }
 
-async function onSuccess(ch: Channel | undefined, row: Download | undefined) {
-  // Only watcher downloads count towards a channel's total.
+async function onSuccess(ch: Subscription | undefined, row: Download | undefined) {
+  // Only watcher downloads count towards a subscription's total.
   if (ch) {
     await db
-      .update(channel)
-      .set({ totalDownloads: sql`${channel.totalDownloads} + 1` })
-      .where(eq(channel.id, ch.id));
+      .update(subscription)
+      .set({ totalDownloads: sql`${subscription.totalDownloads} + 1` })
+      .where(eq(subscription.id, ch.id));
   }
 
   broadcast("notification", {
@@ -891,7 +881,7 @@ async function finishArtworkOffstage(
   if (!row) return;
 
   const homeDir = path.dirname(output);
-  const stageDir = ytdlp.artworkStageDir(appSettings, row.id);
+  const stageDir = await ytdlp.artworkStageDir(homeDir, row.id);
   const staged = path.join(stageDir, path.basename(output));
 
   try {
@@ -912,7 +902,7 @@ async function finishArtworkOffstage(
     try {
       await fsp.rename(staged, output);
     } catch {
-      await fsp.copyFile(staged, output);
+      await ytdlp.copyFile(staged, output);
     }
 
     await fsp.rm(stageDir, { recursive: true, force: true, maxRetries: 2 }).catch(() => {});
@@ -936,7 +926,7 @@ async function captureFromClip(
 
     return clip ? await capturePoster(row, clip) : false;
   } finally {
-    await ytdlp.cleanupFrameClip(appSettings, row.id);
+    await ytdlp.cleanupFrameClip(row.id);
   }
 }
 

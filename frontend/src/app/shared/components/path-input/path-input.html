@@ -1,0 +1,75 @@
+<mat-form-field class="w-full" [appearance]="appearance()" [subscriptSizing]="subscriptSizing()">
+  @if (label()) {
+    <mat-label>{{ label() }}</mat-label>
+  }
+
+  <input
+    matInput
+    type="text"
+    autocomplete="off"
+    spellcheck="false"
+    [class]="inputClass()"
+    [formControl]="_control"
+    [placeholder]="_placeholder()"
+    [errorStateMatcher]="_errorMatcher"
+    [matAutocomplete]="paths"
+    [matAutocompletePosition]="position()"
+    (focus)="_onFocus()"
+    (blur)="_onTouched()"
+    (keydown.enter)="_onEnter($event)"
+    (keydown.escape)="_onEscape($event)"
+  />
+
+  <div matSuffix class="px-5">
+    @if (showStatus()) {
+      @if (_pending()) {
+        <mat-icon svgIcon="loading" />
+      } @else if (_valid()) {
+        <mat-icon fontIcon="check" class="text-green-500!" />
+      } @else {
+        <mat-icon fontIcon="close" class="text-red-500!" />
+      }
+    }
+  </div>
+
+  <mat-autocomplete #paths="matAutocomplete" class="path-input" (optionSelected)="_onSelected($event)">
+    @for (option of _options(); track option.value) {
+      <mat-option
+        [value]="option.value"
+        [class]="option.mount ? 'text-amber-400!' : ''"
+        [matTooltip]="option.tooltip"
+        [matTooltipDisabled]="!option.tooltip"
+        matTooltipPosition="right"
+      >
+        <mat-icon
+          [fontIcon]="
+            option.type === 'folder'
+              ? option.mount
+                ? 'folder_special'
+                : option.downloads
+                  ? 'folder_open'
+                  : 'folder'
+              : 'description'
+          "
+          [class]="option.mount ? 'text-amber-400!' : option.downloads ? 'text-(--rt-accent)!' : 'text-gray-400!'"
+        />
+        <span>{{ option.name }}</span>
+      </mat-option>
+    }
+
+    @if (_note(); as note) {
+      <mat-option disabled class="italic text-sm!">
+        <mat-icon fontIcon="info" class="text-gray-400!" />
+        <span>{{ note }}</span>
+      </mat-option>
+    }
+  </mat-autocomplete>
+
+  @if (_error(); as error) {
+    <mat-error>{{ error }}</mat-error>
+  }
+
+  @if (_defaultNote() ?? hint(); as hint) {
+    <mat-hint>{{ hint }}</mat-hint>
+  }
+</mat-form-field>

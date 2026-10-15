@@ -1,5 +1,6 @@
 export * from './http.service';
 export * from './storage.service';
+export * from './local-storage.service';
 export * from './snackbar.service';
 export * from './ws.service';
 export * from './scroll-to.service';

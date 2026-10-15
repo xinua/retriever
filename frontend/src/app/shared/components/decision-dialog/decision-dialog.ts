@@ -1,4 +1,4 @@
-import { Component, HostListener, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import {
   MAT_DIALOG_DATA,
@@ -60,6 +60,9 @@ export enum Decision {
       }
     `,
   ],
+  host: {
+    '(keydown.enter)': 'onEnter($event)',
+  },
 })
 export class DecisionDialog {
   readonly data = inject(MAT_DIALOG_DATA);
@@ -67,7 +70,6 @@ export class DecisionDialog {
   readonly decision = Decision;
   readonly isDetailsArray = Array.isArray(this.data.details);
 
-  @HostListener('keydown.enter', ['$event'])
   onEnter(event: Event) {
     if ((event.target as HTMLElement)?.closest('button')) return;
     this.dialogRef.close(Decision.CONFIRM);

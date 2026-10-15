@@ -1,15 +1,13 @@
-import path from "node:path";
-
 import { eq } from "drizzle-orm";
 
 import { db } from "../db/index.js";
-import { channel, settings } from "../db/schema.js";
+import { subscription, settings } from "../db/schema.js";
 import { sendWebhook } from "./webhook.js";
 import * as DownloadQueue from "./download-queue.js";
-import * as ytdlp from "./ytdlp.js";
+import { toRelative } from "./paths.js";
 import * as TelegramNotify from "./telegram/notify.js";
 
-import type { Channel, Download, Settings } from "../db/types.js";
+import type { Subscription, Download, Settings } from "../db/types.js";
 import type { MediaInfo } from "./media-quality.js";
 
 /**
@@ -23,7 +21,7 @@ import type { MediaInfo } from "./media-quality.js";
  * override or the global URL. Sent on the finished file rather than on
  * detection, so the payload can say where the file is.
  */
-async function notifyWebhook(row: Download, ch: Channel): Promise<void> {
+async function notifyWebhook(row: Download, ch: Subscription): Promise<void> {
   if (!ch.notifyHA) return;
 
   const [appSettings] = await db.select().from(settings).where(eq(settings.id, 1));
@@ -40,8 +38,8 @@ async function notifyWebhook(row: Download, ch: Channel): Promise<void> {
     title: row.title,
     type: row.type,
     date: new Date(row.finishedAt ?? Date.now()).toISOString(),
-    // Relative to the downloads folder, e.g. "music/Song.mp3".
-    path: relativeToDownloads(row.filePath, appSettings),
+    // Relative to the mounted root, e.g. "music/Song.mp3".
+    path: relativePath(row.filePath),
     fileUrl: fileUrl(row)
   });
 }
@@ -56,7 +54,7 @@ export async function sendDownloadToHA(row: Download, appSettings: Settings): Pr
   await sendWebhook(appSettings.webhookUrl, {
     id: row.id,
     title: row.title,
-    filePath: relativeToDownloads(row.filePath, appSettings),
+    filePath: relativePath(row.filePath),
     fileUrl: fileUrl(row),
     type: row.type,
     format: row.format
@@ -68,19 +66,15 @@ function fileUrl(row: Download): string {
   return `/api/downloads/${row.id}/file?inline=1`;
 }
 
-function relativeToDownloads(filePath: string | null, appSettings: Settings | undefined): string | null {
-  if (!filePath?.trim() || !appSettings) return null;
-
-  const rel = path.relative(ytdlp.downloadsRoot(appSettings), filePath.trim());
-
-  return rel && !rel.startsWith("..") && !path.isAbsolute(rel) ? rel : null;
+function relativePath(filePath: string | null): string | null {
+  return filePath?.trim() ? toRelative(filePath.trim()) || null : null;
 }
 
 /** The subscription a watcher row came from. */
-async function watcherChannel(row: Download): Promise<Channel | null> {
+async function watcherSubscription(row: Download): Promise<Subscription | null> {
   if (row.source !== "watcher" || row.watcherId == null) return null;
 
-  const [ch] = await db.select().from(channel).where(eq(channel.id, row.watcherId));
+  const [ch] = await db.select().from(subscription).where(eq(subscription.id, row.watcherId));
 
   return ch ?? null;
 }
@@ -91,7 +85,7 @@ async function watcherChannel(row: Download): Promise<Channel | null> {
  * are left out, as below.
  */
 async function notifyDownloaded(row: Download, media: MediaInfo | null): Promise<void> {
-  const ch = await watcherChannel(row);
+  const ch = await watcherSubscription(row);
 
   if (!ch) return;
 
@@ -115,7 +109,7 @@ async function notifyDownloadFailed(row: Download): Promise<void> {
   const [appSettings] = await db.select().from(settings).where(eq(settings.id, 1));
 
   if (!appSettings?.notifyDownloadFailed) return;
-  if (!(await watcherChannel(row))?.notifyTelegram) return;
+  if (!(await watcherSubscription(row))?.notifyTelegram) return;
 
   await TelegramNotify.downloadFailed(row);
 }

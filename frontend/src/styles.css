@@ -6,42 +6,6 @@
 @import './styles/animations.css';
 @import './styles/fonts.css';
 
-@keyframes reveal {
-  from {
-    opacity: 0.3;
-    transform: scale(1.5);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes shrink {
-  100% {
-    height: 0;
-    padding: 0;
-    margin: 0;
-  }
-}
-
-@keyframes cicle-once {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(180deg);
-  }
-}
-
-.animate-shrink {
-  animation: shrink 0.5s ease-in-out forwards !important;
-}
-
-.animate-cicle-once {
-  animation: cicle-once 0.5s ease-in-out forwards !important;
-}
-
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button {
   -webkit-appearance: none;
@@ -262,8 +226,8 @@ span {
   /* Opaque the whole way across - the embers supply the flicker, not the fill. */
   background-image: linear-gradient(
     90deg,
-    color-mix(in oklab, var(--rt-accent) 20%, var(--bg-color)) 10%,
-    color-mix(in oklab, var(--rt-accent) 75%, var(--bg-color)) 53%,
+    color-mix(in oklab, var(--rt-accent) 30%, var(--bg-color)) 10%,
+    color-mix(in oklab, var(--rt-accent) 40%, var(--bg-color)) 53%,
     var(--bg-color) 90%
   );
   /* background-image: linear-gradient(

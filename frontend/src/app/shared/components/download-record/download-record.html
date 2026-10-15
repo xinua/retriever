@@ -9,6 +9,8 @@
   <div class="flex flex-col gap-5">
     @if (isActive) {
       <rt-progress-info [download]="download()" (cancel)="cancel.emit(download())" />
+    } @else if (download().move) {
+      <rt-progress-info [download]="download()" (cancel)="cancelMove()" />
     }
 
     <div
@@ -74,7 +76,6 @@
                 [download]="download()"
                 [paginatorLimit]="paginator().limit"
                 (retry)="retry.emit(download())"
-                (remove)="remove.emit({ download: download(), elementRef: record })"
                 (saveAs)="saveAs.emit(download())"
                 (copyFilePath)="copyFilePath.emit(download())"
               />
@@ -137,7 +138,6 @@
             [download]="download()"
             [paginatorLimit]="paginator().limit"
             (retry)="retry.emit(download())"
-            (remove)="remove.emit({ download: download(), elementRef: record })"
             (saveAs)="saveAs.emit(download())"
             (copyFilePath)="copyFilePath.emit(download())"
           />

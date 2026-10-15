@@ -48,9 +48,10 @@ describe('ManualFormComponent', () => {
 
   beforeEach(async () => {
     localStorage.removeItem('manualDownloadForm');
+    localStorage.removeItem('uiConfig');
 
     http = {
-      getFolders: vi.fn(() => of({ root: '/downloads', folders: [] })),
+      getFolder: vi.fn(() => of({ path: '', entries: [], truncated: false })),
       createDownload: vi.fn(() => of(result())),
     };
     notify = vi.fn();
@@ -89,7 +90,10 @@ describe('ManualFormComponent', () => {
     layout.sectionOrder.set([HomeSection.SUBSCRIPTIONS, HomeSection.DOWNLOADS]);
   });
 
-  afterEach(() => localStorage.removeItem('manualDownloadForm'));
+  afterEach(() => {
+    localStorage.removeItem('manualDownloadForm');
+    localStorage.removeItem('uiConfig');
+  });
 
   async function render(params: Params = {}) {
     Object.assign(queryParams, params);
@@ -110,13 +114,12 @@ describe('ManualFormComponent', () => {
   const autoPaste = (enabled = true) => storage.uiConfig.set({ ...DefaultUiConfig, autoPaste: enabled });
 
   describe('initial state', () => {
-    it('starts with the default form and loads folders', async () => {
+    it('starts with the default form', async () => {
       await render();
 
       expect(component.form.getRawValue()).toEqual(DefaultManualForm);
       expect(component.formats()).toEqual(Object.values(VideoFormats));
       expect(component.qualities()).toEqual(Object.values(VideoQuality));
-      expect(http['getFolders']).toHaveBeenCalledTimes(1);
     });
 
     it('restores the saved form', async () => {

@@ -1,8 +1,8 @@
-import { ChannelFormModel } from '@shared/models';
+import { SubscriptionFormModel } from '@shared/models';
 
 /** Boolean controls surfaced through the "Additional flags" multi-select. */
 export type SubscriptionFlagKey = keyof Pick<
-  ChannelFormModel,
+  SubscriptionFormModel,
   'downloadShorts' | 'splitChapters' | 'removeSponsors' | 'notifyHA' | 'notifyTelegram' | 'pollOnce' | 'startFromLast'
 >;
 

@@ -1,13 +1,14 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../../db/index.js";
-import { channel } from "../../db/schema.js";
+import { subscription, settings } from "../../db/schema.js";
 import { eq, asc, sql } from "drizzle-orm";
 import {getFeedInfo} from "../../services/rss.js";
 import {YoutubeService} from "../../services/youtube.service.js";
 import {ImagesService} from "../../services/images.service.js";
-import {isSubPoster, runChannelOnce} from "../../services/worker.js";
-import {avatarName, decorateChannel} from "../../services/avatar.js";
+import {isSubPoster, runSubscriptionOnce} from "../../services/worker.js";
+import {avatarName, decorateSubscription} from "../../services/avatar.js";
 import { removeArchive } from "../../services/ytdlp.js";
+import { downloadsFolder, parseFolderOr } from "../../services/paths.js";
 import * as ArtworkReplace from "../../services/artwork-replace.js";
 import {
   calculateNextCheck,
@@ -44,7 +45,7 @@ async function releaseAvatar(channelId: string | null) {
   if (!channelId) return;
 
   const readers = await db.get<{ n: number }>(sql`
-    SELECT (SELECT COUNT(*) FROM channel WHERE "channelId" = ${channelId})
+    SELECT (SELECT COUNT(*) FROM subscription WHERE "channelId" = ${channelId})
          + (SELECT COUNT(*) FROM download WHERE "channelId" = ${channelId}) AS n
   `);
 
@@ -53,31 +54,31 @@ async function releaseAvatar(channelId: string | null) {
   await ImagesService.remove(avatarName(channelId));
 }
 
-export function channelsRoutes(app: FastifyInstance) {
+export function subscriptionsRoutes(app: FastifyInstance) {
   // GET all
-  app.get("/api/channels", async () => {
+  app.get("/api/subscriptions", async () => {
     const rows = await db
       .select()
-      .from(channel)
-      .orderBy(asc(channel.sortOrder));
+      .from(subscription)
+      .orderBy(asc(subscription.sortOrder));
 
-    return rows.map(decorateChannel);
+    return rows.map(decorateSubscription);
   });
 
   // GET one
-  app.get("/api/channels/:id", async (req) => {
+  app.get("/api/subscriptions/:id", async (req) => {
     const { id } = req.params as { id: string };
 
     const [row] = await db
       .select()
-      .from(channel)
-      .where(eq(channel.id, Number(id)));
+      .from(subscription)
+      .where(eq(subscription.id, Number(id)));
 
-    return row ? decorateChannel(row) : null;
+    return row ? decorateSubscription(row) : null;
   });
 
   // CREATE
-  app.post("/api/channels", async (req, reply) => {
+  app.post("/api/subscriptions", async (req, reply) => {
     const body = req.body as any;
 
     if (!body.url) {
@@ -85,6 +86,17 @@ export function channelsRoutes(app: FastifyInstance) {
     }
 
     const url = body.url.trim();
+
+    const [appSettings] = await db.select().from(settings).where(eq(settings.id, 1));
+
+    // Empty takes the downloads folder setting, "/" is the root. Settled here
+    // and stored, so changing the setting later leaves this subscription
+    // where it was.
+    const folder = parseFolderOr(body.folder, downloadsFolder(appSettings?.downloadsDir));
+
+    if (!folder.ok) {
+      return reply.code(400).send({ error: folder.error });
+    }
 
     try {
 
@@ -153,13 +165,13 @@ export function channelsRoutes(app: FastifyInstance) {
       }
 
       const last = await db.get<{ max: number }>(sql`
-        SELECT MAX("sortOrder") as max FROM channel
+        SELECT MAX("sortOrder") as max FROM subscription
       `);
       const nextOrder = (last?.max ?? -1) + 1;
 
       // ---------- INSERT ----------
       const result = await db
-        .insert(channel)
+        .insert(subscription)
         .values({
           channelId,
           sortOrder: nextOrder,
@@ -187,7 +199,7 @@ export function channelsRoutes(app: FastifyInstance) {
           intervalPeriod: parseIntervalPeriod(body.intervalPeriod),
 
           prefix: body.prefix ?? null,
-          tag: body.tag ?? null,
+          folder: folder.folder,
           webhookOverride: body.webhookOverride ?? null
         })
         .returning();
@@ -199,41 +211,41 @@ export function channelsRoutes(app: FastifyInstance) {
         await getSavedTimeZone()
       );
 
-      await db.update(channel)
+      await db.update(subscription)
         .set({ nextCheckAt })
-        .where(eq(channel.id, created.id));
+        .where(eq(subscription.id, created.id));
 
       broadcast('next-check', null);
 
-      await runChannelOnce(created.id).catch(console.error);
+      await runSubscriptionOnce(created.id).catch(console.error);
 
       const [full] = await db
         .select()
-        .from(channel)
-        .where(eq(channel.id, created.id));
+        .from(subscription)
+        .where(eq(subscription.id, created.id));
 
-      return decorateChannel(full);
+      return decorateSubscription(full);
     } catch (e) {
 
-      console.error("Create channel error:", e);
+      console.error("Create subscription error:", e);
 
       return reply.code(500).send({
-        error: "Failed to create channel"
+        error: "Failed to create subscription"
       });
 
     }
   });
 
   // UPDATE
-  app.put("/api/channels/:id", async (req) => {
+  app.put("/api/subscriptions/:id", async (req, reply) => {
 
     const { id } = req.params as { id: string };
     const body = req.body as any;
   
     const [existing] = await db
       .select()
-      .from(channel)
-      .where(eq(channel.id, Number(id)));
+      .from(subscription)
+      .where(eq(subscription.id, Number(id)));
   
     // Only the JSON columns are reshaped; the rest of the body still goes
     // through as it is. Guarded on the key being present so a partial update
@@ -252,33 +264,45 @@ export function channelsRoutes(app: FastifyInstance) {
       patch.intervalPeriod = parseIntervalPeriod(body.intervalPeriod);
     }
 
-    const updatedChannel = {
+    // Same as on create: cleared takes the downloads folder setting as it is
+    // now, "/" is the root. The form shows a subscription stored at the root
+    // as "/", so saving it unchanged keeps it there.
+    if ("folder" in body) {
+      const [appSettings] = await db.select().from(settings).where(eq(settings.id, 1));
+      const folder = parseFolderOr(body.folder, downloadsFolder(appSettings?.downloadsDir));
+
+      if (!folder.ok) return reply.code(400).send({ error: folder.error });
+
+      patch.folder = folder.folder;
+    }
+
+    const updatedSubscription = {
       ...existing,
       ...patch
     };
   
     const nextCheckAt = calculateNextCheck(
-      updatedChannel,
+      updatedSubscription,
       new Date(),
       await getSavedTimeZone()
     );
   
-    await db.update(channel)
+    await db.update(subscription)
       .set({
         ...patch,
         nextCheckAt,
         updatedAt: new Date().toISOString()
       })
-      .where(eq(channel.id, Number(id)));
+      .where(eq(subscription.id, Number(id)));
   
     const [updated] = await db
       .select()
-      .from(channel)
-      .where(eq(channel.id, Number(id)));
+      .from(subscription)
+      .where(eq(subscription.id, Number(id)));
   
     broadcast('next-check', await getLastCheck());
 
-    return decorateChannel(updated);
+    return decorateSubscription(updated);
   });
 
   /**
@@ -287,7 +311,7 @@ export function channelsRoutes(app: FastifyInstance) {
    * changes it for every subscription on the channel and every download it
    * produced — see services/artwork-replace.ts.
    */
-  app.put("/api/channels/:id/avatar", async (req, reply) => {
+  app.put("/api/subscriptions/:id/avatar", async (req, reply) => {
     const { id } = req.params as { id: string };
 
     if (!Buffer.isBuffer(req.body)) {
@@ -296,8 +320,8 @@ export function channelsRoutes(app: FastifyInstance) {
 
     const [row] = await db
       .select()
-      .from(channel)
-      .where(eq(channel.id, Number(id)));
+      .from(subscription)
+      .where(eq(subscription.id, Number(id)));
 
     if (!row) return reply.code(404).send({ error: "Not found" });
 
@@ -305,23 +329,23 @@ export function channelsRoutes(app: FastifyInstance) {
 
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
 
-    return result.channel;
+    return result.subscription;
   });
 
   // DELETE
-  app.delete("/api/channels/:id", async (req) => {
+  app.delete("/api/subscriptions/:id", async (req) => {
     const { id } = req.params as { id: string };
     const [row] = await db
     .select()
-    .from(channel)
-    .where(eq(channel.id, Number(id)));
+    .from(subscription)
+    .where(eq(subscription.id, Number(id)));
 
     await db
-      .delete(channel)
-      .where(eq(channel.id, Number(id)));
+      .delete(subscription)
+      .where(eq(subscription.id, Number(id)));
 
       await db.run(sql`
-        UPDATE channel
+        UPDATE subscription
         SET "sortOrder" = "sortOrder" - 1
         WHERE "sortOrder" > ${row.sortOrder}
       `);
@@ -333,7 +357,7 @@ export function channelsRoutes(app: FastifyInstance) {
 
     await releaseAvatar(row?.channelId ?? null);
 
-    // Only the channel's own copy — a path left over from before the split
+    // Only the subscription's own copy — a path left over from before the split
     // points at the shared cache, which the download rows still read.
     if (row?.lastVideoThumbnailPath && isSubPoster(row.lastVideoThumbnailPath)) {
       await ImagesService.remove(row.lastVideoThumbnailPath);
@@ -344,13 +368,13 @@ export function channelsRoutes(app: FastifyInstance) {
     return { success: true };
   });
 
-  app.post("/api/channels/reorder", async (req) => {
+  app.post("/api/subscriptions/reorder", async (req) => {
     const { ids } = req.body as { ids: number[] };
   
     await db.transaction((tx) => {
       ids.forEach((id, index) => {
         tx.run(sql`
-          UPDATE channel
+          UPDATE subscription
           SET sortOrder = ${index}
           WHERE id = ${id}
         `);

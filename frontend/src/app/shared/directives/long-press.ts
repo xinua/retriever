@@ -49,6 +49,7 @@ export class LongPress {
     this._fired = false;
     event.preventDefault();
     event.stopImmediatePropagation();
+    event.stopPropagation();
   }
 
   // Touch: holding a link opens the system menu instead.

@@ -4,7 +4,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { DownloadRecord } from '@shared/components';
 import { DefaultFilters, DefaultPaginator, DownloadRecordMock } from '@shared/constants';
 import { DownloadInfoModel, DownloadModel, DownloadsPageModel, DownloadStatus, PaginatorModel } from '@shared/models';
-import { AnimationService, HttpService, StorageService, WsService } from '@shared/services';
+import { HttpService, StorageService, WsService } from '@shared/services';
 import { NotifierService } from 'angular-notifier';
 import { of, Subject, throwError } from 'rxjs';
 
@@ -18,7 +18,6 @@ class DownloadRecordStub {
   paginator = input<PaginatorModel>();
   cancel = output<DownloadModel>();
   retry = output<DownloadModel>();
-  remove = output<{ download: DownloadModel; elementRef: HTMLElement }>();
   saveAs = output<DownloadModel>();
   copyFilePath = output<DownloadModel>();
 }
@@ -46,7 +45,6 @@ describe('Downloads', () => {
     | 'getDownloadsInfo'
     | 'retryDownload'
     | 'cancelDownload'
-    | 'deleteDownload'
     | 'clearFinishedDownloads'
     | 'downloadFileUrl'
     | 'getTelegramChats'
@@ -55,7 +53,6 @@ describe('Downloads', () => {
   >;
   let notify: ReturnType<typeof vi.fn>;
   let dialogOpen: ReturnType<typeof vi.fn>;
-  let animateRemove: ReturnType<typeof vi.fn>;
   let serverPage: DownloadsPageModel;
   let ws: {
     updated: Subject<DownloadModel>;
@@ -69,7 +66,6 @@ describe('Downloads', () => {
     ws = { updated: new Subject(), batch: new Subject(), removed: new Subject(), cleared: new Subject() };
     notify = vi.fn();
     dialogOpen = vi.fn(() => ({ afterClosed: () => of(true) }));
-    animateRemove = vi.fn(() => Promise.resolve());
 
     http = {
       // Mirrors the real service, which stores the page it fetched.
@@ -80,7 +76,6 @@ describe('Downloads', () => {
       getDownloadsInfo: vi.fn(() => of(info())),
       retryDownload: vi.fn((id: number) => of(download({ id, status: DownloadStatus.QUEUED }))),
       cancelDownload: vi.fn(() => of({ ok: true })),
-      deleteDownload: vi.fn(() => of({ ok: true })),
       clearFinishedDownloads: vi.fn(() => of({ ok: true })),
       downloadFileUrl: vi.fn((id: number) => `/api/downloads/${id}/file`),
       getTelegramChats: vi.fn(() => of([])),
@@ -93,7 +88,6 @@ describe('Downloads', () => {
         { provide: HttpService, useValue: http },
         { provide: NotifierService, useValue: { notify } },
         { provide: MatDialog, useValue: { open: dialogOpen } },
-        { provide: AnimationService, useValue: { animateRemoveDownload: animateRemove } },
         {
           provide: WsService,
           useValue: {
@@ -447,68 +441,6 @@ describe('Downloads', () => {
     });
   });
 
-  describe('remove', () => {
-    let row: HTMLElement;
-    let container: HTMLDivElement;
-
-    beforeEach(() => {
-      row = document.createElement('div');
-      container = document.createElement('div');
-      container.style.height = '300px';
-    });
-
-    it('removes the row, refills the page and resets the container', async () => {
-      serverPage = page([download({ id: 1 }), download({ id: 2 })]);
-      await render();
-      vi.useFakeTimers();
-      serverPage = page([download({ id: 2 })]);
-      http.getDownloads.mockClear();
-
-      await component.remove(download({ id: 1 }), row, container);
-
-      expect(animateRemove).not.toHaveBeenCalled();
-      expect(http.deleteDownload).toHaveBeenCalledWith(1);
-      expect(storage.downloads().map((d) => d.id)).toEqual([2]);
-      expect(component.isAnimationInProgress()).toBe(true);
-
-      vi.advanceTimersByTime(0);
-      expect(component.isAnimationInProgress()).toBe(false);
-      expect(container.style.height).toBe('');
-
-      vi.advanceTimersByTime(100);
-      expect(http.getDownloads).toHaveBeenCalledExactlyOnceWith(1, 5, DefaultFilters, '');
-    });
-
-    it('animates the row out when the page is full', async () => {
-      storage.paginator.set({ total: 10, page: 0, limit: 2 });
-      serverPage = page([download({ id: 1 }), download({ id: 2 })], { total: 10, limit: 2 });
-      await render();
-      vi.useFakeTimers();
-
-      await component.remove(download({ id: 1 }), row, container);
-
-      expect(animateRemove).toHaveBeenCalledWith(row, container);
-      vi.advanceTimersByTime(AnimationService.REMOVE_DOWNLOAD_DURATION - 1);
-      expect(component.isAnimationInProgress()).toBe(true);
-      vi.advanceTimersByTime(1);
-      expect(component.isAnimationInProgress()).toBe(false);
-    });
-
-    it('keeps the row and reports a failed delete', async () => {
-      serverPage = page([download({ id: 1 })]);
-      await render();
-      vi.useFakeTimers();
-      http.deleteDownload.mockReturnValue(throwError(() => new Error('nope')));
-
-      await component.remove(download({ id: 1 }), row, container);
-      vi.advanceTimersByTime(0);
-
-      expect(storage.downloads().map((d) => d.id)).toEqual([1]);
-      expect(notify).toHaveBeenCalledWith('error', 'Could not remove this download.');
-      expect(component.isAnimationInProgress()).toBe(false);
-    });
-  });
-
   describe('clearFinished', () => {
     beforeEach(async () => {
       serverPage = page([
@@ -619,6 +551,47 @@ describe('Downloads', () => {
       expect(storage.downloads().map((d) => d.id)).toEqual([2]);
       vi.advanceTimersByTime(100);
       expect(http.getDownloads).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the last row on the page until the refill replaces it', () => {
+      storage.downloads.set([download({ id: 1 })]);
+      serverPage = page([download({ id: 3 })]);
+
+      ws.removed.next({ id: 1 });
+
+      expect(storage.downloads().map((d) => d.id)).toEqual([1]);
+      vi.advanceTimersByTime(100);
+      expect(storage.downloads().map((d) => d.id)).toEqual([3]);
+    });
+
+    it('keeps a removed row until the refill when later pages will backfill it', () => {
+      storage.paginator.set({ total: 12, page: 0, limit: 5 });
+      serverPage = page([download({ id: 2 }), download({ id: 3 })], { total: 11 });
+
+      ws.removed.next({ id: 1 });
+
+      expect(storage.downloads().map((d) => d.id)).toEqual([1, 2]);
+      vi.advanceTimersByTime(100);
+      expect(storage.downloads().map((d) => d.id)).toEqual([2, 3]);
+    });
+
+    it('drops a removed row at once on the last page, where nothing backfills it', () => {
+      storage.paginator.set({ total: 7, page: 1, limit: 5 });
+
+      ws.removed.next({ id: 1 });
+
+      expect(storage.downloads().map((d) => d.id)).toEqual([2]);
+    });
+
+    it('keeps the page when clearing would empty it, until the refill lands', () => {
+      storage.downloads.set([download({ id: 1, status: DownloadStatus.DONE })]);
+      serverPage = page([]);
+
+      ws.cleared.next(undefined);
+
+      expect(storage.downloads().map((d) => d.id)).toEqual([1]);
+      vi.advanceTimersByTime(100);
+      expect(storage.downloads()).toEqual([]);
     });
 
     it('steps back a page when a refill lands on a different one', () => {

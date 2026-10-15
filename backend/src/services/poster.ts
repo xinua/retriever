@@ -6,6 +6,7 @@ import * as Ffmpeg from "./ffmpeg.js";
 import { avatarFor } from "./avatar.js";
 import { authorUrlFor } from "./author.js";
 import { ImagesService } from "./images.service.js";
+import { toAbsolute, toRelative } from "./paths.js";
 
 import type { Download } from "../db/types.js";
 
@@ -82,11 +83,16 @@ export type Decorated<T extends Download> = T & {
  *
  * Every path and link a client renders is resolved in this one place, which
  * is what lets the client render them directly instead of assembling URLs out
- * of per-site knowledge it would have to hold a second copy of.
+ * of per-site knowledge it would have to hold a second copy of. That includes
+ * `filePath`, which goes out relative to the mounted root — the path as the
+ * user sees it on the host, not the container's own.
  */
 export function decorate<T extends Download>(row: T): Decorated<T> {
+  const filePath = row.filePath?.trim();
+
   return {
     ...row,
+    filePath: filePath ? toRelative(toAbsolute(filePath)) ?? filePath : row.filePath,
     // Without the extension: that is fixed, and renaming the file never changes it.
     fileName: row.filePath?.trim() ? path.parse(row.filePath.trim()).name : null,
     thumbnailPath: posterFor(row),

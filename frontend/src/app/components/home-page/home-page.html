@@ -38,18 +38,16 @@
   @for (section of sectionOrder(); track section) {
     <div cdkDrag class="group relative" [cdkDragData]="section">
       <!-- Whole-section dragging would fight the buttons and the row drags
-          inside the channels table, so only this grip starts a drag. -->
-      @if (hasContent()[section]) {
-        <button
-          type="button"
-          cdkDragHandle
-          class="section-handle text-(--rt-accent)!"
-          [matTooltip]="'Drag to reorder · ' + sectionLabels[section]"
-          [attr.aria-label]="'Reorder ' + sectionLabels[section] + ' section'"
-        >
-          <mat-icon fontIcon="drag_indicator" />
-        </button>
-      }
+        inside the channels table, so only this grip starts a drag. -->
+      <button
+        type="button"
+        cdkDragHandle
+        class="section-handle text-(--rt-accent)!"
+        [matTooltip]="'Drag to reorder · ' + sectionLabels[section]"
+        [attr.aria-label]="'Reorder ' + sectionLabels[section] + ' section'"
+      >
+        <mat-icon fontIcon="drag_indicator" />
+      </button>
 
       <div class="section-placeholder" *cdkDragPlaceholder></div>
 

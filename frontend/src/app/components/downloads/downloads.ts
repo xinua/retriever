@@ -5,7 +5,6 @@ import {
   computed,
   DestroyRef,
   ElementRef,
-  HostListener,
   inject,
   OnInit,
   signal,
@@ -35,7 +34,7 @@ import {
   TelegramChatModel,
   TelegramStatusModel,
 } from '@shared/models';
-import { AnimationService, CustomPaginatorIntl, HttpService, StorageService } from '@shared/services';
+import { CustomPaginatorIntl, HttpService, StorageService } from '@shared/services';
 import { NotifierService } from 'angular-notifier';
 import {
   debounceTime,
@@ -84,6 +83,9 @@ const REFILL_DEBOUNCE_MS = 100;
   templateUrl: './downloads.html',
   styleUrl: './downloads.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    '(window:keydown)': 'handleHotkeys($event)',
+  },
 })
 export class Downloads implements OnInit {
   private readonly _storage = inject(StorageService);
@@ -92,42 +94,6 @@ export class Downloads implements OnInit {
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _notifier = inject(NotifierService);
   private readonly _dialog = inject(MatDialog);
-  private readonly _animationService = inject(AnimationService);
-
-  @HostListener('window:keydown', ['$event'])
-  handleHotkeys(event: KeyboardEvent) {
-    // Open search by Ctrl/Cmd + K
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-      event.preventDefault();
-      this.showSearch.set(true);
-      this.searchField()?.nativeElement?.focus();
-    }
-
-    // Ignore typing targets (focused inputs, textareas, selects)
-    if (this._isTypingTarget(event)) {
-      return;
-    }
-
-    // Navigate through pages with ArrowLeft
-    if (event.key.toLowerCase() === 'arrowleft') {
-      event.preventDefault();
-      this.onPageChange({
-        pageIndex: Math.max(this.paginator().page - 1, 0),
-        pageSize: this.paginatorSize(),
-        length: this.paginator().total,
-      });
-    }
-
-    // Navigate through pages with ArrowRight
-    if (event.key.toLowerCase() === 'arrowright') {
-      event.preventDefault();
-      this.onPageChange({
-        pageIndex: Math.min(this.paginator().page + 1, Math.floor(this.paginator().total / this.paginator().limit)),
-        pageSize: this.paginatorSize(),
-        length: this.paginator().total,
-      });
-    }
-  }
 
   readonly status = DownloadStatus;
   readonly downloadInfo$: Observable<DownloadInfoModel>;
@@ -140,7 +106,7 @@ export class Downloads implements OnInit {
   filters = this._storage.filters;
   searchControl = new FormControl<string>('');
   showSearch = signal<boolean>(false);
-  isAnimationInProgress = signal<boolean>(false);
+  loadingDownloads = signal<boolean>(false);
 
   searchField = viewChild<ElementRef<HTMLInputElement>>('searchField');
 
@@ -191,8 +157,7 @@ export class Downloads implements OnInit {
       .pipe(
         takeUntilDestroyed(this._destroyRef),
         tap(({ id }) => {
-          this.downloads.update((rows) => rows.filter((r) => r.id !== id));
-          this._refill$.next();
+          this._removeAndRefill((r) => r.id === id);
         }),
       )
       .subscribe();
@@ -202,8 +167,7 @@ export class Downloads implements OnInit {
       .pipe(
         takeUntilDestroyed(this._destroyRef),
         tap(() => {
-          this.downloads.update((rows) => rows.filter((r) => !this._isFinished(r)));
-          this._refill$.next();
+          this._removeAndRefill((r) => this._isFinished(r));
         }),
       )
       .subscribe();
@@ -250,34 +214,6 @@ export class Downloads implements OnInit {
     this._notifier.notify('success', 'File path copied to clipboard.');
   }
 
-  async remove(download: DownloadModel, elementRef: HTMLElement, downloadsContainer: HTMLDivElement) {
-    let animationDuration = 0;
-    this.isAnimationInProgress.set(true);
-
-    if (this._storage.downloads().length === this.paginator().limit && this.paginator().limit !== 1) {
-      await this._animationService.animateRemoveDownload(elementRef, downloadsContainer);
-      animationDuration = AnimationService.REMOVE_DOWNLOAD_DURATION;
-    }
-
-    this._httpService
-      .deleteDownload(download.id)
-      .pipe(
-        finalize(() => {
-          setTimeout(() => {
-            downloadsContainer.style.height = '';
-            this.isAnimationInProgress.set(false);
-          }, animationDuration);
-        }),
-      )
-      .subscribe({
-        next: () => {
-          this.downloads.update((rows) => rows.filter((r) => r.id !== download.id));
-          this._refill$.next();
-        },
-        error: () => this._notifier.notify('error', 'Could not remove this download.'),
-      });
-  }
-
   filterDownloads(filters: FilterModel) {
     this.filters.set(filters);
 
@@ -300,8 +236,7 @@ export class Downloads implements OnInit {
       )
       .subscribe({
         next: () => {
-          this.downloads.update((rows) => rows.filter((r) => !this._isFinished(r)));
-          this._refill$.next();
+          this._removeAndRefill((r) => this._isFinished(r));
         },
         error: () => this._notifier.notify('error', 'Could not clear the list.'),
       });
@@ -320,6 +255,16 @@ export class Downloads implements OnInit {
         pageSize: this.paginatorSize(),
         length: this.paginator().total,
       });
+    }
+  }
+
+  toggleSearch(searchField: HTMLInputElement) {
+    if (this.searchControl.value) {
+      this.searchControl.setValue('');
+      this.showSearch.set(false);
+    } else {
+      this.showSearch.set(true);
+      searchField.focus();
     }
   }
 
@@ -354,12 +299,14 @@ export class Downloads implements OnInit {
   }
 
   private _fetchDownloads(): Observable<DownloadsPageModel> {
+    this.loadingDownloads.set(true);
     return this._httpService
       .getDownloads(this.paginator().page + 1, this.paginator().limit, this.filters(), this.searchControl.value)
       .pipe(
         tap((result: DownloadsPageModel) =>
           this.paginator.update((current) => ({ ...current, total: result.total, page: result.page - 1 })),
         ),
+        finalize(() => this.loadingDownloads.set(false)),
       );
   }
 
@@ -381,6 +328,27 @@ export class Downloads implements OnInit {
     if (served !== this.paginator().page) {
       this.paginator.update((current) => ({ ...current, total: result.total, page: served }));
     }
+  }
+
+  /**
+   * Drops the matching rows from the page and refills it, in one step when
+   * the refill will bring rows in.
+   *
+   * With rows after this page, the refill pulls them up into the gap, so the
+   * rows stay until it lands: dropping them first shrinks the list and grows
+   * it back a moment later, a double jump. Rows that would leave the page
+   * empty stay too, or rt-no-data would flash for the length of the refill.
+   * Otherwise nothing comes in to replace them — the last page — and they go
+   * at once. A refill that comes back short or empty is still shown as is.
+   */
+  private _removeAndRefill(predicate: (download: DownloadModel) => boolean): void {
+    const { page, limit, total } = this.paginator();
+    const remaining = this.downloads().filter((r) => !predicate(r));
+    const backfilled = total > (page + 1) * limit;
+
+    if (remaining.length && !backfilled) this.downloads.set(remaining);
+
+    this._refill$.next();
   }
 
   private _isFinished(download: DownloadModel): boolean {
@@ -448,5 +416,39 @@ export class Downloads implements OnInit {
 
   private _getTelegramStatus(): Observable<TelegramStatusModel> {
     return this._httpService.getTelegramStatus().pipe();
+  }
+
+  protected handleHotkeys(event: KeyboardEvent) {
+    // Open search by Ctrl/Cmd + K
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      this.showSearch.set(true);
+      this.searchField()?.nativeElement?.focus();
+    }
+
+    // Ignore typing targets (focused inputs, textareas, selects)
+    if (this._isTypingTarget(event)) {
+      return;
+    }
+
+    // Navigate through pages with ArrowLeft
+    if (event.key.toLowerCase() === 'arrowleft') {
+      event.preventDefault();
+      this.onPageChange({
+        pageIndex: Math.max(this.paginator().page - 1, 0),
+        pageSize: this.paginatorSize(),
+        length: this.paginator().total,
+      });
+    }
+
+    // Navigate through pages with ArrowRight
+    if (event.key.toLowerCase() === 'arrowright') {
+      event.preventDefault();
+      this.onPageChange({
+        pageIndex: Math.min(this.paginator().page + 1, Math.floor(this.paginator().total / this.paginator().limit)),
+        pageSize: this.paginatorSize(),
+        length: this.paginator().total,
+      });
+    }
   }
 }

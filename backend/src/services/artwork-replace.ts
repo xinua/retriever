@@ -5,17 +5,18 @@ import path from "node:path";
 import { eq } from "drizzle-orm";
 
 import { db } from "../db/index.js";
-import { channel, download, settings } from "../db/schema.js";
+import { subscription, download } from "../db/schema.js";
 import { broadcast } from "../routes/ws/websockets.js";
-import { avatarName, decorateChannel } from "./avatar.js";
+import { avatarName, decorateSubscription } from "./avatar.js";
 import * as CoverArt from "./cover-art.js";
 import { withFileExists } from "./download-file.js";
+import { busyError, claimFile, releaseFile } from "./file-busy.js";
 import * as DownloadQueue from "./download-queue.js";
 import { ImagesService } from "./images.service.js";
 import * as Jpeg from "./jpeg.js";
 import * as Poster from "./poster.js";
 
-import type { Channel, Download } from "../db/types.js";
+import type { Subscription, Download } from "../db/types.js";
 
 /**
  * Pictures the user brings: a replacement avatar for a YouTube channel, and a
@@ -49,20 +50,6 @@ const POSTER_WIDTH = 1280;
 export type ReplaceError = { ok: false; status: number; error: string };
 
 /**
- * Downloads whose file is being rewritten right now. A second embed into the
- * same file would race the first for the rename at the end.
- */
-const embedding = new Set<number>();
-
-/**
- * Whether this download's file is being rewritten with new cover art. Renaming
- * it meanwhile would let the embed's final rename recreate the old name.
- */
-export function isEmbedding(id: number): boolean {
-  return embedding.has(id);
-}
-
-/**
  * Stores `image` as the avatar of the YouTube channel `channelId`, and tells
  * every client about each subscription and download now showing it.
  */
@@ -79,13 +66,13 @@ export async function replaceAvatar(
   // Re-pointed as well as re-announced: a subscription whose first fetch
   // failed has no path at all, and now has a picture to show.
   const subs = await db
-    .update(channel)
+    .update(subscription)
     .set({ channelAvatarPath: `/images/${name}` })
-    .where(eq(channel.channelId, channelId))
+    .where(eq(subscription.channelId, channelId))
     .returning();
 
   for (const sub of subs) {
-    broadcast("channel-updated", { channel: decorateChannel(sub) });
+    broadcast('subscription-updated', { subscription: decorateSubscription(sub) });
   }
 
   const rows = await db
@@ -100,9 +87,9 @@ export async function replaceAvatar(
 
 /** replaceAvatar for the channel behind a subscription. */
 export async function replaceChannelAvatar(
-  sub: Channel,
+  sub: Subscription,
   image: Buffer
-): Promise<{ ok: true; channel: Channel } | ReplaceError> {
+): Promise<{ ok: true; subscription: Subscription } | ReplaceError> {
   if (!sub.channelId) {
     return { ok: false, status: 400, error: "Subscription has no YouTube channel" };
   }
@@ -111,9 +98,9 @@ export async function replaceChannelAvatar(
 
   if (!result.ok) return result;
 
-  const [updated] = await db.select().from(channel).where(eq(channel.id, sub.id));
+  const [updated] = await db.select().from(subscription).where(eq(subscription.id, sub.id));
 
-  return { ok: true, channel: decorateChannel(updated) };
+  return { ok: true, subscription: decorateSubscription(updated) };
 }
 
 /**
@@ -161,60 +148,60 @@ export async function replacePoster(
     return { ok: false, status: 409, error: "Download is still active" };
   }
 
-  if (embed && embedding.has(row.id)) {
-    return { ok: false, status: 409, error: "The file is already being updated" };
+  // Claimed now rather than once the poster is stored, so a refusal leaves
+  // the old poster in place too.
+  if (embed && !claimFile(row.id, "embedding")) {
+    return { ok: false, status: 409, error: busyError(row.id) };
   }
-
-  const name = Poster.posterName(row.id);
-
-  if (!(await storeUpload(image, name, { kind: "width", max: POSTER_WIDTH }))) {
-    return unreadable();
-  }
-
-  await db
-    .update(download)
-    .set({ thumbnailPath: `/images/${name}` })
-    .where(eq(download.id, row.id));
-
-  // The new poster is out before the file is touched, which for a large
-  // video takes a while.
-  await DownloadQueue.republish([row.id]);
-
-  const coverEmbedded = embed ? await embedPoster(row.id, name) : null;
-
-  return { ok: true, download: await present(row.id), coverEmbedded };
-}
-
-async function embedPoster(id: number, posterFile: string): Promise<boolean> {
-  embedding.add(id);
 
   try {
-    const [row] = await db.select().from(download).where(eq(download.id, id));
-    const [appSettings] = await db.select().from(settings).where(eq(settings.id, 1));
+    const name = Poster.posterName(row.id);
 
-    if (!row?.filePath || !appSettings || !CoverArt.supports(row.filePath)) return false;
-
-    // Only a file the app would itself serve — inside the downloads folder,
-    // and there right now. Written to, after all.
-    const [checked] = await withFileExists([row], appSettings);
-
-    if (!checked?.fileExists) return false;
-
-    if (!(await CoverArt.embed(row.filePath, ImagesService.pathFor(posterFile)))) return false;
-
-    // The picture now lives inside the file, so its size has moved.
-    const size = await fsp.stat(row.filePath).then((s) => s.size, () => null);
-
-    if (size != null) {
-      await db.update(download).set({ totalBytes: size }).where(eq(download.id, id));
+    if (!(await storeUpload(image, name, { kind: "width", max: POSTER_WIDTH }))) {
+      return unreadable();
     }
 
-    await DownloadQueue.republish([id]);
+    await db
+      .update(download)
+      .set({ thumbnailPath: `/images/${name}` })
+      .where(eq(download.id, row.id));
 
-    return true;
+    // The new poster is out before the file is touched, which for a large
+    // video takes a while.
+    await DownloadQueue.republish([row.id]);
+
+    const coverEmbedded = embed ? await embedPoster(row.id, name) : null;
+
+    return { ok: true, download: await present(row.id), coverEmbedded };
   } finally {
-    embedding.delete(id);
+    if (embed) releaseFile(row.id);
   }
+}
+
+/** Expects the file claimed for "embedding" — see replacePoster. */
+async function embedPoster(id: number, posterFile: string): Promise<boolean> {
+  const [row] = await db.select().from(download).where(eq(download.id, id));
+
+  if (!row?.filePath || !CoverArt.supports(row.filePath)) return false;
+
+  // Only a file the app would itself serve — inside the downloads folder,
+  // and there right now. Written to, after all.
+  const [checked] = await withFileExists([row]);
+
+  if (!checked?.fileExists) return false;
+
+  if (!(await CoverArt.embed(row.filePath, ImagesService.pathFor(posterFile)))) return false;
+
+  // The picture now lives inside the file, so its size has moved.
+  const size = await fsp.stat(row.filePath).then((s) => s.size, () => null);
+
+  if (size != null) {
+    await db.update(download).set({ totalBytes: size }).where(eq(download.id, id));
+  }
+
+  await DownloadQueue.republish([id]);
+
+  return true;
 }
 
 /**
@@ -243,15 +230,10 @@ async function storeUpload(image: Buffer, filename: string, fit: Jpeg.Fit): Prom
 /** A row the way every other download endpoint returns one. */
 async function present(id: number) {
   const [row] = await db.select().from(download).where(eq(download.id, id));
-  const [appSettings] = await db.select().from(settings).where(eq(settings.id, 1));
 
   if (!row) return null;
 
-  const decorated = Poster.decorate(row);
-
-  if (!appSettings) return { ...decorated, fileExists: false };
-
-  const [withFile] = await withFileExists([decorated], appSettings);
+  const [withFile] = await withFileExists([Poster.decorate(row)]);
 
   return withFile;
 }

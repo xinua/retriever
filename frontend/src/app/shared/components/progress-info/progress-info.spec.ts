@@ -64,4 +64,25 @@ describe('ProgressInfo', () => {
     fixture.nativeElement.querySelector('button').click();
     expect(cancel).toHaveBeenCalledWith(expect.objectContaining({ id: 7 }));
   });
+
+  describe('while the file is being moved', () => {
+    it('shows how much has been copied instead of the download', async () => {
+      await render({ progress: 100, move: { copied: 2_500_000, total: 10_000_000 } });
+
+      expect(bar().getAttribute('aria-label')).toBe('Moving file...');
+      expect(bar().getAttribute('aria-valuenow')).toBe('25');
+      expect(stats()).toBe('Copied: 2.5 MB of 10.0 MB');
+    });
+
+    it('emits cancel for the move', async () => {
+      const cancel = vi.fn();
+      component.cancel.subscribe(cancel);
+      await render({ id: 4, move: { copied: 0, total: 0 } });
+
+      fixture.nativeElement.querySelector('button').click();
+
+      expect(cancel).toHaveBeenCalledWith(expect.objectContaining({ id: 4 }));
+      expect(component.movePercent()).toBe(0);
+    });
+  });
 });

@@ -1,4 +1,4 @@
-@if (settings().enabled && timer$ && activeChannels().length) {
+@if (settings().enabled && timer$ && activeSubscriptions().length) {
   @let data = timer$ | async;
   <div>
     <p>
@@ -6,7 +6,7 @@
     </p>
 
     <p>
-      <small>Next check for: {{ nextCheck()?.channel?.name }} </small>
+      <small>Next check for: {{ nextCheck()?.subscription?.name }} </small>
     </p>
   </div>
 }

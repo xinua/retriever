@@ -1,5 +1,19 @@
-import { sqliteTable, blob, integer, text } from "drizzle-orm/sqlite-core";
+import { sqliteTable, blob, customType, integer, text } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
+
+import { toAbsolute, toRelative } from "../services/paths.js";
+
+/**
+ * A file on the mounted volume. Stored relative to its root, so the column
+ * reads like the host's own folder and survives the mount point moving; read
+ * back as the absolute path every filesystem call needs. Anything that leaves
+ * the server goes back to relative — see Poster.decorate.
+ */
+const mountedPath = customType<{ data: string; driverData: string }>({
+  dataType: () => "text",
+  toDriver: (value) => toRelative(toAbsolute(value)) ?? value,
+  fromDriver: (value) => toAbsolute(value)
+});
 
 export const settings = sqliteTable("settings", {
   id: integer("id").primaryKey().default(1),
@@ -10,7 +24,8 @@ export const settings = sqliteTable("settings", {
 
   webhookUrl: text("webhookUrl"),
 
-  downloadsDir: text("downloadsDir").default("/downloads"),
+  // Where new downloads go, relative to the mounted root; "" is the root.
+  downloadsDir: text("downloadsDir").default(""),
   cookiesPath: text("cookiesPath"),
   ytdlpArgs: text("ytdlpArgs"),
 
@@ -77,36 +92,6 @@ export const settings = sqliteTable("settings", {
 });
 
 /**
- * Singleton, like `settings` - one row, id 1. Separate table rather than extra
- * columns on `settings` because this is presentation state: it is read on every
- * page load, written whenever someone nudges a control in the theme dialog, and
- * has nothing to do with how downloads behave.
- *
- * The enum-ish columns are plain TEXT and are validated in the route against
- * BG_TYPES / THEME_COLORS, so adding a colour does not need a migration.
- */
-export const uiConfig = sqliteTable("ui_config", {
-  id: integer("id").primaryKey().default(1),
-
-  sectionsBg: text("sectionsBg").notNull().default("dotted"),
-  themeColor: text("themeColor").notNull().default("red"),
-
-  enableAnimations: integer("enableAnimations", { mode: "boolean" })
-    .notNull()
-    .default(true),
-
-  autoPaste: integer("autoPaste", { mode: "boolean" }).notNull().default(false),
-
-  createdAt: text("createdAt")
-    .notNull()
-    .default(sql`(datetime('now'))`),
-
-  updatedAt: text("updatedAt")
-    .notNull()
-    .default(sql`(datetime('now'))`)
-});
-
-/**
  * Singleton, like `settings`. Holds the last answer from the published
  * version manifest plus the instant the next check is due, so the schedule
  * survives a restart: the container comes back up, reads `nextCheckAt`, and
@@ -138,7 +123,7 @@ export const versionCheck = sqliteTable("version_check", {
     .default(sql`(datetime('now'))`)
 });
 
-export const channelGroup = sqliteTable("channel_group", {
+export const subscriptionGroup = sqliteTable("subscription_group", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull().unique(),
   sortOrder: integer("sortOrder").notNull().default(0),
@@ -154,9 +139,9 @@ export const channelGroup = sqliteTable("channel_group", {
     .default(sql`(datetime('now'))`)
 });
 
-export const channel = sqliteTable("channel", {
+export const subscription = sqliteTable("subscription", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  groupId: integer("groupId").references(() => channelGroup.id, { onDelete: "set null" }),
+  groupId: integer("groupId").references(() => subscriptionGroup.id, { onDelete: "set null" }),
   name: text("name"),
   channelId: text("channelId"),
   channelDescription: text("channelDescription"),
@@ -234,7 +219,7 @@ export const channel = sqliteTable("channel", {
   }>(),
 
   prefix: text("prefix"),
-  tag: text("tag"),
+  folder: text("folder"),
   webhookOverride: text("webhookOverride"),
 
   lastVideoId: text("lastVideoId"),
@@ -262,8 +247,8 @@ export const download = sqliteTable("download", {
   id: integer("id").primaryKey({ autoIncrement: true }),
 
   // The watcher row this came from; `channelId` below is the YouTube channel
-  // id, matching the naming used by the channel table.
-  watcherId: integer("watcherId").references(() => channel.id, { onDelete: "set null" }),
+  // id, matching the naming used by the subscription table.
+  watcherId: integer("watcherId").references(() => subscription.id, { onDelete: "set null" }),
   channelId: text("channelId"),
   channelName: text("channelName"),
 
@@ -280,7 +265,7 @@ export const download = sqliteTable("download", {
   // "watcher" for anything an RSS scan queued, "manual" for a one-off request
   // from the Download-now form, "telegram" for the bot and "extension" for
   // the browser extension. Non-watcher rows carry their own options below,
-  // because there is no channel row to read them from.
+  // because there is no subscription row to read them from.
   source: text("source").notNull().default("watcher"),
 
   // Left out of the Downloads list and its counts. The browser extension asks
@@ -290,7 +275,7 @@ export const download = sqliteTable("download", {
     .notNull()
     .default(false),
 
-  // Snapshot of the channel's settings at queue time, so editing the channel
+  // Snapshot of the subscription's settings at queue time, so editing the subscription
   // later does not rewrite the history of what was already downloaded. The
   // two flags below are part of that snapshot for a watcher row, and the
   // request's own choice for a manual one.
@@ -314,7 +299,7 @@ export const download = sqliteTable("download", {
   mediaFormat: text("mediaFormat"),
 
   // Manual-download options. Unused by watcher rows, which still read the
-  // live channel so editing a channel keeps affecting its queued downloads.
+  // live subscription so editing one keeps affecting its queued downloads.
   folder: text("folder"),
   prefix: text("prefix"),
   ytdlpArgs: text("ytdlpArgs"),
@@ -347,7 +332,7 @@ export const download = sqliteTable("download", {
   // ffmpeg re-encodes to the requested codec; null the rest of the time.
   phase: text("phase"),
 
-  filePath: text("filePath"),
+  filePath: mountedPath("filePath"),
 
   // The row's own poster, as a public /images/... path: a frame grabbed out
   // of the finished file for downloads that arrive with no artwork of their

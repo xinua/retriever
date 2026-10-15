@@ -83,6 +83,12 @@ export interface DownloadModel {
    * moved file can still be re-pointed from where it used to be.
    */
   fileExists?: boolean;
+  /**
+   * Bytes copied so far while the file is being moved to another filesystem;
+   * null or absent otherwise. A move within one filesystem is a rename and
+   * never shows up here.
+   */
+  move?: Nullable<MoveProgressModel>;
   avatarPath: Nullable<string>;
   thumbnailPath: Nullable<string>;
   authorUrl: Nullable<string>;
@@ -90,6 +96,11 @@ export interface DownloadModel {
   createdAt: string;
   startedAt: Nullable<string>;
   finishedAt: Nullable<string>;
+}
+
+export interface MoveProgressModel {
+  copied: number;
+  total: number;
 }
 
 /** Body of POST /api/downloads — an ad-hoc download outside any channel. */

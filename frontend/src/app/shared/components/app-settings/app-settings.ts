@@ -31,6 +31,7 @@ import {
 } from '../../constants/code.const';
 import { DRAG_TOKEN } from '../../constants/drag-token';
 import { DisableStepDirective } from '../../directives/disable-step.directive';
+import { YtdlpValidatorDirective } from '../../directives/ytdlp-validator';
 import { browserTimeZone, supportedTimeZones } from '../../helpers/common.helpers';
 import { createDragObservable } from '../../helpers/factory.helpers';
 import { formatNotifyAutomation, formatPlayDownloadAutomation } from '../../helpers/settings.helpers';
@@ -40,6 +41,7 @@ import { HttpService } from '../../services/http.service';
 import { StorageService } from '../../services/storage.service';
 import { RtValidators } from '../../validators/rt.validators';
 import { Code } from '../code/code';
+import { PathInput } from '../path-input/path-input';
 import { TelegramChats } from '../telegram-chats/telegram-chats';
 
 interface CodeExample {
@@ -130,6 +132,8 @@ const codeExamples: CodeExamples = {
     MatExpansionModule,
     Code,
     MatSelectModule,
+    PathInput,
+    YtdlpValidatorDirective,
   ],
   providers: [
     {
@@ -179,7 +183,7 @@ export class AppSettings {
 
   form = this._fb.group<SettingsFormModel>({
     webhookUrl: this._fb.control('', { validators: [RtValidators.url] }),
-    downloadsDir: this._fb.control('./'),
+    downloadsDir: this._fb.control(''),
     ytdlpArgs: this._fb.control(''),
     ytdlpConcurrency: this._fb.control(2, {
       nonNullable: true,

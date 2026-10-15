@@ -57,7 +57,7 @@ export class ReleaseNotesDialog {
   private _getChangeTypes(): (keyof ChangelogModel)[] {
     const latestChangelog = this.info().changelog.find((v) => v.version === this.info().latest)?.changelog;
     return Object.keys(latestChangelog ?? {}).filter(
-      (key) => key !== 'images' && key !== 'developerMessage' && latestChangelog?.[key]?.length > 0,
+      (key) => key !== 'images' && key !== 'videos' && key !== 'developerMessage' && latestChangelog?.[key]?.length > 0,
     ) as (keyof ChangelogModel)[];
   }
 

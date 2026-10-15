@@ -26,7 +26,7 @@
               matTooltip="Clear"
               [disabled]="isPending()"
             >
-              <mat-icon fontIcon="close" class="text-white animate-cicle-once" />
+              <mat-icon fontIcon="close" class="text-white animate-spin-once" />
             </button>
           }
 
@@ -205,25 +205,13 @@
               </mat-form-field>
             </div>
 
-            <mat-form-field appearance="outline" class="col-span-2 lg:col-span-1 order-2 lg:order-3">
-              <mat-label>Destination folder</mat-label>
-              <input
-                matInput
-                formControlName="destinationFolder"
-                placeholder="e.g. podcasts"
-                type="text"
-                [matAutocomplete]="dir"
-              />
-              <mat-icon matIconSuffix fontIcon="folder" matTooltip="Inside downloads folder" />
-
-              <mat-autocomplete #dir="matAutocomplete">
-                @for (folder of folders(); track folder) {
-                  <mat-option [value]="folder">
-                    {{ folder }}
-                  </mat-option>
-                }
-              </mat-autocomplete>
-            </mat-form-field>
+            <rt-path-input
+              class="col-span-2 lg:col-span-1 order-2 lg:order-3"
+              formControlName="destinationFolder"
+              label="Destination folder"
+              placeholder="e.g. podcasts"
+              [defaultFolder]="downloadsFolder()"
+            />
 
             <div class="col-span-2 lg:col-span-1 grid grid-cols-2 items-center gap-6 order-4">
               <div class="col-span-1">

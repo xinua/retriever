@@ -1,19 +1,21 @@
 import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Click, ClickAction } from './click';
+import { ClickAction, ClickEvent, DoubleClick } from './click';
 
 @Component({
-  imports: [Click],
-  template: `<button rtClick [rtClickDelay]="200" (rtClick)="actions.push($event)">Action</button>`,
+  imports: [DoubleClick],
+  template: `<button rtClick [rtClickDelay]="200" (rtClick)="events.push($event)">Action</button>`,
 })
 class HostComponent {
-  actions: ClickAction[] = [];
+  events: ClickEvent[] = [];
 }
 
-describe('Click', () => {
+describe('DoubleClick', () => {
   let fixture: ComponentFixture<HostComponent>;
   let host: HostComponent;
   let el: HTMLElement;
+
+  const actions = (): ClickAction[] => host.events.map((e) => e.action);
 
   beforeEach(async () => {
     fixture = TestBed.createComponent(HostComponent);
@@ -28,10 +30,11 @@ describe('Click', () => {
   it('emits single after the delay', () => {
     el.click();
     vi.advanceTimersByTime(199);
-    expect(host.actions).toEqual([]);
+    expect(actions()).toEqual([]);
 
     vi.advanceTimersByTime(1);
-    expect(host.actions).toEqual(['single']);
+    expect(actions()).toEqual([ClickAction.SINGLE]);
+    expect(host.events[0].event).toBeInstanceOf(MouseEvent);
   });
 
   it('emits only double for two clicks within the delay', () => {
@@ -40,7 +43,7 @@ describe('Click', () => {
     el.click();
     vi.advanceTimersByTime(500);
 
-    expect(host.actions).toEqual(['double']);
+    expect(actions()).toEqual([ClickAction.DOUBLE]);
   });
 
   it('emits two singles for clicks further apart than the delay', () => {
@@ -49,7 +52,7 @@ describe('Click', () => {
     el.click();
     vi.advanceTimersByTime(250);
 
-    expect(host.actions).toEqual(['single', 'single']);
+    expect(actions()).toEqual([ClickAction.SINGLE, ClickAction.SINGLE]);
   });
 
   it('does not emit after destroy', () => {
@@ -57,6 +60,6 @@ describe('Click', () => {
     fixture.destroy();
     vi.advanceTimersByTime(500);
 
-    expect(host.actions).toEqual([]);
+    expect(actions()).toEqual([]);
   });
 });

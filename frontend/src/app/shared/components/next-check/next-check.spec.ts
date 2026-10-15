@@ -39,7 +39,7 @@ describe('NextCheckComponent', () => {
     http.expectOne('/api/next-check').flush({
       ok: true,
       nextCheckAt: new Date(NOW.getTime() + 90_000).toISOString(),
-      channel: { id: 1, name: 'Some Channel' },
+      subscription: { id: 1, name: 'Some Channel' },
       ...nextCheck,
     });
     fixture.detectChanges();
@@ -54,7 +54,7 @@ describe('NextCheckComponent', () => {
 
   it('stores the next check fetched on init', () => {
     render();
-    expect(storage.nextCheck()?.channel.name).toBe('Some Channel');
+    expect(storage.nextCheck()?.subscription.name).toBe('Some Channel');
   });
 
   it('shows a placeholder until the first tick', () => {
@@ -128,7 +128,7 @@ describe('NextCheckComponent', () => {
     storage.nextCheck.set({
       ok: true,
       nextCheckAt: new Date(Date.now() + 10_000).toISOString(),
-      channel: { id: 2, name: 'Other Channel' },
+      subscription: { id: 2, name: 'Other Channel' },
     });
     fixture.detectChanges();
     expect(text()).toContain('Next check in: updating...');

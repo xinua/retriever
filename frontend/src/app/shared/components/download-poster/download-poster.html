@@ -30,7 +30,7 @@
           #previewVideo
           [src]="mediaUrl()"
           (rtLongPress)="togglePlay(download(), true, $event)"
-          (click)="togglePlay(download(), true, $event)"
+          (click)="togglePlay(download(), true, $event, clickAction.SINGLE)"
           controls
           autoplay
           preload="metadata"
@@ -43,12 +43,57 @@
         <img
           #posterImage
           [src]="download()?.thumbnailPath"
-          (click)="togglePlay(download(), true, $event)"
+          (rtClick)="togglePlay(download(), true, $event.event, $event.action)"
           (rtLongPress)="togglePlay(download(), true, $event)"
           (error)="posterImage.src = 'https://mockimage.tw/photo/257x145/1f1f1f/ff8800/Poster%20not%20found'"
           alt="Poster"
-          class="w-full h-full aspect-video object-cover cursor-pointer"
+          class="w-full h-full aspect-video object-cover"
         />
+
+        @let leftClass = 'justify-start';
+        @let rightClass = 'justify-end';
+
+        @if (seekDirection()) {
+          <div
+            class="absolute top-1/2 -translate-y-1/2 z-1 w-full flex items-center px-10"
+            [class]="seekDirection() === 'left' ? leftClass : rightClass"
+            (rtClick)="togglePlay(download(), true, $event.event, $event.action)"
+            animate.leave="fadeOut"
+          >
+            <div class="flex items-center mb-6.25 relative">
+              <h1
+                class="select-none text-black text-md bg-white/50 px-3 py-1 rounded-md backdrop-blur-xs relative z-1"
+                [class.order-1]="seekDirection() === 'left'"
+              >
+                <!-- Keyed on the value so the span is recreated (and the animation replays) on every change. -->
+                @for (key of [seekDirection() + seekTotalTime()]; track key) {
+                  <span class="inline-block animate-scale">
+                    {{ seekDirection() === 'left' ? '-' : '+' }}
+                    {{ seekTotalTime() }}s
+                  </span>
+                }
+              </h1>
+
+              @if (
+                (seekDirection() === 'right' && seekTotalTime() > 10) ||
+                (seekDirection() === 'left' && seekTotalTime() > 10)
+              ) {
+                @for (key of [seekDirection() + seekTotalTime()]; track key) {
+                  <mat-icon
+                    [fontIcon]="seekDirection() === 'left' ? 'arrow_back_ios' : 'arrow_forward_ios'"
+                    class="animate-follow-{{ seekDirection() }} absolute left-1/2 -translate-x-1/2"
+                  />
+                }
+              }
+
+              <mat-icon
+                [fontIcon]="seekDirection() === 'left' ? 'arrow_back_ios' : 'arrow_forward_ios'"
+                class="absolute left-1/2 -translate-x-1/2 animate-fly-{{ seekDirection() }}"
+              />
+            </div>
+          </div>
+        }
+
         <div class="w-full absolute bottom-0 left-0 z-1">
           <rt-audio-player
             #previewAudio

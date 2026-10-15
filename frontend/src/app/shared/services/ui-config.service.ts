@@ -24,11 +24,7 @@ export class UiConfigService {
   readonly themeColors = THEME_COLORS;
 
   constructor() {
-    // Applied once up front as well as on change: an effect first flushes
-    // during the initial change detection run, which is late enough to show a
-    // frame of the default palette before the configured one lands.
     this._apply(this._storage.uiConfig());
-
     effect(() => this._apply(this._storage.uiConfig()));
   }
 

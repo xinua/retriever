@@ -5,7 +5,7 @@
 ![Webhook payload](demo/4.webp)
 ![Webhook payload](demo/5.webp)
 
-The webhook is sent once the subscription's download has finished. `watcherId` is the watcher's own id — the same one the widget URL below takes — not the channel's YouTube id. `path` is the file's location inside the downloads folder, and `fileUrl` streams it from Retriever, the same URL the widget plays.
+The webhook is sent once the subscription's download has finished. `watcherId` is the watcher's own id — the same one the widget URL below takes — not the channel's YouTube id. `path` is the file's location relative to the folder mounted at `/downloads`, and `fileUrl` streams it from Retriever, the same URL the widget plays.
 
 **Widget cards.** Each watcher has a compact page showing its latest video:
 

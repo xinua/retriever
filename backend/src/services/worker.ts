@@ -1,5 +1,5 @@
 import { db } from "../db/index.js";
-import { channel, settings } from "../db/schema.js";
+import { subscription, settings } from "../db/schema.js";
 import { eq, sql } from "drizzle-orm";
 
 import { getFeedVideos, type RssVideo } from "./rss.js";
@@ -7,10 +7,10 @@ import { isShort } from "./shorts.js";
 import * as DownloadQueue from "./download-queue.js";
 import { withLock } from "./lock.js";
 import { ImagesService } from "./images.service.js";
-import { avatarName, decorateChannel } from "./avatar.js";
+import { avatarName, decorateSubscription } from "./avatar.js";
 import { YoutubeService } from "./youtube.service.js";
 
-import type { Channel, Settings } from "../db/types.js";
+import type { Subscription, Settings } from "../db/types.js";
 import { calculateNextCheck, isHeldForToday } from "../utils/schedule.helper.js";
 import { broadcast } from "../routes/ws/websockets.js";
 import { getLastCheck } from "../utils/last-check.helper.js";
@@ -18,11 +18,11 @@ import { getLastCheck } from "../utils/last-check.helper.js";
 let workerTimer: NodeJS.Timeout | null = null;
 
 /**
- * The channel card's own copy of the latest video's artwork.
+ * The subscription card's own copy of the latest video's artwork.
  *
  * `video-<id>.jpg` is the shared cache every download row reads (see
  * manual-download.ts), so it belongs to the download and has to outlive the
- * channel's interest in it. The card, on the other hand, only ever shows the
+ * subscription's interest in it. The card, on the other hand, only ever shows the
  * newest video and wants the previous picture gone — so it gets a copy it is
  * free to delete. Rotating the card no longer strips the poster off the
  * download record for the video that just scrolled out of view.
@@ -32,16 +32,16 @@ export function subPosterName(videoId: string): string {
 }
 
 /**
- * Whether a stored `lastVideoThumbnailPath` is the channel's own copy rather
+ * Whether a stored `lastVideoThumbnailPath` is the subscription's own copy rather
  * than the shared cache. Rows written before the split still point straight
- * at `video-<id>.jpg`, which must never be deleted on the channel's behalf.
+ * at `video-<id>.jpg`, which must never be deleted on the subscription's behalf.
  */
 export function isSubPoster(imagePath: string): boolean {
   return imagePath.endsWith("-sub.jpg");
 }
 
 /**
- * Fills the shared artwork cache for `videoId` and returns the channel's own
+ * Fills the shared artwork cache for `videoId` and returns the subscription's own
  * copy of it, dropping the copy made for `prevVideoId`. Returns null when the
  * feed carried no thumbnail, or when fetching it failed — artwork is
  * cosmetic, and the scan has more important work to finish.
@@ -108,7 +108,7 @@ const MAX_FEED_WALK = 10;
  * cached in shorts.ts.
  */
 async function pickLatest(
-  ch: Channel,
+  ch: Subscription,
   videos: RssVideo[]
 ): Promise<RssVideo | null> {
 
@@ -119,7 +119,7 @@ async function pickLatest(
     if (ch.downloadShorts) return video;
 
     if (await isShort(video)) {
-      console.log(`Channel ${ch.id}: ignoring short ${video.videoId}`);
+      console.log(`Subscription ${ch.id}: ignoring short ${video.videoId}`);
       continue;
     }
 
@@ -152,7 +152,7 @@ const avatarAttempts = new Map<string, number>();
  * The column is re-pointed at the same time: it may be null on a row whose
  * first fetch failed, and stale on one whose file was deleted underneath it.
  */
-async function ensureAvatar(ch: Channel): Promise<void> {
+async function ensureAvatar(ch: Subscription): Promise<void> {
   if (!ch.channelId) return;
 
   const name = avatarName(ch.channelId);
@@ -160,9 +160,9 @@ async function ensureAvatar(ch: Channel): Promise<void> {
 
   if (ImagesService.exists(name)) {
     if (ch.channelAvatarPath !== publicPath) {
-      await db.update(channel)
+      await db.update(subscription)
         .set({ channelAvatarPath: publicPath })
-        .where(eq(channel.id, ch.id));
+        .where(eq(subscription.id, ch.id));
     }
 
     return;
@@ -185,9 +185,9 @@ async function ensureAvatar(ch: Channel): Promise<void> {
 
     if (!stored) return;
 
-    await db.update(channel)
+    await db.update(subscription)
       .set({ channelAvatarPath: stored })
-      .where(eq(channel.id, ch.id));
+      .where(eq(subscription.id, ch.id));
 
     avatarAttempts.delete(ch.channelId);
   } catch (e) {
@@ -195,8 +195,8 @@ async function ensureAvatar(ch: Channel): Promise<void> {
   }
 }
 
-export async function processChannel(
-  ch: Channel,
+export async function processSubscription(
+  ch: Subscription,
   appSettings: Settings,
   scheduled: boolean = true
 ) {
@@ -212,12 +212,12 @@ export async function processChannel(
   // usable entry at all: the scan still happened, so it books the next one.
   if (!latest?.videoId) {
     const nextCheckAt = scheduled ? calculateNextCheck(ch, now, appSettings.timeZone) : ch.nextCheckAt;
-    await db.update(channel)
+    await db.update(subscription)
       .set({
         lastCheckedAt: nowIso,
         nextCheckAt
       })
-      .where(eq(channel.id, ch.id));
+      .where(eq(subscription.id, ch.id));
 
     broadcast('next-check', await getLastCheck());
 
@@ -241,7 +241,7 @@ export async function processChannel(
       ? calculateNextCheck({ ...ch, lastCaptureAt: nowIso }, now, appSettings.timeZone)
       : ch.nextCheckAt;
 
-    await db.update(channel)
+    await db.update(subscription)
       .set({
         lastVideoId: latest.videoId,
         lastVideoTitle: latest.title ?? null,
@@ -251,10 +251,10 @@ export async function processChannel(
         lastCheckedAt: nowIso,
         nextCheckAt,
       })
-      .where(eq(channel.id, ch.id));
+      .where(eq(subscription.id, ch.id));
 
     if (ch.startFromLast) {
-      await DownloadQueue.enqueue({ channel: ch, settings: appSettings, video: latest });
+      await DownloadQueue.enqueue({ subscription: ch, settings: appSettings, video: latest });
 
       broadcast(
         'notification',
@@ -275,13 +275,13 @@ export async function processChannel(
     ch.lastVideoId
   );
 
-  await DownloadQueue.enqueue({ channel: ch, settings: appSettings, video: latest });
+  await DownloadQueue.enqueue({ subscription: ch, settings: appSettings, video: latest });
 
   const nextCheckAt = scheduled
     ? calculateNextCheck({ ...ch, lastCaptureAt: nowIso }, now, appSettings.timeZone)
     : ch.nextCheckAt;
 
-  await db.update(channel)
+  await db.update(subscription)
     .set({
       lastVideoId: latest.videoId,
       lastVideoTitle: latest.title ?? null,
@@ -292,14 +292,14 @@ export async function processChannel(
       lastCheckedAt: nowIso,
       nextCheckAt
     })
-    .where(eq(channel.id, ch.id));
+    .where(eq(subscription.id, ch.id));
 
-  const [updatedChannel] = await db
+  const [updatedSubscription] = await db
     .select()
-    .from(channel)
-    .where(eq(channel.id, ch.id));
+    .from(subscription)
+    .where(eq(subscription.id, ch.id));
 
-  broadcast('channel-updated', { channel: decorateChannel(updatedChannel) });
+  broadcast('subscription-updated', { subscription: decorateSubscription(updatedSubscription) });
   broadcast('next-check', await getLastCheck());
   broadcast('notification', {
     type: 'success',
@@ -314,7 +314,7 @@ async function getNextWorkerDelay(): Promise<number> {
   const row = await db.get<{ nextCheckAt: string }>(
     sql`
       SELECT nextCheckAt
-      FROM channel
+      FROM subscription
       WHERE enabled = 1
       AND nextCheckAt IS NOT NULL
       ORDER BY nextCheckAt ASC
@@ -345,16 +345,16 @@ export async function runWorkerTick() {
 
   const nowIso = new Date().toISOString();
 
-  const channels = await db
+  const subscriptions = await db
     .select()
-    .from(channel)
+    .from(subscription)
     .where(sql`
       enabled = 1
       AND nextCheckAt IS NOT NULL
       AND nextCheckAt <= ${nowIso}
     `);
 
-  for (const ch of channels) {
+  for (const ch of subscriptions) {
 
     const now = new Date();
 
@@ -364,9 +364,9 @@ export async function runWorkerTick() {
     // a check already booked.
     if (isHeldForToday(ch, now, appSettings.timeZone)) {
 
-      await db.update(channel)
+      await db.update(subscription)
         .set({ nextCheckAt: calculateNextCheck(ch, now, appSettings.timeZone) })
-        .where(eq(channel.id, ch.id));
+        .where(eq(subscription.id, ch.id));
 
       broadcast('next-check', await getLastCheck());
 
@@ -375,19 +375,19 @@ export async function runWorkerTick() {
 
     try {
 
-      await processChannel(ch, appSettings, true);
+      await processSubscription(ch, appSettings, true);
 
     } catch (e) {
 
-      console.error("Channel error:", ch.id, e);
+      console.error("Subscription error:", ch.id, e);
       const nextCheckAt = calculateNextCheck(ch, now, appSettings.timeZone);
 
-      await db.update(channel)
+      await db.update(subscription)
         .set({
           lastCheckedAt: nowIso,
           nextCheckAt
         })
-        .where(eq(channel.id, ch.id));
+        .where(eq(subscription.id, ch.id));
 
       broadcast('next-check', await getLastCheck());
     }
@@ -412,7 +412,7 @@ export function startWorker() {
   workerLoop().catch(console.error);
 }
 
-export async function runChannelOnce(channelId: number) {
+export async function runSubscriptionOnce(id: number) {
 
   const [appSettings] = await db
     .select()
@@ -423,10 +423,10 @@ export async function runChannelOnce(channelId: number) {
 
   const [ch] = await db
     .select()
-    .from(channel)
-    .where(eq(channel.id, channelId));
+    .from(subscription)
+    .where(eq(subscription.id, id));
 
   if (!ch) return;
 
-  await processChannel(ch, appSettings, false);
+  await processSubscription(ch, appSettings, false);
 }

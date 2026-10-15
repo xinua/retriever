@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
-import { runChannelOnce } from "../../services/worker.js";
+import { runSubscriptionOnce } from "../../services/worker.js";
 import { db } from "../../db/index.js";
-import { settings, channel } from "../../db/schema.js";
+import { settings, subscription } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
 import { sendWebhook } from "../../services/webhook.js";
 
@@ -24,18 +24,18 @@ export async function actionsRoutes(app: FastifyInstance) {
     }
   });
 
-  // Run one channel scan
+  // Run one subscription scan
   app.post("/api/actions/run-once/:id", async (req) => {
     const { id } = req.params as { id: string };
 
     const [ch] = await db
       .select()
-      .from(channel)
-      .where(eq(channel.id, Number(id)));
+      .from(subscription)
+      .where(eq(subscription.id, Number(id)));
 
-    if (!ch) return { error: "Channel not found" };
+    if (!ch) return { error: "Subscription not found" };
 
-    await runChannelOnce(Number(id));
+    await runSubscriptionOnce(Number(id));
 
     return { ok: true };
   });

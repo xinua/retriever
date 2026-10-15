@@ -44,7 +44,7 @@ export class WidgetPage implements OnInit {
   isPlaying = signal(false);
   isOverlayVisible = signal(false);
   download = signal<DownloadModel | null>(null);
-  channel = computed(() => this._storage.subscriptions().find((c) => c.id === +this._id));
+  subscription = computed(() => this._storage.subscriptions().find((c) => c.id === +this._id));
   videoUrl = computed(() => this._http.streamFileUrl(this.download()?.id));
   canPlay = computed(() => this.download()?.type !== 'thumbnail' && hasFile(this.download()));
 

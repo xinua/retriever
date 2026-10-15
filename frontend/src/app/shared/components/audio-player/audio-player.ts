@@ -87,6 +87,15 @@ export class AudioPlayer {
     if (Number.isFinite(seconds)) this.audio.currentTime = seconds;
   }
 
+  /** Jumps relative to the real playback position, clamped to the track bounds. */
+  seekBy(seconds: number) {
+    const audio = this.audio;
+    const max = this.totalDuration() || audio.duration || Infinity;
+    const target = Math.min(Math.max(0, audio.currentTime + seconds), max);
+    this.currentTime.set(target);
+    audio.currentTime = target;
+  }
+
   onTimeUpdate() {
     if (!this.isSeeking()) this.currentTime.set(this.audio.currentTime);
   }

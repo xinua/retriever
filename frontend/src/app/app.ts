@@ -57,7 +57,6 @@ export class App implements OnInit {
   protected readonly rootInjector = inject(ApplicationRef).injector;
 
   ngOnInit(): void {
-    this._http.getUiConfig().subscribe();
     // The first browser to load the app gives the server its zone, so poll
     // hours mean what they say here rather than on the server's clock.
     this._http

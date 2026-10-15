@@ -51,20 +51,6 @@
       }
     }
 
-    @if (latestChangelog()?.images?.length > 0) {
-      <div class="grid grid-cols-1 gap-4 mt-4">
-        @for (image of latestChangelog()?.images; track $index) {
-          <img
-            [src]="image"
-            alt="Feature preview"
-            aria-label="Feature preview"
-            class="w-auto h-auto col-span-1"
-            loading="lazy"
-          />
-        }
-      </div>
-    }
-
     @if (latestChangelog()?.videos?.length > 0) {
       <div class="grid grid-cols-1 gap-4 mt-4">
         @for (video of latestChangelog()?.videos; track $index) {
@@ -80,6 +66,20 @@
           >
             <source [src]="video" type="video/mp4" />
           </video>
+        }
+      </div>
+    }
+
+    @if (latestChangelog()?.images?.length > 0) {
+      <div class="grid grid-cols-1 gap-4 mt-4">
+        @for (image of latestChangelog()?.images; track $index) {
+          <img
+            [src]="image"
+            alt="Feature preview"
+            aria-label="Feature preview"
+            class="w-auto h-auto col-span-1"
+            loading="lazy"
+          />
         }
       </div>
     }

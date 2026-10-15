@@ -68,7 +68,6 @@ export class DownloadRecord {
 
   cancel = output<DownloadModel>();
   retry = output<DownloadModel>();
-  remove = output<{ download: DownloadModel; elementRef: HTMLElement }>();
   saveAs = output<DownloadModel>();
   copyFilePath = output<DownloadModel>();
   setFilePath = output<{ filePath: string; download: DownloadModel }>();
@@ -112,5 +111,10 @@ export class DownloadRecord {
 
   setEditing() {
     this.isEditing.set(!this.isEditing());
+  }
+
+  /** The server reports how it ended, canceled or already finished. */
+  cancelMove() {
+    this._httpService.cancelMove(this.download().id).subscribe();
   }
 }

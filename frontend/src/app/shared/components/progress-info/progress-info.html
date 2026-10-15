@@ -1,36 +1,54 @@
-<div class="flex flex-col gap-2 w-full mb-5">
-  <div class="flex items-center gap-2">
-    <rt-progress-bar
-      [value]="download().progress"
-      [label]="
-        download().phase === 'converting' ? 'Converting to ' + (download().codec | uppercase) + '...' : 'Downloading...'
-      "
-      [indeterminate]="download().progress === 100"
-    />
+@if (download().move; as move) {
+  <div class="flex flex-col gap-2 w-full mb-5">
+    <div class="flex items-center gap-2">
+      <rt-progress-bar [value]="movePercent()" label="Moving file..." />
 
-    <button mat-icon-button matTooltip="Cancel" (click)="cancel.emit(download())">
-      <mat-icon class="text-red-500!">stop_circle</mat-icon>
-    </button>
+      <button mat-icon-button matTooltip="Cancel the move" (click)="cancel.emit(download())">
+        <mat-icon class="text-red-500!">stop_circle</mat-icon>
+      </button>
+    </div>
+
+    <div class="flex items-center gap-3 text-xs text-gray-500">
+      <span>Copied: {{ move.copied | size }} of {{ move.total | size }}</span>
+    </div>
   </div>
+} @else {
+  <div class="flex flex-col gap-2 w-full mb-5">
+    <div class="flex items-center gap-2">
+      <rt-progress-bar
+        [value]="download().progress"
+        [label]="
+          download().phase === 'converting'
+            ? 'Converting to ' + (download().codec | uppercase) + '...'
+            : 'Downloading...'
+        "
+        [indeterminate]="download().progress === 100"
+      />
 
-  <div class="flex items-center gap-3 text-xs text-gray-500">
-    @if (download().progress !== 100) {
-      <span>Progress: {{ download().progress }}%</span>
+      <button mat-icon-button matTooltip="Cancel" (click)="cancel.emit(download())">
+        <mat-icon class="text-red-500!">stop_circle</mat-icon>
+      </button>
+    </div>
 
-      @if (download().speed) {
-        <span>Speed: {{ download().speed }}</span>
+    <div class="flex items-center gap-3 text-xs text-gray-500">
+      @if (download().progress !== 100) {
+        <span>Progress: {{ download().progress }}%</span>
+
+        @if (download().speed) {
+          <span>Speed: {{ download().speed }}</span>
+        }
+
+        @if (download().eta) {
+          <span>ETA: {{ download().eta }}</span>
+        }
+
+        @if (download().totalBytes) {
+          <span>Size: {{ download().totalBytes | size }}</span>
+        }
+      } @else {
+        <span class="text-white"><strong>Post-processing...</strong></span>
+        <mat-icon class="text-(--rt-accent)! animate-spin" fontIcon="autorenew" />
       }
-
-      @if (download().eta) {
-        <span>ETA: {{ download().eta }}</span>
-      }
-
-      @if (download().totalBytes) {
-        <span>Size: {{ download().totalBytes | size }}</span>
-      }
-    } @else {
-      <span class="text-white"><strong>Post-processing...</strong></span>
-      <mat-icon class="text-(--rt-accent)! animate-spin" fontIcon="autorenew" />
-    }
+    </div>
   </div>
-</div>
+}

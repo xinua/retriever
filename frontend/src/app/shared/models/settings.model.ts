@@ -38,12 +38,22 @@ export interface SettingsFormModel {
   notifyDownloadFailed: FormControl<boolean>;
 }
 
-/** Folders that already exist inside the downloads root, newest listing wins. */
-export interface FoldersModel {
-  /** Absolute path the folders are relative to, for the tooltip/hint. */
-  root: string;
-  /** Slash-joined paths relative to `root`, e.g. `podcasts/history`. */
-  folders: string[];
+/** One entry of a folder inside the mounted root. */
+export interface FolderEntryModel {
+  name: string;
+  type: 'folder' | 'file';
+  /** A folder that is a separate filesystem: a ZFS dataset, a btrfs subvolume, another disk. */
+  mount: boolean;
+}
+
+/** One level of the mounted root, as `GET /api/folders` lists it. */
+export interface FolderListingModel {
+  /** The listed folder relative to the root, "" for the root itself. */
+  path: string;
+  /** Folders first, then files (only when asked for). */
+  entries: FolderEntryModel[];
+  /** The folder held more entries than were sent. */
+  truncated: boolean;
 }
 
 export interface YtdlpStatusModel {

@@ -73,7 +73,7 @@ actions:
     data:
       media:
         media_content_id: >-
-          media-source://media_source/local/<nas_media>/<:downloads>/{{trigger.json.filePath }}
+          media-source://media_source/local/<media_folder>/{{ trigger.json.filePath }}
         media_content_type: audio/mpeg
         metadata: {}
     alias: Play from path

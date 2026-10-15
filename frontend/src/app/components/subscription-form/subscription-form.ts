@@ -39,7 +39,7 @@ import { AudioFormatLabels, CodecLabels, DefaultSubscription, VideoFormatLabels 
 import { equalJson } from '@shared/helpers';
 import {
   AudioFormats,
-  ChannelFormModel,
+  SubscriptionFormModel,
   Codecs,
   PollType,
   SubscriptionModel,
@@ -57,6 +57,7 @@ import { IntervalRange } from './components/interval-range/interval-range';
 import { FlagsPipe } from './flags.pipe';
 import { POLL_TIME_OPTIONS, SUBSCRIPTION_FLAG_OPTIONS } from './subscription-form.const';
 import { SubscriptionFlagKey } from './subscription-form.model';
+import { PathInput } from '@shared/components';
 
 @Component({
   selector: 'rt-subscription-form',
@@ -92,6 +93,7 @@ import { SubscriptionFlagKey } from './subscription-form.model';
     TitleCasePipe,
     LowerCasePipe,
     IntervalRange,
+    PathInput,
   ],
   providers: [provideNgxMask()],
   templateUrl: './subscription-form.html',
@@ -107,17 +109,16 @@ export class SubscriptionForm implements OnInit {
 
   private readonly _formDirective = viewChild<FormGroupDirective>(FormGroupDirective);
 
-  protected readonly defaultChannel = DefaultSubscription;
+  protected readonly defaultSubscription = DefaultSubscription;
   globalWebhookURL = computed((): string => this._storage.settings().webhookUrl);
   /** The zone poll hours are read in - see the time zone field in settings. */
   timeZoneLabel = computed((): string => this._storage.settings().timeZone ?? 'server time');
   globalWebhookURL$ = toObservable(this.globalWebhookURL);
 
-  form!: FormGroup<ChannelFormModel>;
+  form!: FormGroup<SubscriptionFormModel>;
   isSaving = signal(false);
   isEditing = computed(() => !!this._storage.editingSubscription());
-  /** Folders on disk under the downloads root, plus every subscription tag. */
-  folders = this._storage.folderOptions;
+  downloadsFolder = computed(() => this._storage.settings().downloadsDir);
 
   /** Flags are stored on the form itself; the multi-select is just a view of those controls. */
   private _formValue!: Signal<Partial<SubscriptionModel>>;
@@ -148,9 +149,9 @@ export class SubscriptionForm implements OnInit {
   codecOptions = Object.values(this.codecs);
 
   constructor() {
-    this._trackChannel();
+    this._trackSubscription();
 
-    this.form = this._fb.group<ChannelFormModel>({
+    this.form = this._fb.group<SubscriptionFormModel>({
       id: this._fb.control(null),
       name: this._fb.control(null),
       rssUrl: this._fb.control('', {
@@ -171,7 +172,7 @@ export class SubscriptionForm implements OnInit {
       webhookOverride: this._fb.control({ value: '', disabled: true }),
       pollOnce: this._fb.control(false, { nonNullable: true }),
       prefix: this._fb.control(''),
-      tag: this._fb.control(''),
+      folder: this._fb.control(''),
       pollType: this._fb.control(PollType.INTERVAL, {
         nonNullable: true,
         validators: [Validators.required],
@@ -200,7 +201,6 @@ export class SubscriptionForm implements OnInit {
   }
 
   ngOnInit() {
-    this._httpService.getFolders().subscribe();
     this._trackWebhook();
     this._trackPollType();
     this._trackType();
@@ -214,11 +214,11 @@ export class SubscriptionForm implements OnInit {
     );
 
     request(this.form.value as SubscriptionModel).subscribe({
-      next: (channel: SubscriptionModel) => {
-        this._updateChannels(channel);
+      next: (subscription: SubscriptionModel) => {
+        this._updateSubscriptions(subscription);
         this.resetForm();
         this._storage.showForm.set(false);
-        if (!channel.startFromLast) {
+        if (!subscription.startFromLast) {
           this._notifier.notify('success', 'Subscription saved successfully');
         }
       },
@@ -279,7 +279,7 @@ export class SubscriptionForm implements OnInit {
 
   /**
    * Control "required" validator for webhookOverride control\
-   * Add/Remove validator if global webhook was added/deleted while editing/adding a channel
+   * Add/Remove validator if global webhook was added/deleted while editing/adding a subscription
    */
   private _trackWebhook() {
     combineLatest([this.form.controls.notifyHA.valueChanges, this.globalWebhookURL$])
@@ -315,14 +315,14 @@ export class SubscriptionForm implements OnInit {
       });
   }
 
-  private _trackChannel() {
+  private _trackSubscription() {
     effect((): void => {
-      // If the channel was deleted while editing, close the form
-      const isChannelExists = !this._storage
+      // If the subscription was deleted while editing, close the form
+      const isSubscriptionExists = !this._storage
         .subscriptions()
         .find((c) => c.id === this._storage.editingSubscription()?.id);
 
-      if (this._storage.editingSubscription() && isChannelExists) {
+      if (this._storage.editingSubscription() && isSubscriptionExists) {
         this.closeForm();
         return;
       }
@@ -337,7 +337,12 @@ export class SubscriptionForm implements OnInit {
     if (this._storage.editingSubscription()) {
       const subscription = this._storage.editingSubscription();
 
-      this.form.patchValue({ ...subscription, pollTime: subscription.pollTime ?? [] });
+      // Stored empty is the root; shown as "/", since an empty field means the downloads folder.
+      this.form.patchValue({
+        ...subscription,
+        folder: subscription.folder || '/',
+        pollTime: subscription.pollTime ?? [],
+      });
       this.form.addValidators(RtValidators.formChanged(this.form.value));
     } else {
       this.form.clearValidators();
@@ -364,13 +369,13 @@ export class SubscriptionForm implements OnInit {
       .subscribe();
   }
 
-  private _updateChannels(channel: SubscriptionModel) {
+  private _updateSubscriptions(subscription: SubscriptionModel) {
     if (this.isEditing()) {
       this._storage.subscriptions.set(
-        this._storage.subscriptions().map((c) => (c.id === channel.id ? channel : c)) as SubscriptionModel[],
+        this._storage.subscriptions().map((c) => (c.id === subscription.id ? subscription : c)) as SubscriptionModel[],
       );
     } else {
-      this._storage.subscriptions.set([...this._storage.subscriptions(), channel] as SubscriptionModel[]);
+      this._storage.subscriptions.set([...this._storage.subscriptions(), subscription] as SubscriptionModel[]);
     }
   }
 }

@@ -5,14 +5,17 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 
 import { db } from "../../db/index.js";
-import { channel, download, settings } from "../../db/schema.js";
+import { subscription, download, settings } from "../../db/schema.js";
 import * as DownloadQueue from "../../services/download-queue.js";
 import { startManualDownload } from "../../services/manual-download.js";
+import { parseFolder } from "../../services/paths.js";
 import { lookupDownloads, lookupKey } from "../../services/download-lookup.js";
 import * as Poster from "../../services/poster.js";
 import * as Notify from "../../services/notify.js";
 import * as MediaQuality from "../../services/media-quality.js";
 import * as ArtworkReplace from "../../services/artwork-replace.js";
+import { busyError, fileTask } from "../../services/file-busy.js";
+import { cancelMove, moveDownloadFile } from "../../services/move-download.js";
 import { renameDownloadFile, retitleDownload } from "../../services/rename-download.js";
 import * as TelegramBot from "../../services/telegram/bot.js";
 import * as TelegramChats from "../../services/telegram/chats.js";
@@ -35,7 +38,7 @@ import {
   type DownloadType
 } from "../../models/download.model.js";
 import * as MediaOptions from "../../models/media-options.js";
-import type { Download, Settings } from "../../db/types.js";
+import type { Download } from "../../db/types.js";
 
 const VIDEO_FORMATS = new Set<string>(MediaOptions.VIDEO_FORMATS);
 const AUDIO_FORMATS = new Set<string>(MediaOptions.AUDIO_FORMATS);
@@ -162,7 +165,7 @@ function buildFilter(
  * optional and they compose, so a search can be restricted to one status or
  * one kind of file without a second trip.
  */
-async function listDownloads(settings: Settings, query: {
+async function listDownloads(query: {
   limit?: string;
   page?: string;
   statuses?: string;
@@ -208,7 +211,7 @@ async function listDownloads(settings: Settings, query: {
   // Echoed back so a client can tell which filter produced this page — the
   // list arrives asynchronously, and a stale response must be recognisable.
   return {
-    items: await withFileExists(Poster.decorateAll(items), settings),
+    items: await withFileExists(Poster.decorateAll(items)),
     total,
     page: current,
     pages,
@@ -273,7 +276,7 @@ async function otherRowForFile(realFile: string, exceptId: number): Promise<Down
  * The download behind a watcher's last video, optionally narrowed to some
  * statuses and types.
  *
- * Pinned to `channel.lastVideoId` rather than simply the newest row, because
+ * Pinned to `subscription.lastVideoId` rather than simply the newest row, because
  * that is the video the card names and pictures: a scan writes the channel's
  * last video as soon as it queues it, so a download that then fails leaves
  * the newest *finished* row belonging to an older video. Answering with that
@@ -281,7 +284,7 @@ async function otherRowForFile(realFile: string, exceptId: number): Promise<Down
  * nothing to play the card now says so instead of playing the wrong file.
  *
  * Falls back to the newest row when the watcher has no last video recorded —
- * a channel row deleted out from under its downloads, or one that never
+ * a subscription row deleted out from under its downloads, or one that never
  * completed a scan — where "the newest one" is the best answer available.
  *
  * The narrowing reuses `buildFilter`, so a filter means the same thing here
@@ -293,9 +296,9 @@ async function newestForWatcher(
   types: DownloadType[]
 ): Promise<Download | undefined> {
   const [watcher] = await db
-    .select({ lastVideoId: channel.lastVideoId })
-    .from(channel)
-    .where(eq(channel.id, watcherId));
+    .select({ lastVideoId: subscription.lastVideoId })
+    .from(subscription)
+    .where(eq(subscription.id, watcherId));
 
   const clauses: SQL[] = [eq(download.watcherId, watcherId)];
 
@@ -340,15 +343,6 @@ async function uploadTarget(req: FastifyRequest, reply: FastifyReply): Promise<D
     reply.code(404).send({ error: "Not found" });
     return null;
   }
-
-  return row;
-}
-
-async function loadSettings(): Promise<Settings | undefined> {
-  const [row] = await db
-    .select()
-    .from(settings)
-    .where(eq(settings.id, 1));
 
   return row;
 }
@@ -412,6 +406,13 @@ function parseManualBody(body: any):
   const clipStart = normalize(body?.clipStart);
   const clipEnd = normalize(body?.clipEnd);
 
+  // Left out, null or blank takes the downloads folder setting (resolved when
+  // the job is queued); "/" is the root, chosen on purpose.
+  const blank = body?.folder == null || (typeof body.folder === "string" && !body.folder.trim());
+  const folder = blank ? null : parseFolder(body.folder);
+
+  if (folder && !folder.ok) return { ok: false, error: folder.error };
+
   const watcherId = body?.watcherId ?? null;
 
   // Only the sources an HTTP caller can honestly be: "watcher" and
@@ -436,7 +437,7 @@ function parseManualBody(body: any):
       format: type === "thumbnail" ? "jpg" : format,
       codec,
       quality,
-      folder: normalize(body?.folder),
+      folder: folder ? folder.folder : null,
       prefix: typeof body?.prefix === "string" && body.prefix.length ? body.prefix : null,
       ytdlpArgs: normalize(body?.ytdlpArgs),
       clipStart,
@@ -468,13 +469,7 @@ export async function downloadsRoutes(app: FastifyInstance) {
    * left two places for paging or ordering to drift apart.
    */
   app.get("/api/downloads", async (req, reply) => {
-    const appSettings = await loadSettings();
-
-    if (!appSettings) {
-      return reply.code(500).send({ error: "Settings unavailable" });
-    }
-
-    return listDownloads(appSettings, req.query as any);
+    return listDownloads(req.query as any);
   });
 
   /**
@@ -538,17 +533,11 @@ export async function downloadsRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "A valid url is required" });
     }
 
-    const appSettings = await loadSettings();
-
-    if (!appSettings) {
-      return reply.code(500).send({ error: "Settings unavailable" });
-    }
-
     const { video, audio } = await lookupDownloads(key);
 
     return {
-      video: await withFileExists(Poster.decorateAll(video), appSettings),
-      audio: await withFileExists(Poster.decorateAll(audio), appSettings)
+      video: await withFileExists(Poster.decorateAll(video)),
+      audio: await withFileExists(Poster.decorateAll(audio))
     };
   });
 
@@ -582,13 +571,7 @@ export async function downloadsRoutes(app: FastifyInstance) {
 
     if (!row) return reply.send(null);
 
-    const appSettings = await loadSettings();
-
-    if (!appSettings) {
-      return reply.code(500).send({ error: "Settings unavailable" });
-    }
-
-    const [withFile] = await withFileExists([Poster.decorate(row)], appSettings);
+    const [withFile] = await withFileExists([Poster.decorate(row)]);
 
     return withFile;
   });
@@ -606,9 +589,9 @@ export async function downloadsRoutes(app: FastifyInstance) {
 
     if (parsed.options.watcherId !== null) {
       const [watcher] = await db
-        .select({ id: channel.id })
-        .from(channel)
-        .where(eq(channel.id, parsed.options.watcherId));
+        .select({ id: subscription.id })
+        .from(subscription)
+        .where(eq(subscription.id, parsed.options.watcherId));
 
       if (!watcher) return reply.code(404).send({ error: "Subscription not found" });
     }
@@ -661,16 +644,7 @@ export async function downloadsRoutes(app: FastifyInstance) {
 
     if (!row) return reply.code(404).send({ error: "Not found" });
 
-    const [appSettings] = await db
-      .select()
-      .from(settings)
-      .where(eq(settings.id, 1));
-
-    if (!appSettings) {
-      return reply.code(500).send({ error: "Settings unavailable" });
-    }
-
-    const file = await resolveDownloadFile(row, appSettings);
+    const file = await resolveDownloadFile(row);
 
     if (!file.ok) {
       return reply.code(file.status).send({ error: file.error });
@@ -734,7 +708,7 @@ export async function downloadsRoutes(app: FastifyInstance) {
       return reply.code(409).send({ error: "No webhook URL is set" });
     }
 
-    const file = await resolveDownloadFile(row, appSettings);
+    const file = await resolveDownloadFile(row);
 
     if (!file.ok) {
       return reply.code(file.status).send({ error: file.error });
@@ -783,16 +757,7 @@ export async function downloadsRoutes(app: FastifyInstance) {
 
     if (!row) return reply.code(404).send({ error: "Not found" });
 
-    const [appSettings] = await db
-      .select()
-      .from(settings)
-      .where(eq(settings.id, 1));
-
-    if (!appSettings) {
-      return reply.code(500).send({ error: "Settings unavailable" });
-    }
-
-    const file = await resolveDownloadFile(row, appSettings);
+    const file = await resolveDownloadFile(row);
 
     if (!file.ok) {
       return reply.code(file.status).send({ error: file.error });
@@ -868,16 +833,12 @@ export async function downloadsRoutes(app: FastifyInstance) {
       return reply.code(409).send({ error: "Download is still active" });
     }
 
-    const [appSettings] = await db
-      .select()
-      .from(settings)
-      .where(eq(settings.id, 1));
-
-    if (!appSettings) {
-      return reply.code(500).send({ error: "Settings unavailable" });
+    // Whatever the task finishes with would overwrite the new path.
+    if (fileTask(rowId)) {
+      return reply.code(409).send({ error: busyError(rowId) });
     }
 
-    const file = await resolveNewFilePath(wanted, appSettings);
+    const file = await resolveNewFilePath(wanted);
 
     if (!file.ok) {
       return reply.code(file.status).send({ error: file.error });
@@ -894,8 +855,8 @@ export async function downloadsRoutes(app: FastifyInstance) {
 
     const media = await MediaQuality.probe(file.path, row.type);
 
-    // The resolved realpath rather than what was typed, so the column keeps
-    // holding an absolute path that the file endpoint can use directly.
+    // The resolved realpath rather than what was typed; the column stores it
+    // relative to the mounted root (see schema.ts).
     const [updated] = await db
       .update(download)
       .set({
@@ -936,13 +897,7 @@ export async function downloadsRoutes(app: FastifyInstance) {
 
     if (!row) return reply.code(404).send({ error: "Not found" });
 
-    const appSettings = await loadSettings();
-
-    if (!appSettings) {
-      return reply.code(500).send({ error: "Settings unavailable" });
-    }
-
-    const result = await retitleDownload(row, title, appSettings);
+    const result = await retitleDownload(row, title);
 
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
 
@@ -971,17 +926,53 @@ export async function downloadsRoutes(app: FastifyInstance) {
 
     if (!row) return reply.code(404).send({ error: "Not found" });
 
-    const appSettings = await loadSettings();
-
-    if (!appSettings) {
-      return reply.code(500).send({ error: "Settings unavailable" });
-    }
-
-    const result = await renameDownloadFile(row, fileName, appSettings);
+    const result = await renameDownloadFile(row, fileName);
 
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
 
     return result.download;
+  });
+
+  /**
+   * Moves a download's file to `folder`, relative to the root ("/" or "" is
+   * the root itself), keeping its name. 200 with the row when it is done —
+   * same folder, or a rename within one filesystem; 202 when the file is
+   * being copied to another filesystem, with progress in the row's `move`
+   * and the outcome as a notification. See services/move-download.ts.
+   */
+  app.post("/api/downloads/:id/move", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const rowId = Number(id);
+
+    if (!Number.isInteger(rowId)) {
+      return reply.code(400).send({ error: "id must be a number" });
+    }
+
+    const { folder } = (req.body ?? {}) as { folder?: unknown };
+
+    const [row] = await db
+      .select()
+      .from(download)
+      .where(eq(download.id, rowId));
+
+    if (!row) return reply.code(404).send({ error: "Not found" });
+
+    const result = await moveDownloadFile(row, folder);
+
+    if (!result.ok) return reply.code(result.status).send({ error: result.error });
+
+    return reply.code(result.status).send(result.download);
+  });
+
+  /** Stops a copy started by the endpoint above; the file stays where it was. */
+  app.post("/api/downloads/:id/move/cancel", async (req, reply) => {
+    const { id } = req.params as { id: string };
+
+    if (!cancelMove(Number(id))) {
+      return reply.code(409).send({ error: "The file is not being copied" });
+    }
+
+    return { ok: true };
   });
 
   /**
@@ -1024,6 +1015,11 @@ export async function downloadsRoutes(app: FastifyInstance) {
   app.post("/api/downloads/:id/retry", async (req, reply) => {
     const { id } = req.params as { id: string };
 
+    // A retry clears filePath, which the file task would then write back.
+    if (fileTask(Number(id))) {
+      return reply.code(409).send({ error: busyError(Number(id)) });
+    }
+
     const row = await DownloadQueue.retry(Number(id));
 
     if (!row) {
@@ -1055,13 +1051,33 @@ export async function downloadsRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  /**
+   * Removes a download from the list. With `?withFile=true` the file it
+   * points at is deleted from disk first, and the row only goes once that
+   * worked — a failed unlink leaves both in place, so the user can retry
+   * rather than be left with a file the list no longer knows about.
+   *
+   * A file that is already gone is not an error: the row is removed all the
+   * same, which is what the user asked for. A path outside the downloads
+   * folder is refused (403) rather than deleted, for the same reason the file
+   * endpoint will not serve one. Another row pointing at the same file is
+   * told its file is gone instead of being removed with it.
+   */
   app.delete("/api/downloads/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
+    const rowId = Number(id);
+
+    if (!Number.isInteger(rowId)) {
+      return reply.code(400).send({ error: "id must be a number" });
+    }
+
+    const { withFile } = (req.query ?? {}) as { withFile?: string };
+    const deleteFile = withFile === "1" || withFile === "true";
 
     const [row] = await db
       .select()
       .from(download)
-      .where(eq(download.id, Number(id)));
+      .where(eq(download.id, rowId));
 
     if (!row) return reply.code(404).send({ error: "Not found" });
 
@@ -1069,15 +1085,55 @@ export async function downloadsRoutes(app: FastifyInstance) {
       return reply.code(409).send({ error: "Download is still active" });
     }
 
-    await db.delete(download).where(eq(download.id, Number(id)));
+    // The copy would finish into a row that is gone; cancel it first.
+    if (fileTask(rowId) === "moving") {
+      return reply.code(409).send({ error: busyError(rowId) });
+    }
+
+    let fileDeleted = false;
+
+    if (deleteFile) {
+      if (fileTask(rowId)) {
+        return reply.code(409).send({ error: busyError(rowId) });
+      }
+
+      const file = await resolveDownloadFile(row);
+
+      // 409 is no path on the row, 410 no file at it: nothing to delete.
+      if (!file.ok && file.status !== 409 && file.status !== 410) {
+        return reply.code(file.status).send({ error: file.error });
+      }
+
+      if (file.ok) {
+        const other = await otherRowForFile(file.path, rowId);
+
+        try {
+          await fsp.unlink(file.path);
+        } catch (e: any) {
+          if (e?.code !== "ENOENT") {
+            req.log.error({ err: e, path: file.path }, "Failed to delete download file");
+
+            return reply.code(500).send({ error: "Could not delete the file" });
+          }
+        }
+
+        fileDeleted = true;
+
+        if (other) {
+          broadcast("download-updated", { ...Poster.decorate(other), fileExists: false });
+        }
+      }
+    }
+
+    await db.delete(download).where(eq(download.id, rowId));
 
     // Captured posters live in the images directory rather than beside the
     // media, so nothing else would ever collect them.
-    Poster.remove(Number(id));
+    Poster.remove(rowId);
 
-    broadcast("download-removed", { id: Number(id) });
+    broadcast("download-removed", { id: rowId });
 
-    return { ok: true };
+    return { ok: true, fileDeleted };
   });
 
   app.post("/api/downloads/clear-finished", async () => {
