@@ -112,7 +112,7 @@ docker run -d \
   --name pot \
   --network retriever-net \
   --init \
-  brainicism/bgutil-ytdlp-pot-provider:1.3.2
+  brainicism/bgutil-ytdlp-pot-provider:2.0.2
 
 docker run -d \
   --name retriever \
@@ -168,7 +168,7 @@ services:
     restart: unless-stopped
 
   pot:
-    image: brainicism/bgutil-ytdlp-pot-provider:1.3.2
+    image: brainicism/bgutil-ytdlp-pot-provider:2.0.2
     container_name: retriever-pot
     init: true
     restart: unless-stopped
@@ -176,7 +176,7 @@ services:
 
 Already running a POT provider elsewhere on your network? Skip the second service and point at it directly — `POT_BASE_URL: http://192.168.1.50:4416`.
 
-> **Versions.** The plugin ships inside the Retriever image and should match the provider server. If you pin the provider to a tag, pin it to the version this README documents (`1.3.2`); `latest` on both sides also stays in step. A mismatch logs a warning rather than breaking.
+> **Versions.** The plugin ships inside the Retriever image and should match the provider server. If you pin the provider to a tag, pin it to the version this README documents (`2.0.2`); `latest` on both sides also stays in step. A mismatch logs a warning rather than breaking.
 
 Two volumes matter:
 

@@ -1,37 +1,22 @@
 {
-  "version": "1.2.7",
+  "version": "1.2.8",
   "releaseDate": "2026-10-18",
   "changelog": [
+    {
+      "version": "1.2.8",
+      "releaseDate": "2026-10-18",
+      "changelog": {
+        "other": [
+          "Update POT provider plugin to 2.0.2"
+        ]
+      }
+    },
     {
       "version": "1.2.7",
       "releaseDate": "2026-10-18",
       "changelog": {
         "bugfixes": [
           "Fix Downloads section disappearing after moving it above Subscriptions"
-        ],
-        "features": [
-          "Remove files right from the app",
-          "- Long press on the trash icon",
-          "Move files between folders without leaving the app"
-        ],
-        "improvements": [
-          "Reworked downloads directory",
-          "- The field now sets only the default folder for new downloads",
-          "- The app no longer limits what you see to this folder: all content from the mounted folder is displayed",
-          "- Manage your downloads without leaving the app, no more manual file handling",
-          "Enhanced folder suggestions",
-          "Redesigned search UI",
-          "Video player now closes on long press only",
-          "Audio player",
-          "- Tap the poster to play/pause",
-          "- Double-click to rewind",
-          "- Long press to close the player"
-        ],
-        "other": [
-          "Other UI fixes and improvements"
-        ],
-        "images": [
-          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.2.6/1.webp"
         ]
       }
     },

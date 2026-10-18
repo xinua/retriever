@@ -56,7 +56,7 @@
   # the app puts it on the search path with --plugin-dirs only when POT_BASE_URL
   # names a server. See services/ytdlp.ts:potArgs(). Keep this version in step
   # with the provider image tag documented in the README.
-  ARG POT_PLUGIN_VERSION=1.3.2
+  ARG POT_PLUGIN_VERSION=2.0.2
   RUN mkdir -p /app/pot-plugin && \
       wget -q -O /app/pot-plugin/bgutil-ytdlp-pot-provider.zip \
         "https://github.com/Brainicism/bgutil-ytdlp-pot-provider/releases/download/${POT_PLUGIN_VERSION}/bgutil-ytdlp-pot-provider.zip"
@@ -93,7 +93,7 @@
   CMD ["node", "dist/server.js"]
 
   LABEL org.opencontainers.image.source="https://github.com/xinua/retriever"
-  LABEL org.opencontainers.image.version="1.2.7"
+  LABEL org.opencontainers.image.version="1.2.8"
   LABEL org.opencontainers.image.title="Retriever"
   LABEL org.opencontainers.image.description="yt-dlp Web UI"
   LABEL org.opencontainers.image.documentation="https://github.com/xinua/retriever/blob/main/README.md"

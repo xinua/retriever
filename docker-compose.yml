@@ -30,7 +30,7 @@ services:
   # The POT provider server. Optional — see the README. Keep its tag in step
   # with POT_PLUGIN_VERSION in the Dockerfile.
   # pot:
-  #   image: brainicism/bgutil-ytdlp-pot-provider:1.3.2
+  #   image: brainicism/bgutil-ytdlp-pot-provider:2.0.2
   #   container_name: retriever-pot
   #   init: true
   #   restart: unless-stopped
