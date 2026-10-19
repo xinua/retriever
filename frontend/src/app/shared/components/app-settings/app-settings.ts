@@ -182,7 +182,7 @@ export class AppSettings {
   private readonly _knownTimeZones = new Set(this._timeZones);
 
   form = this._fb.group<SettingsFormModel>({
-    webhookUrl: this._fb.control('', { validators: [RtValidators.url] }),
+    webhookUrl: this._fb.control('', { nonNullable: false, validators: [RtValidators.url] }),
     downloadsDir: this._fb.control(''),
     ytdlpArgs: this._fb.control(''),
     ytdlpConcurrency: this._fb.control(2, {

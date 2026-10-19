@@ -1,18 +1,19 @@
 {
   "name": "retriever",
   "description": "yt-dlp Web UI",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "type": "module",
   "packageManager": "pnpm@10.17.0",
   "engines": {
     "node": ">=22.19.0"
   },
   "scripts": {
-    "version:sync": "node scripts/generate-version.mjs",
     "setup": "pnpm install && cd backend && npm install",
     "dev": "pnpm version:sync && concurrently \"npm run dev:backend\" \"pnpm dev:frontend\"",
     "dev:backend": "cd backend && pnpm run dev",
     "dev:frontend": "cd frontend && pnpm dev",
+    "verify": "cd frontend && pnpm verify",
+    "version:sync": "node scripts/generate-version.mjs",
     "build": "pnpm version:sync && concurrently \"pnpm build:backend\" \"pnpm build:frontend\"",
     "build:backend": "cd backend && npm run build",
     "build:frontend": "cd frontend && pnpm build"

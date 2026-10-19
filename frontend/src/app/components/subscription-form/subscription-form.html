@@ -16,7 +16,7 @@
           <input
             matInput
             type="url"
-            name="url"
+            name="youtube-channel"
             formControlName="rssUrl"
             placeholder="https://www.youtube.com/feeds/videos.xml?channel_id=..."
           />
@@ -299,6 +299,9 @@
         </button>
 
         <button mat-flat-button color="primary" type="submit" [disabled]="form.invalid || isSaving()">
+          @if (isSaving()) {
+            <mat-icon svgIcon="loading" />
+          }
           {{ isEditing() ? 'Update' : 'Subscribe' }}
         </button>
       </div>

@@ -40,7 +40,7 @@ describe('SubscriptionForm', () => {
 
     // The option templates use registered SVG icons; register blanks so they resolve.
     const sanitizer = TestBed.inject(DomSanitizer);
-    ['telegram', 'avc'].forEach((name) =>
+    ['telegram', 'avc', 'loading'].forEach((name) =>
       TestBed.inject(MatIconRegistry).addSvgIconLiteral(name, sanitizer.bypassSecurityTrustHtml('<svg></svg>')),
     );
 

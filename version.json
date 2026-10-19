@@ -1,7 +1,19 @@
 {
-  "version": "1.2.8",
-  "releaseDate": "2026-10-18",
+  "version": "1.2.9",
+  "releaseDate": "2026-10-19",
   "changelog": [
+    {
+      "version": "1.2.9",
+      "releaseDate": "2026-10-19",
+      "changelog": {
+        "bugfixes": [
+          "Fix settings error when webhook URL is not set",
+        ],
+        "improvements": [
+          "Update subscription form - show loading state while saving"
+        ]
+      }
+    },
     {
       "version": "1.2.8",
       "releaseDate": "2026-10-18",

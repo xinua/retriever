@@ -323,7 +323,7 @@
 
           <div class="rounded-xl border border-gray-800 p-4">
             <mat-form-field class="w-full" appearance="outline">
-              @let isValid = form.controls.webhookUrl.valid && form.controls.webhookUrl.value.length > 0;
+              @let isValid = form.controls.webhookUrl.valid && form.controls.webhookUrl?.value?.length > 0;
               <mat-label>Webhook URL</mat-label>
               <input
                 matInput

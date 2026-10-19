@@ -201,7 +201,6 @@ export class DownloadControls {
     } else {
       this._openConfirmationDialog<ChoiseResult>(RememberChoiseDialog, this.removeDialogData)
         .pipe(
-          tap((result) => console.log(result)),
           // Closing on the backdrop answers with nothing.
           filter((result) => !!result?.value),
           tap((result) => result.rememberChoise && this._localStorage.set('rememberChoise', true)),
