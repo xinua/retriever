@@ -7,7 +7,7 @@
       "releaseDate": "2026-10-19",
       "changelog": {
         "bugfixes": [
-          "Fix settings error when webhook URL is not set",
+          "Fix settings error when webhook URL is not set"
         ],
         "improvements": [
           "Update subscription form - show loading state while saving"
