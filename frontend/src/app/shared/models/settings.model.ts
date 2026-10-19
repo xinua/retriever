@@ -89,6 +89,8 @@ export interface TelegramStatusModel {
   /** Talking to a local Bot API server rather than api.telegram.org. */
   local: boolean;
   apiRoot: string;
+  /** What an empty Bot API URL stands for. */
+  defaultApiRoot: string;
   limitMb: number;
 }
 

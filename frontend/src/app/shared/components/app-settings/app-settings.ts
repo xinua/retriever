@@ -174,6 +174,10 @@ export class AppSettings {
    */
   potStatus = signal<PotStatusModel | null>(null);
   tgIsLocal = computed<boolean>(() => !!this._storage.telegramStatus()?.local);
+  /** Shown without the scheme, like the api.telegram.org it usually is. */
+  tgDefaultApiRoot = computed<string>(() =>
+    (this._storage.telegramStatus()?.defaultApiRoot ?? 'https://api.telegram.org').replace(/^https?:\/\//, ''),
+  );
 
   readonly browser = signal<Browser>(this._getBrowser());
   readonly browserType = Browser;

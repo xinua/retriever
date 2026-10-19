@@ -22,6 +22,13 @@ import type { Settings } from "../../db/types.js";
 
 export const CLOUD_API_ROOT = "https://api.telegram.org";
 
+/**
+ * The Bot API server used while the Bot API URL setting is empty. A deploy
+ * that runs its own server next to Retriever, like the TrueNAS app, sets
+ * TELEGRAM_BOT_API_URL so nobody has to type it in.
+ */
+const DEFAULT_API_ROOT = trimRoot(process.env.TELEGRAM_BOT_API_URL) || CLOUD_API_ROOT;
+
 const MB = 1024 * 1024;
 
 /**
@@ -47,6 +54,8 @@ export type TelegramStatus = {
   warning: string | null;
   local: boolean;
   apiRoot: string;
+  /** What an empty Bot API URL stands for. */
+  defaultApiRoot: string;
   limitMb: number;
 };
 
@@ -75,13 +84,18 @@ function statusFor(row: Settings | null | undefined, running: boolean, extra: Pa
     warning: null,
     local,
     apiRoot: root,
+    defaultApiRoot: DEFAULT_API_ROOT,
     limitMb: (local ? LOCAL_LIMIT : CLOUD_LIMIT) / MB,
     ...extra
   };
 }
 
 function rootFor(row: Settings | null | undefined): string {
-  return row?.telegramApiUrl?.trim().replace(/\/+$/, "") || CLOUD_API_ROOT;
+  return trimRoot(row?.telegramApiUrl) || DEFAULT_API_ROOT;
+}
+
+function trimRoot(url: string | null | undefined): string | null {
+  return url?.trim().replace(/\/+$/, "") || null;
 }
 
 function setStatus(next: TelegramStatus) {
@@ -125,6 +139,24 @@ export async function restart(change?: { previous: Settings | null | undefined; 
   await stop();
 
   const warning = change ? await handOver(change.previous, change.next) : null;
+
+  await start(warning);
+}
+
+/**
+ * The start at boot. The server can change while Retriever is down, with no
+ * settings save to hand the bot over: TELEGRAM_BOT_API_URL added or removed,
+ * say. So the server the bot was last handed to is compared with the one it
+ * gets now. Unrecorded means the cloud, where every bot starts out.
+ */
+export async function boot(): Promise<void> {
+  const [row] = await db.select().from(settings).where(eq(settings.id, 1));
+  const handedTo = row?.telegramApiRootUsed ?? CLOUD_API_ROOT;
+
+  const warning =
+    row && handedTo !== rootFor(row)
+      ? await handOver({ ...row, telegramApiUrl: handedTo }, row, { quietLeave: true })
+      : null;
 
   await start(warning);
 }
@@ -283,27 +315,44 @@ export async function welcome(chatId: string): Promise<void> {
  * Done whether Telegram is on or off, so turning it off, changing the URL and
  * turning it back on later does not skip the step. Never throws: a failure
  * comes back as a warning, and the bot starts anyway.
+ *
+ * `quietLeave` keeps a failed log-out of the server being left to the log. At
+ * boot that server is usually gone with its container, which is no news to
+ * whoever removed it.
  */
-async function handOver(previous: Settings | null | undefined, next: Settings | null | undefined): Promise<string | null> {
+async function handOver(
+  previous: Settings | null | undefined,
+  next: Settings | null | undefined,
+  { quietLeave = false }: { quietLeave?: boolean } = {}
+): Promise<string | null> {
   const prevToken = previous?.telegramBotToken?.trim() || null;
   const nextToken = next?.telegramBotToken?.trim() || null;
   const prevRoot = rootFor(previous);
   const nextRoot = rootFor(next);
 
   const warnings: string[] = [];
+  let cloudLogOutFailed = false;
 
   if (prevToken && prevRoot !== CLOUD_API_ROOT && prevRoot !== nextRoot) {
     const failed = await logOutFrom(prevRoot, prevToken);
 
-    if (failed) warnings.push(`Could not log out of ${prevRoot}: ${failed}`);
+    if (failed && !quietLeave) warnings.push(`Could not log out of ${prevRoot}: ${failed}`);
   }
 
   if (nextToken && nextRoot !== CLOUD_API_ROOT && (prevRoot === CLOUD_API_ROOT || prevToken !== nextToken)) {
     const failed = await logOutFrom(CLOUD_API_ROOT, nextToken);
 
     if (failed) {
+      cloudLogOutFailed = true;
       warnings.push(`Could not log out of the cloud API, so the local server may miss updates: ${failed}`);
     }
+  }
+
+  // A failed log-out of the cloud is tried again at the next boot. One of the
+  // server being left is not: often it is gone for good, its container
+  // removed along with the setting, and would fail at every boot.
+  if (!cloudLogOutFailed) {
+    await db.update(settings).set({ telegramApiRootUsed: nextRoot }).where(eq(settings.id, 1));
   }
 
   return warnings.join(" ") || null;

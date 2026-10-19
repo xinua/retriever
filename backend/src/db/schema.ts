@@ -59,6 +59,11 @@ export const settings = sqliteTable("settings", {
     .default(false),
   telegramBotToken: text("telegramBotToken"),
   telegramApiUrl: text("telegramApiUrl"),
+  /**
+   * The Bot API server the bot was last handed over to, so a boot notices a
+   * server that changed without a settings save. Null means the cloud.
+   */
+  telegramApiRootUsed: text("telegramApiRootUsed"),
 
   /**
    * Whether a file the bot downloaded stays where the normal pipeline put it

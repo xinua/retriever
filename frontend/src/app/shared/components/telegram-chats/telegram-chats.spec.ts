@@ -32,6 +32,7 @@ const botStatus = (overrides: Partial<TelegramStatusModel> = {}): TelegramStatus
   error: null,
   local: false,
   apiRoot: 'https://api.telegram.org',
+  defaultApiRoot: 'https://api.telegram.org',
   limitMb: 50,
   ...overrides,
 });

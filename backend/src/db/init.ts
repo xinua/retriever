@@ -18,6 +18,7 @@ export function initSchema() {
       telegramEnabled INTEGER NOT NULL DEFAULT 0,
       telegramBotToken TEXT,
       telegramApiUrl TEXT,
+      telegramApiRootUsed TEXT,
       telegramKeepFiles INTEGER NOT NULL DEFAULT 0,
       telegramNoDescription INTEGER NOT NULL DEFAULT 0,
       notifyDownloadFailed INTEGER NOT NULL DEFAULT 0,
@@ -232,7 +233,9 @@ function ensureColumn(table: string, name: string, ddl: string) {
  * above: CREATE TABLE IF NOT EXISTS skips a table that already exists, so this
  * is the only way an existing database picks them up.
  */
-function runColumnMigrations() {}
+function runColumnMigrations() {
+  ensureColumn("settings", "telegramApiRootUsed", "TEXT");
+}
 
 /**
  * Downloads that were running when the process died can never resume,

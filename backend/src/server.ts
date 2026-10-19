@@ -128,7 +128,7 @@ startWorker();
 startVersionCheck();
 DownloadQueue.resume();
 
-void Telegram.start().catch((e) => console.warn("telegram: start failed:", e));
+void Telegram.boot().catch((e) => console.warn("telegram: start failed:", e));
 
 process.on('SIGTERM', async () => {
   await Telegram.stop();

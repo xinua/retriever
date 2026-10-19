@@ -209,6 +209,7 @@ Most settings live in the UI (⚙️ in the header). These environment variables
 | `MAX_MANUAL_ITEMS`      | `500`                      | Cap on how many videos one pasted channel/playlist queues |
 | `POT_BASE_URL`          | *(unset)*                  | POT provider server to use — see below. Unset = disabled  |
 | `POT_PLUGIN_DIR`        | `/app/pot-plugin`          | Where the bundled POT plugin lives                        |
+| `TELEGRAM_BOT_API_URL`  | *(unset)*                  | Bot API server to use while Settings leaves it empty      |
 | `VERSION_CHECK_ENABLED` | `true`                     | Set to `false` to never look for a new release            |
 | `VERSION_CHECK_WINDOW`  | `00:00-02:00`              | UTC window the daily check picks its random time from     |
 | `VERSION_CHECK_URL`     | *(the manifest on GitHub)* | Where to read the published version from                  |

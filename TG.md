@@ -51,13 +51,14 @@ docker run -d \
   --entrypoint telegram-bot-api \
   aiogram/telegram-bot-api:latest \
   --local --http-port=8081 \
-  --dir=/var/lib/telegram-bot-api --temp-dir=/tmp/telegram-bot-api
+  --dir=/var/lib/telegram-bot-api --temp-dir=/tmp
 
 docker run -d \
   --name retriever \
   --network retriever-net \
   -p 31080:8000 \
   -e POT_BASE_URL=http://pot:4416 \
+  -e TELEGRAM_BOT_API_URL=http://tg-api:8081 \
   -v /your-directory/data:/data \
   -v /your-media/youtube:/downloads \
   ghcr.io/xinua/retriever:latest
@@ -77,6 +78,7 @@ services:
       - /mnt/tank/media/youtube:/downloads
     environment:
       POT_BASE_URL: http://pot:4416
+      TELEGRAM_BOT_API_URL: http://tg-api:8081
     restart: unless-stopped
 
   tg-api:
@@ -89,7 +91,7 @@ services:
       - --local
       - --http-port=8081
       - --dir=/var/lib/telegram-bot-api
-      - --temp-dir=/tmp/telegram-bot-api
+      - --temp-dir=/tmp
     environment:
       TELEGRAM_API_ID: "123456"
       TELEGRAM_API_HASH: 0123456789abcdef0123456789abcdef
@@ -102,9 +104,11 @@ services:
 
 > **File permissions.** The server has to be able to read every downloaded file. The image's default entrypoint drops to its own user, `telegram-bot-api` (uid 101). If your downloads folder isn't readable by that user, which is common on NAS datasets with `770` permissions or ACLs, every send fails with *can't get stat about the file*. The `entrypoint` above avoids that by running the server as root, and the `:ro` mount keeps it from changing anything. If you'd rather keep the default entrypoint, give uid 101 read and traverse access to the downloads folder and the files created in it.
 
-The `pot` service is optional here too. Then, in **Settings → Telegram bot**, set **Bot API URL** to `http://tg-api:8081` and save. The status line should switch to *local server, 2000 MB limit*.
+The `pot` service is optional here too. `TELEGRAM_BOT_API_URL` points Retriever at the server and is used whenever **Bot API URL** in **Settings → Telegram bot** is empty. A URL saved there takes precedence. Without the variable, set **Bot API URL** to `http://tg-api:8081` and save. The status line should switch to *local server, 2000 MB limit*.
 
-> **Already used the bot with api.telegram.org?** Before the same token works with a local server, the bot has to be logged out of the cloud API once. Use **Log out from cloud API** in Settings, then save the local URL. After a log-out, Telegram doesn't let the bot back onto the cloud API for about 10 minutes.
+`--temp-dir=/tmp` matters when the server runs as a user other than root, for example with `--user` set to the owner of your downloads. The image's own `/tmp/telegram-bot-api` belongs to uid 101, and the server doesn't create a missing one.
+
+> **Already used the bot with api.telegram.org?** Before the same token works with a local server, the bot has to be logged out of the cloud API once. Use **Log out from cloud API** in Settings, then save the local URL. When the URL comes from `TELEGRAM_BOT_API_URL`, Retriever does this log-out itself on the first start with the variable set. After a log-out, Telegram doesn't let the bot back onto the cloud API for about 10 minutes.
 
 A few more things to know:
 
