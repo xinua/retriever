@@ -10,6 +10,8 @@
     "dev": "ng serve --host 0.0.0.0 --port 4200",
     "verify": "pnpm run format && pnpm test --no-watch",
     "build": "ng build --configuration production && gzipper compress ./dist --brotli && gzipper compress ./dist --gzip",
+    "build:demo": "ng build --configuration demo && cp ../docs/index.html ../docs/404.html && touch ../docs/.nojekyll",
+    "dev:demo": "ng serve --configuration demo --port 4300",
     "prettier": "prettier --write .",
     "test": "ng test --no-watch",
     "lint": "eslint .",

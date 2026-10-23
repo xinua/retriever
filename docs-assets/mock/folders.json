@@ -1,0 +1,31 @@
+{
+  "path": "",
+  "entries": [
+    {
+      "name": "anime",
+      "type": "folder",
+      "mount": false
+    },
+    {
+      "name": "movies",
+      "type": "folder",
+      "mount": false
+    },
+    {
+      "name": "music",
+      "type": "folder",
+      "mount": false
+    },
+    {
+      "name": "subscriptions",
+      "type": "folder",
+      "mount": true
+    },
+    {
+      "name": "my-downloads",
+      "type": "folder",
+      "mount": false
+    }
+  ],
+  "truncated": false
+}

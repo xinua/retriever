@@ -1,0 +1,12 @@
+{
+  "enabled": true,
+  "configured": true,
+  "running": true,
+  "username": "retriever_bot",
+  "error": null,
+  "warning": null,
+  "local": true,
+  "apiRoot": "http://tg-api:8081",
+  "defaultApiRoot": "https://api.telegram.org",
+  "limitMb": 2000
+}

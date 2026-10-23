@@ -93,7 +93,7 @@ export const DefaultPaginator: PaginatorModel = {
   total: 0,
   /** Zero-based, like MatPaginator's `pageIndex`; the API's 1-based `page` is derived from it. */
   page: 0,
-  limit: 5,
+  limit: 1,
 };
 
 export const DefaultManualForm: ManualDownloadModel = {

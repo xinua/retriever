@@ -50,6 +50,7 @@ import {
 } from 'rxjs';
 import { WsService } from '../../shared/services/ws.service';
 import { NoData } from '../no-data/no-data';
+import { MatTooltip } from '@angular/material/tooltip';
 
 /** Long enough to merge a delete's HTTP response with its own broadcast. */
 const REFILL_DEBOUNCE_MS = 100;
@@ -78,6 +79,7 @@ const REFILL_DEBOUNCE_MS = 100;
     DownloadRecord,
     FilterDownloads,
     SwipeDirective,
+    MatTooltip,
   ],
   providers: [{ provide: MatPaginatorIntl, useClass: CustomPaginatorIntl }],
   templateUrl: './downloads.html',

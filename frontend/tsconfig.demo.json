@@ -1,0 +1,10 @@
+/* The `demo` build: the app plus demo/, which answers the API from docs-assets/mock. */
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "outDir": "./out-tsc/demo",
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*.ts", "demo/**/*.ts"],
+  "exclude": ["src/**/*.spec.ts"]
+}

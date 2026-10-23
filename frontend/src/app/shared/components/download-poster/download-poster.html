@@ -37,6 +37,8 @@
           type="video/mp4"
           class="w-full h-auto no-shadow aspect-video object-cover relative z-1"
           (error)="handleError()"
+          matTooltip="Hold to stop"
+          matTooltipPosition="above"
         ></video>
         <ng-container *ngTemplateOutlet="indicator"></ng-container>
       } @else if (download()?.type === 'audio') {
@@ -48,6 +50,8 @@
           (error)="posterImage.src = 'https://mockimage.tw/photo/257x145/1f1f1f/ff8800/Poster%20not%20found'"
           alt="Poster"
           class="w-full h-full aspect-video object-cover"
+          matTooltip="Hold to stop"
+          matTooltipPosition="above"
         />
 
         @let leftClass = 'justify-start';

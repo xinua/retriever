@@ -1,0 +1,51 @@
+[
+  {
+    "id": 1,
+    "groupId": null,
+    "name": "Tom’s Jazz Lounge",
+    "channelId": "UCSF_ZOoWF6oqeeCeCov9stw",
+    "channelDescription": "Slow Noir Jazz with Tom for Midnight Relaxation.\nsweet on Spotify \nhttps://open.spotify.com/artist/76ZdGAziZ4Wye7IJ1HWcP3\n\n",
+    "channelAvatarPath": "/images/channel-UCSF_ZOoWF6oqeeCeCov9stw.jpg?v=1789146949908",
+    "sortOrder": 2,
+    "color": null,
+    "rssUrl": "https://www.youtube.com/feeds/videos.xml?channel_id=UCSF_ZOoWF6oqeeCeCov9stw",
+    "type": "audio",
+    "format": "mp3",
+    "codec": null,
+    "ytdlpArgs": null,
+    "enabled": true,
+    "startFromLast": true,
+    "downloadShorts": false,
+    "notifyHA": false,
+    "notifyTelegram": true,
+    "splitChapters": false,
+    "removeSponsors": false,
+    "pollType": "time",
+    "pollInterval": 90,
+    "pollOnce": true,
+    "pollTime": [
+      "03:00",
+      "09:00",
+      "12:00",
+      "14:00",
+      "16:00"
+    ],
+    "intervalPeriod": {
+      "start": 9,
+      "end": 17
+    },
+    "prefix": "",
+    "folder": "subscriptions",
+    "webhookOverride": null,
+    "lastVideoId": "x_ejVo7g2J4",
+    "lastVideoTitle": "Jazz Noir — A Glamorous Night in Motion🍷",
+    "lastVideoDescription": "Step into a smooth noir jazz night with Tom — where cool vibes, soft sax, and gentle piano set the mood for a calm and cozy atmosphere. 🎷🐱\n\nWhether you're studying, relaxing, or just letting your mind wander, this music brings you into a quiet late-night world filled with warm tones and laid-back rhythm.\n\nsweet on Spotify \nhttps://open.spotify.com/artist/76ZdGAziZ4Wye7IJ1HWcP3\n\nFeel like you're walking through an empty city under neon lights, with nothing but the sound of jazz and your thoughts keeping you company.\n\nSlow down, breathe, and enjoy the moment.\n\n🎷 Press play, relax, and let Tom take you through the night.",
+    "lastVideoThumbnailPath": "/images/video-x_ejVo7g2J4-sub.jpg",
+    "lastCheckedAt": "2026-10-19T02:30:49.400Z",
+    "nextCheckAt": "2026-10-19T06:00:00.000Z",
+    "lastCaptureAt": "2026-10-17T00:00:04.806Z",
+    "totalDownloads": 1,
+    "createdAt": "2026-09-11 17:15:49",
+    "updatedAt": "2026-10-19T04:34:44.774Z"
+  }
+]

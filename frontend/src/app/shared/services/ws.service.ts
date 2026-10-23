@@ -1,6 +1,6 @@
-import { Injectable } from '@angular/core';
+import { inject, Injectable, InjectionToken } from '@angular/core';
 import { catchError, filter, map, Observable, of } from 'rxjs';
-import { io, Socket } from 'socket.io-client';
+import { io } from 'socket.io-client';
 import { DownloadModel } from '../models/download.model';
 import { TelegramChatModel, TelegramStatusModel } from '../models/settings.model';
 import {
@@ -14,11 +14,24 @@ import {
   WsMessage,
 } from '../models/websocket.model';
 
+/** The part of a socket.io client the service uses. */
+export interface MessageSocket {
+  on(event: 'message', handler: (message: WsMessage<WebSocketData>) => void): unknown;
+  off(event: 'message', handler: (message: WsMessage<WebSocketData>) => void): unknown;
+  disconnect(): unknown;
+}
+
+/** The server's socket; the demo build swaps in one that never connects. */
+export const WS_SOCKET = new InjectionToken<MessageSocket>('WS_SOCKET', {
+  providedIn: 'root',
+  factory: () => io({ path: '/ws', transports: ['websocket'] }),
+});
+
 @Injectable({
   providedIn: 'root',
 })
 export class WsService {
-  private readonly _socket: Socket;
+  private readonly _socket = inject(WS_SOCKET);
 
   wsMessage$<T>(type: WebSocketMessageType): Observable<T> {
     return new Observable<WsMessage<WebSocketData>>((subscriber) => {
@@ -31,13 +44,6 @@ export class WsService {
       filter((message) => message.type === type),
       map((message) => message.data as T),
     );
-  }
-
-  constructor() {
-    this._socket = io({
-      path: '/ws',
-      transports: ['websocket'],
-    });
   }
 
   downloaderStatus$(): Observable<DownloaderStatusPayload> {

@@ -50,7 +50,7 @@ export class FireBgAnimation implements BgAnimation {
 
     soot.className = 'fire-bg-soot';
     soot.alt = '';
-    soot.src = `/assets/images/animations/soot${randomInt(0, SOOT_SPRITES - 1)}.png`;
+    soot.src = `assets/images/animations/soot${randomInt(0, SOOT_SPRITES - 1)}.png`;
     // Per-flake size and timing only - the keyframes stay in the stylesheet.
     soot.style.width = `${randomInt(8, 16)}px`;
     soot.style.animationDelay = `${randomInt(0, 2)}s`;

@@ -1,0 +1,20 @@
+{
+  "id": 1,
+  "enabled": true,
+  "webhookUrl": "http://homeassistant.local:8123/api/webhook/retriever",
+  "downloadsDir": "my-downloads",
+  "cookiesPath": null,
+  "ytdlpArgs": null,
+  "ytdlpConcurrency": 2,
+  "timeZone": "El Dorado",
+  "embedVideoCover": false,
+  "telegramEnabled": true,
+  "telegramBotToken": "1234567890:DEMO-token-not-real",
+  "telegramApiUrl": "http://tg-api:8081",
+  "telegramApiRootUsed": null,
+  "telegramKeepFiles": false,
+  "telegramNoDescription": true,
+  "notifyDownloadFailed": true,
+  "createdAt": "2026-03-17 10:19:26",
+  "updatedAt": "2026-10-18T01:27:07.049Z"
+}

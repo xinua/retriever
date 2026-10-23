@@ -21,7 +21,13 @@
             </mat-form-field>
           </div>
 
-          <button mat-icon-button (click)="toggleSearch(searchField)" class="text-white!">
+          <button 
+            mat-icon-button 
+            class="text-white!" 
+            matTooltip="Ctrl + K" 
+            [matTooltipDisabled]="showSearch()"
+            (click)="toggleSearch(searchField)" 
+          >
             <mat-icon
               class="cursor-pointer relative z-1"
               [class]="searchControl.value ? 'animate-spin-once' : 'animate-fadeIn'"
@@ -90,6 +96,8 @@
               (page)="onPageChange($event)"
               aria-label="Select page"
               class="bg-transparent!"
+              matTooltip="You can use keyboard arrows to navigate"
+              matTooltipPosition="below"
             />
           </div>
         }

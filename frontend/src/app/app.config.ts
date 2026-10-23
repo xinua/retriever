@@ -12,6 +12,7 @@ import { provideNotifier } from './shared/providers/notifier.provider';
 import { UiConfigService } from './shared/services';
 import { useIconFactory } from './shared/providers/icons.provider';
 import { provideCodeHighlight } from './shared/providers/highlight.provider';
+import { demoProviders } from './demo.providers';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -31,5 +32,7 @@ export const appConfig: ApplicationConfig = {
       inject(UiConfigService);
     }),
     provideCodeHighlight(),
+    // Last, so the demo's HttpBackend and socket override the real ones.
+    ...demoProviders,
   ],
 };

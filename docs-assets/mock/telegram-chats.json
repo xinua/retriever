@@ -1,0 +1,24 @@
+[
+  {
+    "chatId": "1234567890",
+    "type": "private",
+    "name": "Rem",
+    "username": "rem_account",
+    "status": "approved",
+    "notify": false,
+    "createdAt": "2026-10-05T14:54:39.693Z",
+    "updatedAt": "2026-10-08T16:01:32.768Z",
+    "avatar": "/images/rem.webp"
+  },
+  {
+    "chatId": "0987654321",
+    "type": "private",
+    "name": "Ram",
+    "username": "ram_account",
+    "status": "approved",
+    "notify": false,
+    "createdAt": "2026-10-06T22:47:49.050Z",
+    "updatedAt": "2026-10-09T20:56:18.253Z",
+    "avatar": "/images/ram.jpg"
+  }
+]

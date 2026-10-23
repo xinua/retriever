@@ -52,6 +52,38 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "demo": {
+              "optimization": true,
+              "baseHref": "/retriever/",
+              "outputPath": {
+                "base": "../docs",
+                "browser": ""
+              },
+              "tsConfig": "tsconfig.demo.json",
+              "fileReplacements": [
+                {
+                  "replace": "src/app/demo.providers.ts",
+                  "with": "demo/demo.providers.ts"
+                }
+              ],
+              "assets": [
+                "assets/release/**",
+                {
+                  "glob": "**/*",
+                  "input": "public"
+                },
+                {
+                  "glob": "**/*",
+                  "input": "../docs-assets/images",
+                  "output": "images"
+                },
+                {
+                  "glob": "**/*",
+                  "input": "../docs-assets/downloads",
+                  "output": "downloads"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -68,6 +100,9 @@
             "development": {
               "buildTarget": "retriever:build:development",
               "proxyConfig": "proxy.conf.json"
+            },
+            "demo": {
+              "buildTarget": "retriever:build:demo"
             }
           },
           "defaultConfiguration": "development"

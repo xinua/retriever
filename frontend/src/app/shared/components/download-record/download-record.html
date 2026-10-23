@@ -63,8 +63,8 @@
                   (rtLongPress)="setEditing()"
                   [rtThreshold]="250"
                   [href]="download().url"
-                  [matTooltip]="title"
-                  [matTooltipDisabled]="!(titleEl.scrollWidth > titleEl.clientWidth)"
+                  matTooltip="Hold to edit"
+                  matTooltipPosition="below"
                 >
                   {{ title }}
                 </a>
