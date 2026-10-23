@@ -34,7 +34,7 @@ import { DisableStepDirective } from '../../directives/disable-step.directive';
 import { YtdlpValidatorDirective } from '../../directives/ytdlp-validator';
 import { browserTimeZone, supportedTimeZones } from '../../helpers/common.helpers';
 import { createDragObservable } from '../../helpers/factory.helpers';
-import { formatNotifyAutomation, formatPlayDownloadAutomation } from '../../helpers/settings.helpers';
+import { baseUrl, formatNotifyAutomation, formatPlayDownloadAutomation } from '../../helpers/settings.helpers';
 import { PotStatusModel, SettingsFormModel, SettingsModel } from '../../models/settings.model';
 import { ExtensionService } from '../../services/extension.service';
 import { HttpService } from '../../services/http.service';
@@ -96,7 +96,7 @@ const codeExamples: CodeExamples = {
   widget: {
     value: 'cardWidget',
     name: 'Card widget',
-    code: WIDGET_CODE(window.location.origin, 1),
+    code: WIDGET_CODE(baseUrl(), 1),
   },
 };
 
@@ -163,7 +163,7 @@ export class AppSettings {
   readonly cookiesFileName = computed(() => this.cookiesPath()?.split(/[\\/]/).pop() ?? '');
 
   code = codeExamples;
-  appUrl = window.location.origin;
+  appUrl = baseUrl();
   selectedWebhook = signal<CodeExample>(codeExamples.webhooks[0]);
   selectedAutomation = signal<CodeExample>(codeExamples.automations[0]);
 

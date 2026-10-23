@@ -10,6 +10,7 @@ import { ManualDownloadRequest } from '../../models/download.model';
 import { NotifierService } from 'angular-notifier';
 import { HA_AUTOMATION_CODE, WIDGET_CODE } from '../../constants/code.const';
 import { AudioFormatLabels, CodecLabels, VideoFormatLabels } from '../../constants/labels.const';
+import { baseUrl } from '../../helpers/settings.helpers';
 import { DayPipe } from '../../pipes/day.pipe';
 import { TimePipe } from '../../pipes/time.pipe';
 import { HttpService } from '../../services/http.service';
@@ -67,12 +68,12 @@ export class SubscriptionDetails {
   readonly settings = this._storage.settings;
 
   copyHaCardCode(id: SubscriptionModel['id']) {
-    navigator.clipboard.writeText(WIDGET_CODE(window.location.origin, id));
+    navigator.clipboard.writeText(WIDGET_CODE(baseUrl(), id));
     this._notifier.notify('success', 'Home Assistant card code copied to clipboard');
   }
 
   openWidgetInNewTab(id: SubscriptionModel['id']) {
-    window.open(`${window.location.origin}/widget/${id}`, '_blank');
+    window.open(`${baseUrl()}/widget/${id}`, '_blank');
   }
 
   copyHaCardAutomationCode(id: SubscriptionModel['id']) {
