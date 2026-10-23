@@ -13,6 +13,7 @@ import {
   NextCheckModel,
   NextCheckPayload,
   NotificationPayload,
+  NotifierType,
 } from '@shared/models';
 import { HttpService, LayoutService, WsService } from '@shared/services';
 import { NotifierService } from 'angular-notifier';
@@ -108,6 +109,9 @@ export class HomePage implements OnInit {
     this._nextCheckUpdates().subscribe();
 
     this._subscriptionUpdates().subscribe();
+
+    this._notifier.notify(NotifierType.UPDATE, 'This is a static demo version, built purely for demonstration purposes.');
+    this._notifier.notify(NotifierType.UPDATE, 'Nothing here actually changes, and everything resets to its original state after a reload.');
   }
 
   /**

@@ -5,3 +5,11 @@ export enum SnackbarType {
   WARNING = 'warning',
   DARK = 'dark',
 }
+
+export enum NotifierType {
+  SUCCESS = 'success',
+  ERROR = 'error',
+  INFO = 'info',
+  WARNING = 'warning',
+  UPDATE = 'update',
+}

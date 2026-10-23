@@ -652,6 +652,7 @@ html {
 .notifier__notification.notifier__notification--update {
   color: white;
   background-color: black;
+  user-select: none;
   .notifier__notification-button {
     filter: invert(1);
   }
