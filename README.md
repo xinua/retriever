@@ -28,9 +28,11 @@ Perfect if you:
 
 ---
 
+  <img src="demo/icons/retriever.svg" width="20" height="20"> [Demo](https://xinua.github.io/retriever/)
+
   🖥👩‍💻 [Installation](#docker)
 
-  <img src="demo/icons/retriever.svg" width="20" height="20"> [Screenshots](SCREENSHOTS.md)
+  <img src="demo/icons/image.png" width="20" height="20"> [Screenshots](SCREENSHOTS.md)
 
   <img src="demo/icons/extension.svg" width="20" height="20"> [Browser extension](https://github.com/xinua/rt-ext)
 
