@@ -74,6 +74,23 @@ describe('SwipeDirective', () => {
     expect(host.swipes).toEqual([]);
   });
 
+  it('does nothing while media inside the element is playing', () => {
+    const video = document.createElement('video');
+    Object.defineProperty(video, 'paused', { value: false });
+    el.appendChild(video);
+
+    swipe(-120);
+    expect(host.swipes).toEqual([]);
+    expect(el.style.transform).toBe('');
+  });
+
+  it('swipes when media inside the element is paused', () => {
+    el.appendChild(document.createElement('video'));
+
+    swipe(-120);
+    expect(host.swipes).toEqual([{ direction: 'left' }]);
+  });
+
   it('moves the element with the finger and resets it on release', () => {
     pointer('pointerdown', 100);
     pointer('pointermove', 20);

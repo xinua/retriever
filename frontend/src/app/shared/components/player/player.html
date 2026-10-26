@@ -7,30 +7,43 @@
     @if (download()?.type === 'video') {
       <video
         #videoPlayer
+        rtMediaSession
+        rtReleaseMedia
+        [rtMediaTitle]="download()?.title"
+        [rtMediaArtist]="download()?.channelName || 'Unknown Artist'"
+        [rtMediaArtwork]="download()?.thumbnailPath"
         [src]="mediaUrl()"
-        (click)="togglePlay($event)"
+        (rtLongPress)="togglePlay($event)"
         controls
         autoplay
         preload="metadata"
         type="video/mp4"
-        class="aspect-video object-cover cursor-pointer w-full h-full"
+        class="aspect-video object-cover w-full h-full"
         (error)="handleError()"
       ></video>
     } @else {
-      <div class="relative w-full h-full flex items-end justify-center cursor-pointer" (click)="togglePlay($event)">
+      <div class="relative w-full h-full flex items-end justify-center" rtAutoHide #autoHide="rtAutoHide">
         @if (!!download()?.thumbnailPath) {
           <img [src]="download()?.thumbnailPath" alt="Poster" [class]="'w-full object-cover ' + posterClass()" />
         }
 
-        <div class="w-full absolute bottom-0 left-0 z-1">
+        <div
+          class="w-full absolute bottom-0 left-0 z-2 transition-opacity duration-500"
+          [class]="autoHide.hidden() ? 'opacity-0 pointer-events-none' : ''"
+        >
           <rt-audio-player
+            #previewAudio
+            [posterUrl]="download()?.thumbnailPath"
+            [trackTitle]="download()?.title"
+            [artist]="download()?.channelName || 'Unknown Artist'"
             playerSize="md"
             [audioUrl]="mediaUrl()"
             [duration]="download()?.duration"
             (gotError)="handleError()"
-            (click)="$event.stopPropagation()"
           />
         </div>
+
+        <rt-media-gestures playerSize="md" [player]="previewAudio" (closed)="togglePlay()" />
       </div>
     }
   </div>

@@ -142,6 +142,7 @@ export interface DownloadsPageModel {
   page: number;
   pages: number;
   limit: number;
+  hidden?: boolean;
 }
 
 /**

@@ -78,6 +78,20 @@ describe('WidgetPage', () => {
   const query = <T extends Element = HTMLElement>(selector: string): T | null => el().querySelector<T>(selector);
   const overlay = (): HTMLDivElement => component.playOverlay()!.nativeElement;
   const playButton = (): HTMLElement => query('.bg-red-500.rounded-full.cursor-pointer')!;
+  /** The layer the audio gestures land on. */
+  const gestures = (): HTMLElement => query('rt-media-gestures div')!;
+
+  /** Holds the pointer down long enough for the long press to fire. */
+  function hold(element: HTMLElement) {
+    vi.useFakeTimers();
+    try {
+      // jsdom has no PointerEvent; the long press only reads `button`.
+      element.dispatchEvent(Object.assign(new Event('pointerdown', { cancelable: true }), { button: 0 }));
+      vi.advanceTimersByTime(500);
+    } finally {
+      vi.useRealTimers();
+    }
+  }
 
   describe('loading', () => {
     it('fetches the subscription from the route id and refetches on every next check', async () => {
@@ -272,16 +286,37 @@ describe('WidgetPage', () => {
       expect(component.isPlaying()).toBe(false);
     });
 
-    it('closes the player when the backdrop is clicked, but not the player itself', async () => {
+    it('toggles playback on a tap over the thumbnail, and leaves the player bar alone', async () => {
       await render();
       component.togglePlay();
       await refresh();
 
-      query('rt-audio-player')!.click();
-      expect(component.isPlaying()).toBe(true);
+      const toggle = vi.spyOn(component.audioPlayer()!, 'togglePlayPause').mockReturnValue(false);
 
-      query<HTMLElement>('.z-10')!.click();
+      query('rt-audio-player')!.click();
+      expect(toggle).not.toHaveBeenCalled();
+
+      vi.useFakeTimers();
+      gestures().click();
+      vi.advanceTimersByTime(250);
+      vi.useRealTimers();
+      await refresh();
+
+      expect(toggle).toHaveBeenCalled();
+      expect(component.isPlaying()).toBe(true);
+      expect(query('.animate-pop-fade mat-icon')!.getAttribute('data-mat-icon-name')).toBe('pause');
+    });
+
+    it('closes the player when the thumbnail is held', async () => {
+      await render();
+      component.togglePlay();
+      await refresh();
+
+      hold(gestures());
+      await refresh();
+
       expect(component.isPlaying()).toBe(false);
+      expect(query('rt-audio-player')).toBeNull();
     });
 
     it('handles playback errors from the audio player', async () => {

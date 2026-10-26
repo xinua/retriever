@@ -9,6 +9,7 @@ import { PotStatusModel, SettingsModel } from '@shared/models';
 import { HttpService, SnackbarService, StorageService, WsService } from '@shared/services';
 import { NotifierService } from 'angular-notifier';
 import { NEVER, of, throwError } from 'rxjs';
+import { DeviceDetectorService } from 'ngx-device-detector';
 
 import { provideCodeHighlight, useIconFactory } from '../../providers';
 import { AppSettings } from './app-settings';
@@ -37,6 +38,7 @@ describe('AppSettings', () => {
   let fixture: ComponentFixture<AppSettings>;
   let http: Record<string, ReturnType<typeof vi.fn>>;
   let notify: ReturnType<typeof vi.fn>;
+  let isMobile: ReturnType<typeof vi.fn>;
   let showWebhookDemo: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
@@ -53,9 +55,12 @@ describe('AppSettings', () => {
       // Used by the embedded <rt-telegram-chats>.
       getTelegramStatus: vi.fn(() => NEVER),
       getTelegramChats: vi.fn(() => of([])),
+      previewImageCleanup: vi.fn(() => of({ total: 3, totalSizeKB: 120 })),
+      runImageCleanup: vi.fn(() => of({ total: 3, totalSizeKB: 120 })),
     };
     notify = vi.fn();
     showWebhookDemo = vi.fn();
+    isMobile = vi.fn(() => false);
 
     await TestBed.configureTestingModule({
       imports: [AppSettings],
@@ -67,6 +72,7 @@ describe('AppSettings', () => {
         { provide: NotifierService, useValue: { notify } },
         { provide: SnackbarService, useValue: { showWebhookDemo } },
         { provide: WsService, useValue: { telegramStatus$: () => NEVER, telegramChats$: () => NEVER } },
+        { provide: DeviceDetectorService, useValue: { isMobile } },
         // Registers the app's SVG icons (telegram, homeassistant) the stepper uses.
         provideAppInitializer(() => {
           const initializerFn = useIconFactory(inject(DomSanitizer), inject(MatIconRegistry));
@@ -444,20 +450,37 @@ describe('AppSettings', () => {
   });
 
   describe('steps', () => {
+    /** Looked up by stepper index, not array position, so adding a step does not shift the others. */
+    const step = (index: number) => component.steps().find((s) => s.index === index);
+
     it('enables the POT step only when a provider is configured', async () => {
       await render();
-      expect(component.steps()[1]).toEqual({ index: 5, enabled: false });
+      expect(step(5)?.enabled).toBeFalsy();
 
       component.potStatus.set(potStatus());
-      expect(component.steps()[1]).toEqual({ index: 5, enabled: true });
+      expect(step(5)?.enabled).toBe(true);
     });
 
     it('follows the Telegram toggle for the Telegram step', async () => {
       await render();
-      expect(component.steps()[0]).toEqual({ index: 2, enabled: false });
+      expect(step(2)?.enabled).toBe(false);
 
       component.form.controls.telegramEnabled.setValue(true);
-      expect(component.steps()[0]).toEqual({ index: 2, enabled: true });
+      expect(step(2)?.enabled).toBe(true);
+    });
+
+    it('enables the Extension step on desktop', async () => {
+      await render();
+      expect(step(4)?.enabled).toBe(true);
+    });
+
+    it('disables the Extension step on mobile', async () => {
+      isMobile.mockReturnValue(true);
+      await render();
+
+      expect(step(4)?.enabled).toBe(false);
+      const headers: HTMLElement[] = Array.from(fixture.nativeElement.querySelectorAll('mat-step-header'));
+      expect(headers[4].getAttribute('aria-disabled')).toBe('true');
     });
 
     it('disables the headers of steps that are off', async () => {
@@ -506,5 +529,30 @@ describe('AppSettings', () => {
     (fixture.nativeElement.querySelector('mat-card-header button') as HTMLButtonElement).click();
 
     expect(closed).toHaveBeenCalled();
+  });
+
+  describe('image cleanup', () => {
+    it('checks first, then removes what it found', async () => {
+      await render();
+
+      component.cleanupImages();
+      expect(http['previewImageCleanup']).toHaveBeenCalled();
+      expect(http['runImageCleanup']).not.toHaveBeenCalled();
+      expect(component.cleanupData()).toEqual({ total: 3, totalSizeKB: 120 });
+
+      component.cleanupImages();
+      expect(http['runImageCleanup']).toHaveBeenCalled();
+      expect(notify).toHaveBeenCalledWith('success', 'Removed 3 unused images.');
+      expect(component.cleanupData()).toEqual({ total: 0 });
+    });
+
+    it('does not remove anything when the check finds nothing', async () => {
+      http['previewImageCleanup'].mockReturnValue(of({ total: 0, totalSizeKB: 0 }));
+      await render();
+
+      component.cleanupImages();
+      expect(component.cleanupData()).toEqual({ total: 0, totalSizeKB: 0 });
+      expect(http['runImageCleanup']).not.toHaveBeenCalled();
+    });
   });
 });

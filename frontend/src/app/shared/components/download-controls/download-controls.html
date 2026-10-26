@@ -105,6 +105,18 @@
       <span>Fix path</span>
     </button>
   }
+
+  @if (!download().hidden) {
+    <button mat-menu-item (click)="toggleVisibility()">
+      <mat-icon class="text-white!">visibility_off</mat-icon>
+      <span>Hide record</span>
+    </button>
+  } @else {
+    <button mat-menu-item (click)="toggleVisibility()">
+      <mat-icon class="text-white!">visibility</mat-icon>
+      <span>Make visible</span>
+    </button>
+  }
 </mat-menu>
 
 <mat-menu #pathMenu class="pt-0! overflow-visible!">

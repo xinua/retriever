@@ -14,6 +14,7 @@ import {
 } from '../models/download.model';
 import { FilterModel, Nullable } from '../models/common.model';
 import {
+  CleanupData,
   FolderListingModel,
   PotStatusModel,
   SettingsModel,
@@ -49,6 +50,16 @@ export class HttpService {
    */
   checkForUpdates(): Observable<VersionModel> {
     return this._http.post<VersionModel>('/api/version/check', null);
+  }
+
+  /** How many unused avatars and posters a cleanup would remove; removes nothing. */
+  previewImageCleanup(): Observable<CleanupData> {
+    return this._http.get<CleanupData>('/api/images/cleanup');
+  }
+
+  /** Removes the unused images, answering with what was actually removed. */
+  runImageCleanup(): Observable<CleanupData> {
+    return this._http.post<CleanupData>('/api/images/cleanup', null);
   }
 
   getError(): Observable<void> {
@@ -172,7 +183,10 @@ export class HttpService {
     if (name) params = params.set('name', name);
 
     return this._http.get<DownloadsPageModel>('/api/downloads', { params }).pipe(
-      tap((result) => this._storage.downloads.set(result.items)),
+      tap((result) => {
+        this._storage.downloads.set(result.items);
+        this._storage.hiddenList.set(result.hidden ?? false);
+      }),
       catchError(async () => ({ items: [], total: 0, page, pages: 1, limit })),
     );
   }
@@ -191,8 +205,16 @@ export class HttpService {
     return this._http.get<Nullable<DownloadModel>>(`/api/downloads/by-watcher/${watcherId}?${filter}`);
   }
 
-  getDownloadsInfo(): Observable<DownloadInfoModel> {
-    return this._http.get<DownloadInfoModel>(`/api/downloads/info`);
+  /**
+   * Counts over the whole table rather than the page the list is showing.
+   * `name` is the search term, because the counts label a list that a search
+   * has narrowed: left out, they would describe rows the list is not showing
+   * and offer pages that do not exist.
+   */
+  getDownloadsInfo(name = ''): Observable<DownloadInfoModel> {
+    const params = name ? new HttpParams().set('name', name) : undefined;
+
+    return this._http.get<DownloadInfoModel>(`/api/downloads/info`, { params });
   }
 
   /**
@@ -378,5 +400,9 @@ export class HttpService {
 
   cancelMove(id: number): Observable<{ ok: boolean }> {
     return this._http.post<{ ok: boolean }>(`/api/downloads/${id}/move/cancel`, {});
+  }
+
+  toggleVisibility(id: number): Observable<{ ok: boolean }> {
+    return this._http.post<{ ok: boolean }>(`/api/downloads/${id}/visibility`, {});
   }
 }

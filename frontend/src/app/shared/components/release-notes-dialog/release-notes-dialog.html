@@ -55,6 +55,7 @@
       <div class="grid grid-cols-1 gap-4 mt-4">
         @for (video of latestChangelog()?.videos; track $index) {
           <video
+            rtReleaseMedia
             [src]="video"
             alt="Feature preview"
             aria-label="Feature preview"

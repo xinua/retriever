@@ -5,8 +5,8 @@ import { MatDialogConfig } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { MatTableModule } from '@angular/material/table';
 import { MatTooltip } from '@angular/material/tooltip';
+import { finalize } from 'rxjs';
 import { DownloadStatusLabels } from '../../constants/labels.const';
-import { AppearDirective } from '../../directives/appear.directive';
 import { LongPress } from '../../directives/long-press';
 import { PaginatorModel } from '../../models/common.model';
 import { DownloadModel, DownloadSource, DownloadStatus } from '../../models/download.model';
@@ -22,7 +22,6 @@ import { DropArea } from '../drop-area/drop-area';
 import { ProgressInfo } from '../progress-info/progress-info';
 import { StatusIndicator } from '../status-indicator/status-indicator';
 import { TextInput } from '../text-input/text-input';
-import { finalize } from 'rxjs';
 
 const DEFAULT_AVATARS = 'default.webp';
 const DIALOG_DATA: MatDialogConfig = {
@@ -37,7 +36,6 @@ const DIALOG_DATA: MatDialogConfig = {
 @Component({
   selector: 'rt-download-record',
   imports: [
-    AppearDirective,
     MatIcon,
     MatButtonModule,
     SizePipe,

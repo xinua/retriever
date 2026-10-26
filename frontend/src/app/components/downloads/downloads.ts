@@ -23,13 +23,14 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTableModule } from '@angular/material/table';
 import { ConfirmationDialog, DownloadRecord, FilterDownloads } from '@shared/components';
 import { BgDirective, SwipeDirective, SwipeEvent } from '@shared/directives';
-import { hasFile } from '@shared/helpers';
+import { hasFile, isMediaPlaying } from '@shared/helpers';
 import {
   DownloadInfoModel,
   DownloadModel,
   DownloadsPageModel,
   DownloadStatus,
   FilterModel,
+  Nullable,
   Platform,
   TelegramChatModel,
   TelegramStatusModel,
@@ -53,6 +54,13 @@ import { NoData } from '../no-data/no-data';
 
 /** Long enough to merge a delete's HTTP response with its own broadcast. */
 const REFILL_DEBOUNCE_MS = 100;
+
+/**
+ * How long typing settles before the term is sent. Shared by the list and
+ * the counts, which have to be asked for together: two values would send one
+ * request for a term the other has already moved on from.
+ */
+const SEARCH_DEBOUNCE_MS = 300;
 
 @Component({
   selector: 'rt-downloads',
@@ -106,6 +114,7 @@ export class Downloads implements OnInit {
   filters = this._storage.filters;
   searchControl = new FormControl<string>('');
   showSearch = signal<boolean>(false);
+  hiddenPopulated = this._storage.hiddenList;
   loadingDownloads = signal<boolean>(false);
 
   searchField = viewChild<ElementRef<HTMLInputElement>>('searchField');
@@ -122,8 +131,12 @@ export class Downloads implements OnInit {
       toObservable(this.downloads).pipe(distinctUntilChanged((a, b) => this._areCountsEqual(a, b))),
       // A stop-all cancels every off-page row at once, one broadcast each.
       this._infoStale$.pipe(debounceTime(REFILL_DEBOUNCE_MS)),
+      // The counts are counts of the searched rows, so a new term needs its
+      // own: the page it returns can carry the same statuses as the last one
+      // and leave the numbers behind, describing a list nobody is looking at.
+      this._searchTerm$(),
     ).pipe(
-      switchMap(() => this._httpService.getDownloadsInfo()),
+      switchMap(() => this._httpService.getDownloadsInfo(this.searchControl.value ?? '')),
       tap((info) => this._storage.downloadInfo.set(info)),
     );
   }
@@ -147,8 +160,7 @@ export class Downloads implements OnInit {
       .downloadsBatch$()
       .pipe(
         takeUntilDestroyed(this._destroyRef),
-        tap((rows) => this._upsertMany(rows)),
-        tap(() => this._refill$.next()),
+        tap((rows) => this._onDownloadsBatch(rows)),
       )
       .subscribe();
 
@@ -310,11 +322,19 @@ export class Downloads implements OnInit {
       );
   }
 
+  /**
+   * The search term once typing has settled, which both the list and the
+   * counts are asked for. `valueChanges` fires per keystroke, and the field
+   * is also cleared and refilled in code, so the term is compared before it
+   * is sent — nothing is asked for twice.
+   */
+  private _searchTerm$(): Observable<Nullable<string>> {
+    return this.searchControl.valueChanges.pipe(debounceTime(SEARCH_DEBOUNCE_MS), distinctUntilChanged());
+  }
+
   private _trackSearch(): Observable<DownloadsPageModel> {
-    return this.searchControl.valueChanges.pipe(
+    return this._searchTerm$().pipe(
       takeUntilDestroyed(this._destroyRef),
-      debounceTime(300),
-      distinctUntilChanged(),
       switchMap((value) => this._httpService.getDownloads(1, this.paginator().limit, this.filters(), value)),
       tap((result: DownloadsPageModel) =>
         this.paginator.update((current) => ({ ...current, total: result.total, page: 0 })),
@@ -366,6 +386,16 @@ export class Downloads implements OnInit {
    * would overflow the page limit. A newly queued row refills the page instead.
    */
   private _onDownloadUpdated(download: DownloadModel) {
+    // The app only ever hears about visible rows (see `WsService`), so on the
+    // hidden list an update for a row on the page means it was just unhidden:
+    // it leaves this list the way a hidden row leaves the normal one.
+    if (this.hiddenPopulated()) {
+      if (this.downloads().some((d) => d.id === download.id)) {
+        this._removeAndRefill((r) => r.id === download.id);
+      }
+      return;
+    }
+
     if (this.downloads().some((d) => d.id === download.id)) {
       this._upsert(download);
     } else if (download.status === DownloadStatus.QUEUED) {
@@ -373,6 +403,21 @@ export class Downloads implements OnInit {
     } else if (this._isFinished(download)) {
       this._infoStale$.next();
     }
+  }
+
+  /** Same rule as a single update: visible rows never belong on the hidden list. */
+  private _onDownloadsBatch(rows: DownloadModel[]) {
+    if (this.hiddenPopulated()) {
+      const ids = new Set(rows.map((row) => row.id));
+
+      if (this.downloads().some((d) => ids.has(d.id))) {
+        this._removeAndRefill((r) => ids.has(r.id));
+      }
+      return;
+    }
+
+    this._upsertMany(rows);
+    this._refill$.next();
   }
 
   private _upsert(download: DownloadModel) {
@@ -428,6 +473,11 @@ export class Downloads implements OnInit {
 
     // Ignore typing targets (focused inputs, textareas, selects)
     if (this._isTypingTarget(event)) {
+      return;
+    }
+
+    // Changing the page would cut off the video or audio playing on it
+    if (isMediaPlaying()) {
       return;
     }
 

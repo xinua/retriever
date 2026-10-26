@@ -23,6 +23,7 @@ import { ytdlpRoutes } from "./routes/http/ytdlp.js";
 import { downloadsRoutes } from "./routes/http/downloads.js";
 import { foldersRoutes } from "./routes/http/folders.js";
 import { telegramRoutes } from "./routes/http/telegram.js";
+import { imagesRoutes } from "./routes/http/images.js";
 import * as Telegram from "./services/telegram/bot.js";
 import * as TelegramDownload from "./services/telegram/download.js";
 import * as Notify from "./services/notify.js";
@@ -76,6 +77,7 @@ await app.register(ytdlpRoutes);
 await app.register(downloadsRoutes);
 await app.register(foldersRoutes);
 await app.register(telegramRoutes);
+await app.register(imagesRoutes);
 
 initSchema();
 requeueStaleDownloads();
@@ -93,13 +95,28 @@ if (!existing.length) {
   });
 }
 
+// Angular puts a content hash in the names of its bundles (main-, chunk-,
+// styles-, media/...), so a release changes their URLs and they can be cached
+// for good. Everything else (index.html, public/ icons, images, manifest) keeps
+// its name across releases and must be revalidated, or the browser - and an
+// installed PWA - keeps running the old app. The match is on the path relative
+// to the web root and allows the .br/.gz siblings preCompressed serves.
+const HASHED_ASSET = /^(?:media\/)?[\w.-]+-[A-Z0-9]{8}\.\w+(?:\.(?:br|gz))?$/;
+
 await app.register(staticPlugin, {
   root: WEB_ROOT,
   prefix: "/",
   wildcard: false,
   preCompressed: true,
-  maxAge: "1y",
-  immutable: true
+  // send's own Cache-Control is written after setHeaders and would replace it.
+  cacheControl: false,
+  setHeaders: (res, filePath) => {
+    const relative = path.relative(WEB_ROOT, filePath).split(path.sep).join("/");
+    res.setHeader(
+      "Cache-Control",
+      HASHED_ASSET.test(relative) ? "public, max-age=31536000, immutable" : "no-cache"
+    );
+  }
 });
 
 await app.register(staticPlugin, {

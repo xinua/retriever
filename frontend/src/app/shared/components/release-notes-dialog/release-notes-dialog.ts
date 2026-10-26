@@ -10,12 +10,13 @@ import { ListItemPipe } from '../../pipes/list-item.pipe';
 import { HttpService } from '../../services/http.service';
 import { NotifierService } from 'angular-notifier';
 import { finalize } from 'rxjs';
+import { ReleaseMedia } from '../../directives/release-media';
 
 @Component({
   selector: 'rt-release-notes-dialog',
   templateUrl: './release-notes-dialog.html',
   styleUrl: './release-notes-dialog.css',
-  imports: [MatCardModule, TitleCasePipe, ListItemPipe, MatIcon, MatIconButton, DatePipe, MatTooltip],
+  imports: [MatCardModule, TitleCasePipe, ListItemPipe, MatIcon, MatIconButton, DatePipe, MatTooltip, ReleaseMedia],
 })
 export class ReleaseNotesDialog {
   private readonly _httpService = inject(HttpService);

@@ -113,3 +113,9 @@ export interface TelegramTestResult {
   sent: number;
   errors: { chatId: string; name: Nullable<string>; error: string }[];
 }
+
+/** Unused avatars and posters: what a cleanup would remove, or what it removed. */
+export interface CleanupData {
+  total: number;
+  totalSizeKB?: number;
+}

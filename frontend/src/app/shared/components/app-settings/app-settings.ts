@@ -11,7 +11,7 @@ import {
   Validators,
 } from '@angular/forms';
 import { MatAutocomplete, MatAutocompleteTrigger, MatOption } from '@angular/material/autocomplete';
-import { MatButton, MatButtonModule } from '@angular/material/button';
+import { MatButtonModule } from '@angular/material/button';
 import { MatCard, MatCardContent, MatCardHeader, MatCardTitle } from '@angular/material/card';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatIcon } from '@angular/material/icon';
@@ -20,22 +20,18 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggle, MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatStepperModule } from '@angular/material/stepper';
 import { MatTooltip } from '@angular/material/tooltip';
+import { Nullable } from '../../models/common.model';
 import { NotifierService } from 'angular-notifier';
+import { DeviceDetectorService } from 'ngx-device-detector';
 import { catchError, finalize, of, tap } from 'rxjs';
-import {
-  notifyAutomationExample,
-  notifyWebhookExample,
-  playDownloadAutomationExample,
-  playWebhookExample,
-  WIDGET_CODE,
-} from '../../constants/code.const';
+import { SizePipe } from '../../pipes/size.pipe';
 import { DRAG_TOKEN } from '../../constants/drag-token';
 import { DisableStepDirective } from '../../directives/disable-step.directive';
 import { YtdlpValidatorDirective } from '../../directives/ytdlp-validator';
-import { browserTimeZone, supportedTimeZones } from '../../helpers/common.helpers';
+import { browserTimeZone, supportedTimeZones, versionStatus } from '../../helpers/common.helpers';
 import { createDragObservable } from '../../helpers/factory.helpers';
 import { formatNotifyAutomation, formatPlayDownloadAutomation } from '../../helpers/settings.helpers';
-import { PotStatusModel, SettingsFormModel, SettingsModel } from '../../models/settings.model';
+import { CleanupData, PotStatusModel, SettingsFormModel, SettingsModel } from '../../models/settings.model';
 import { ExtensionService } from '../../services/extension.service';
 import { HttpService } from '../../services/http.service';
 import { StorageService } from '../../services/storage.service';
@@ -44,61 +40,8 @@ import { Code } from '../code/code';
 import { PathInput } from '../path-input/path-input';
 import { TelegramChats } from '../telegram-chats/telegram-chats';
 
-interface CodeExample {
-  value: string;
-  name: string;
-  code: string;
-}
-
-interface CodeExamples {
-  webhooks: CodeExample[];
-  automations: CodeExample[];
-  widget: CodeExample;
-}
-
-enum Browser {
-  Firefox = 'Firefox',
-  Chrome = 'Chrome',
-  Other = 'Other',
-}
-
-const EXTENSION_URLS: Record<Browser, string> = {
-  [Browser.Chrome]: 'https://github.com/xinua/rt-ext/releases/latest/download/chrome.zip',
-  [Browser.Firefox]: 'https://addons.mozilla.org/en-US/firefox/addon/retriever-ext/',
-  [Browser.Other]: 'https://github.com/xinua/rt-ext',
-};
-
-const codeExamples: CodeExamples = {
-  webhooks: [
-    {
-      value: 'notifyWebhook',
-      name: 'Notify Webhook',
-      code: notifyWebhookExample,
-    },
-    {
-      value: 'playWebhook',
-      name: 'Play Webhook',
-      code: playWebhookExample,
-    },
-  ],
-  automations: [
-    {
-      value: 'notifyAutomation',
-      name: 'Notify Automation',
-      code: notifyAutomationExample,
-    },
-    {
-      value: 'playAutomation',
-      name: 'Play Automation',
-      code: playDownloadAutomationExample,
-    },
-  ],
-  widget: {
-    value: 'cardWidget',
-    name: 'Card widget',
-    code: WIDGET_CODE(window.location.origin, 1),
-  },
-};
+import { codeExamples, EXTENSION_URLS } from './app-settings.constants';
+import { Browser, CodeExample } from './app-settings.models';
 
 @Component({
   selector: 'rt-app-settings',
@@ -107,7 +50,6 @@ const codeExamples: CodeExamples = {
     MatStepperModule,
     ReactiveFormsModule,
     FormsModule,
-    MatButton,
     MatCard,
     MatCardContent,
     MatCardHeader,
@@ -121,6 +63,7 @@ const codeExamples: CodeExamples = {
     MatError,
     MatSuffix,
     MatTooltip,
+    SizePipe,
     MatAutocomplete,
     MatAutocompleteTrigger,
     MatOption,
@@ -150,6 +93,7 @@ export class AppSettings {
   private readonly _httpService = inject(HttpService);
   private readonly _storage = inject(StorageService);
   private readonly _notifier = inject(NotifierService);
+  private readonly _deviceService = inject(DeviceDetectorService);
   private _changedValidator?: ValidatorFn;
   closeDialog = output<void>();
 
@@ -164,6 +108,9 @@ export class AppSettings {
 
   code = codeExamples;
   appUrl = window.location.origin;
+  /** Null until checked; then what a cleanup would remove, or zero once it has. */
+  cleanupData = signal<Nullable<CleanupData>>(null);
+  isCleaning = signal(false);
   selectedWebhook = signal<CodeExample>(codeExamples.webhooks[0]);
   selectedAutomation = signal<CodeExample>(codeExamples.automations[0]);
 
@@ -221,11 +168,13 @@ export class AppSettings {
 
   steps = computed(() => [
     { index: 2, enabled: this.isTelegramEnabled() },
+    { index: 4, enabled: !this._deviceService.isMobile() },
     { index: 5, enabled: this.potStatus()?.configured },
   ]);
   isUpdated = signal(false);
   extensionVersion = inject(ExtensionService).version;
   latestExtensionVersion = signal<string | null>(null);
+  extensionStatus = computed(() => versionStatus(this.extensionVersion(), this.latestExtensionVersion()));
 
   ngOnInit() {
     this._httpService.getSettings().subscribe((settings) => {
@@ -349,6 +298,23 @@ export class AppSettings {
 
   downloadExtension(): string {
     return EXTENSION_URLS[this.browser()];
+  }
+
+  /** First press checks for unused images, the second removes what it found. */
+  cleanupImages() {
+    const found = this.cleanupData();
+    const request = found?.total ? this._httpService.runImageCleanup() : this._httpService.previewImageCleanup();
+
+    this.isCleaning.set(true);
+    request.pipe(finalize(() => this.isCleaning.set(false))).subscribe({
+      next: (result) => {
+        if (!found?.total) return this.cleanupData.set(result);
+
+        this._notifier.notify('success', `Removed ${result.total} unused image${result.total === 1 ? '' : 's'}.`);
+        this.cleanupData.set({ total: 0 });
+      },
+      error: () => this._notifier.notify('error', 'Image cleanup failed.'),
+    });
   }
 
   checkExtensionUpdates() {

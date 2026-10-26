@@ -12,7 +12,7 @@ export const notifyWebhook = {
 export const playWebhook = {
   id: 1,
   title: 'Download name',
-  filePath: 'music/test.mp3',
+  filePath: 'music/example.mp3',
   fileUrl: '/api/downloads/1/file?inline=1',
   type: 'audio',
   format: 'mp3',

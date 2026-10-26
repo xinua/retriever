@@ -7,6 +7,11 @@ const IMAGE_DIR = path.join(dataDir, "images");
 
 export class ImagesService {
 
+  /** The images store itself, for a caller that walks every file in it. */
+  static get dir(): string {
+    return IMAGE_DIR;
+  }
+
   static ensureDir() {
     if (!fs.existsSync(IMAGE_DIR)) {
       fs.mkdirSync(IMAGE_DIR, { recursive: true });

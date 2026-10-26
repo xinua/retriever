@@ -5,4 +5,8 @@ export * from './click-outside';
 export * from './swipe';
 export * from './disable-step.directive';
 export * from './temp-class';
+export * from './auto-hide';
 export * from './click';
+export * from './long-press';
+export * from './media-session';
+export * from './release-media';

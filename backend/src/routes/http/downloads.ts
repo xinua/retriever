@@ -112,6 +112,28 @@ function parseSearch(value: unknown): string | null {
 }
 
 /**
+ * Typed into the search field, this lists the hidden rows instead of being
+ * searched for — the way back to a record the browser extension queued
+ * without a card, or one hidden from the row menu, neither of which any
+ * normal listing will show.
+ *
+ * It comes from the environment rather than from Settings, because the point
+ * of it is to be nowhere in the UI: the PIN is never served, only compared
+ * against here. Unset or blank — the default — means there is no such term,
+ * and hidden rows stay out of every answer.
+ */
+const PIN = process.env.PIN?.trim() || null;
+
+/**
+ * Whether a raw `name` parameter is the PIN rather than something to match
+ * titles against. Compared to the trimmed term, so a space picked up on the
+ * way out of the field does not silently turn it back into a search.
+ */
+function isPin(value: unknown): boolean {
+  return PIN !== null && typeof value === "string" && value.trim() === PIN;
+}
+
+/**
  * What a search term is matched against: the name the list actually shows,
  * which is the file-name prefix followed by the title. Matching the title
  * alone missed the prefix half — someone typing "Channel - " to find one
@@ -180,9 +202,18 @@ async function listDownloads(query: {
 
   const statuses = parseStatuses(query.statuses);
   const types = parseTypes(query.types);
-  const search = parseSearch(query.name);
-  // Hidden rows were asked to stay out of the list — see the schema.
-  const where = and(eq(download.hidden, false), buildFilter(statuses, types, search));
+
+  // The PIN is a term of its own rather than something to search for: it
+  // swaps the list over to the hidden rows instead of narrowing it. The
+  // status and type filters still apply on top, so the hidden list is read
+  // the same way the visible one is.
+  const pin = isPin(query.name);
+  const search = pin ? null : parseSearch(query.name);
+
+  // Hidden rows were asked to stay out of the list — see the schema — so the
+  // list is one side of that flag or the other, never both: the PIN asks for
+  // exactly the rows no other listing shows.
+  const where = and(eq(download.hidden, pin), buildFilter(statuses, types, search));
 
   const [counted] = await db
     .select({ total: sql<number>`COUNT(*)` })
@@ -218,7 +249,10 @@ async function listDownloads(query: {
     limit: take,
     statuses,
     types,
-    name: typeof query.name === "string" ? query.name.trim() : ""
+    name: typeof query.name === "string" ? query.name.trim() : "",
+    // Which side of `hidden` these rows are, so a client can say so on screen
+    // rather than having to recognise the PIN itself.
+    hidden: pin
   };
 }
 
@@ -480,15 +514,19 @@ export async function downloadsRoutes(app: FastifyInstance) {
   app.get("/api/downloads/info", async (req) => {
     const { name } = req.query as { name?: string };
 
-    const search = parseSearch(name);
+    const pin = isPin(name);
+    const search = pin ? null : parseSearch(name);
 
     // The counts size the paginator and label the filter chips, so they have
     // to be counts of the same rows the list is showing. A search that is not
-    // reflected here would offer pages of results that do not exist.
-    // Hidden rows are left out for the same reason: the list never shows them.
+    // reflected here would offer pages of results that do not exist. Hidden
+    // rows are left out for the same reason — and counted instead of the
+    // visible ones when the PIN was sent, which is the list it then shows.
+    const hidden = pin ? 1 : 0;
+
     const scope = search
-      ? sql`WHERE hidden = 0 AND ${SEARCHABLE_NAME} LIKE ${search} ESCAPE '\\'`
-      : sql`WHERE hidden = 0`;
+      ? sql`WHERE hidden = ${hidden} AND ${SEARCHABLE_NAME} LIKE ${search} ESCAPE '\\'`
+      : sql`WHERE hidden = ${hidden}`;
 
     const rows = db.all<{ status: string; count: number }>(sql`
       SELECT status, COUNT(*) AS count
@@ -1049,6 +1087,71 @@ export async function downloadsRoutes(app: FastifyInstance) {
     }
 
     return { ok: true };
+  });
+
+  /**
+   * Takes a download out of the Downloads list, or brings a hidden one back.
+   * `hidden` in the body says which; without one the flag is flipped, so a
+   * menu item can toggle it without having to be sure of the row's current
+   * state. Answers with the row either way, already flipped.
+   *
+   * Only list membership changes: the row, its file and the way lookups,
+   * retries and "Clear finished" treat it stay exactly as they were — see
+   * `hidden` in the schema, where the browser extension sets the same flag at
+   * queue time.
+   *
+   * Hiding is broadcast as a removal and unhiding as an update, because that
+   * is what each one means to an open list — the row leaves it, or joins it.
+   * The row is still there, so nothing that holds one by id is misled for
+   * longer than it takes to ask for it again.
+   */
+  app.post("/api/downloads/:id/visibility", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const rowId = Number(id);
+
+    if (!Number.isInteger(rowId)) {
+      return reply.code(400).send({ error: "id must be a number" });
+    }
+
+    const { hidden } = (req.body ?? {}) as { hidden?: unknown };
+
+    if (hidden !== undefined && typeof hidden !== "boolean") {
+      return reply.code(400).send({ error: "hidden must be a boolean" });
+    }
+
+    const [row] = await db
+      .select()
+      .from(download)
+      .where(eq(download.id, rowId));
+
+    if (!row) return reply.code(404).send({ error: "Not found" });
+
+    const wanted = hidden ?? !row.hidden;
+
+    // Asking for the state it is already in is not an error — a double click,
+    // or two tabs sending the same thing — but nothing is written or
+    // broadcast for it either.
+    if (wanted === row.hidden) {
+      const [unchanged] = await withFileExists([Poster.decorate(row)]);
+
+      return unchanged;
+    }
+
+    const [updated] = await db
+      .update(download)
+      .set({ hidden: wanted })
+      .where(eq(download.id, rowId))
+      .returning();
+
+    const [decorated] = await withFileExists([Poster.decorate(updated)]);
+
+    if (wanted) {
+      broadcast("download-removed", { id: rowId });
+    } else {
+      broadcast("download-updated", decorated);
+    }
+
+    return decorated;
   });
 
   /**

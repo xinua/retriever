@@ -1,7 +1,47 @@
 {
-  "version": "1.3.0",
-  "releaseDate": "2026-10-19",
+  "version": "1.3.1",
+  "releaseDate": "2026-11-14",
   "changelog": [
+    {
+      "version": "1.3.1",
+      "releaseDate": "2026-11-14",
+      "changelog": {
+        "bugfixes": [
+          "App no longer stays on the old version after an update",
+          "- Applies to the installed app (PWA) as well, no need to clear the browser cache anymore",
+          "- If the app is outdated, click the version badge to reload",
+          "Fix Play/Pause button stuck on \"Play\" in the audio player in Firefox",
+          "Fix long error messages overflowing the download record",
+          "- The error block is now scrollable and wraps long text",
+          "Fix version comparison for update notifications"
+        ],
+        "features": [
+          "Hidden records",
+          "- Hide any download record from its menu",
+          "- Set the PIN environment variable and type it into the Downloads search to list hidden records",
+          "- Bring a record back with \"Make visible\"",
+          "Clean up unused avatars and posters",
+          "- Settings shows how many unused images there are and removes them in one click"
+        ],
+        "improvements": [
+          "Enhanced audio player",
+          "- Shows the file's poster when available",
+          "- Shows the track name and artist/album",
+          "- Play/Pause icon briefly appears on tap",
+          "- No more poster animation on play",
+          "- Same player in Subscriptions and the widget",
+          "Extension tab is disabled in Settings on mobile to avoid confusion"
+        ],
+        "other": [
+          "Other improvements you'll never notice but will love"
+        ],
+        "images": [
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.3.1/1.webp",
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.3.1/2.webp",
+          "https://raw.githubusercontent.com/xinua/retriever/main/demo/release/1.3.1/3.webp"
+        ]
+      }
+    },
     {
       "version": "1.3.0",
       "releaseDate": "2026-10-19",

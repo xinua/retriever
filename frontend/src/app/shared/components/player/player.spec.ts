@@ -1,4 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { AutoHide } from '../../directives/auto-hide';
 import { inject, provideAppInitializer } from '@angular/core';
 
 import { provideHttpClient } from '@angular/common/http';
@@ -44,7 +46,10 @@ describe('RtPlayer', () => {
     httpMock = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => httpMock.verify());
+  afterEach(() => {
+    httpMock.verify();
+    vi.unstubAllGlobals();
+  });
 
   /**
    * Renders the component and answers the lookup it fires on init. Every
@@ -81,16 +86,28 @@ describe('RtPlayer', () => {
 
   /** The outermost element the component renders: the projected placeholder, or the media wrapper. */
   const surface = (): HTMLElement => fixture.nativeElement.querySelector('div');
-  /** What closes the player again — the video itself, or the poster the audio sits on. */
+  /** What closes the player again — the video itself, or the gesture layer over the audio poster. */
   const media = (): HTMLElement =>
-    fixture.nativeElement.querySelector('video') ?? fixture.nativeElement.querySelector('div > div');
+    fixture.nativeElement.querySelector('video') ?? fixture.nativeElement.querySelector('rt-media-gestures div');
+  /** The element the pointer has to leave for the audio bar to go away. */
+  const hoverable = (): HTMLElement => fixture.debugElement.query(By.directive(AutoHide)).nativeElement;
+  /** The layer the audio gestures land on. */
+  const gestures = (): HTMLElement => fixture.nativeElement.querySelector('rt-media-gestures div');
 
   const open = async () => {
     surface().dispatchEvent(new MouseEvent('click'));
     await fixture.whenStable();
   };
+  /** Holding the media is what closes it again, so a click can stay with the player's own controls. */
   const close = async () => {
-    media().dispatchEvent(new MouseEvent('click'));
+    vi.useFakeTimers();
+    try {
+      // jsdom has no PointerEvent; the long press only reads `button`.
+      media().dispatchEvent(Object.assign(new Event('pointerdown', { cancelable: true }), { button: 0 }));
+      vi.advanceTimersByTime(500);
+    } finally {
+      vi.useRealTimers();
+    }
     await fixture.whenStable();
   };
 
@@ -169,6 +186,30 @@ describe('RtPlayer', () => {
     expect(poster.classList).toContain('rounded-t-lg');
   });
 
+  it('gets the audio bar out of the way once the pointer leaves the poster', async () => {
+    // The test environment answers no media query, and without a hovering pointer the bar stays put.
+    vi.stubGlobal('matchMedia', () => ({ matches: true }) as MediaQueryList);
+
+    await render({ download: { type: Types.AUDIO, thumbnailPath: '/thumbs/7.jpg' } });
+    await open();
+
+    const bar = (): HTMLElement => fixture.nativeElement.querySelector('rt-audio-player').parentElement;
+    expect(bar().classList).not.toContain('opacity-0');
+
+    vi.useFakeTimers();
+    try {
+      hoverable().dispatchEvent(new MouseEvent('mouseleave'));
+      vi.advanceTimersByTime(1000);
+    } finally {
+      vi.useRealTimers();
+    }
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(bar().classList).toContain('opacity-0');
+    expect(bar().classList).toContain('pointer-events-none');
+  });
+
   it('sizes the media wrapper from containerSize', async () => {
     await render({ containerSize: '640x360' });
     await open();
@@ -177,15 +218,40 @@ describe('RtPlayer', () => {
     expect(surface().style.height).toBe('360px');
   });
 
-  it('closes the player when the video itself is clicked', async () => {
+  it('leaves a click on the video to its controls and closes the player when it is held', async () => {
     await render();
     await open();
 
     fixture.nativeElement.querySelector('video').dispatchEvent(new MouseEvent('click'));
     await fixture.whenStable();
 
+    expect(component.isPlaying()).toBe(true);
+
+    await close();
+
     expect(component.isPlaying()).toBe(false);
     expect(fixture.nativeElement.querySelector('video')).toBeNull();
+  });
+
+  it('toggles audio playback on a tap over the poster, and closes it when held', async () => {
+    await render({ download: { type: Types.AUDIO, thumbnailPath: '/thumbs/7.jpg' } });
+    await open();
+
+    const toggle = vi.spyOn(component.audioPlayer()!, 'togglePlayPause').mockReturnValue(false);
+
+    vi.useFakeTimers();
+    gestures().click();
+    vi.advanceTimersByTime(250);
+    vi.useRealTimers();
+    await fixture.whenStable();
+
+    expect(toggle).toHaveBeenCalled();
+    expect(component.isPlaying()).toBe(true);
+
+    await close();
+
+    expect(component.isPlaying()).toBe(false);
+    expect(fixture.nativeElement.querySelector('audio')).toBeNull();
   });
 
   it('reopens from the download it already has, without asking again', async () => {

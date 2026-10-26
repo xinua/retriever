@@ -18,17 +18,28 @@ import { DownloadModel, DownloadStatus } from '@shared/models';
 import { HttpService, StorageService, WsService } from '@shared/services';
 import { catchError, fromEvent, of, startWith, switchMap, take, takeWhile } from 'rxjs';
 import { NgTemplateOutlet } from '@angular/common';
-import { AudioPlayer } from '@shared/components';
+import { AudioPlayer, MediaGestures } from '@shared/components';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NotifierService } from 'angular-notifier';
 import { DeviceDetectorService } from 'ngx-device-detector';
-import { ClickOutside } from '@shared/directives';
+import { ClickOutside, LongPress, MediaSession, ReleaseMedia } from '@shared/directives';
 
 @Component({
   selector: 'rt-widget-page',
   templateUrl: './widget-page.html',
   styleUrl: './widget-page.css',
-  imports: [MatCardModule, MatTooltip, MatIcon, NgTemplateOutlet, AudioPlayer, ClickOutside],
+  imports: [
+    MatCardModule,
+    MatTooltip,
+    MatIcon,
+    NgTemplateOutlet,
+    AudioPlayer,
+    ClickOutside,
+    MediaSession,
+    ReleaseMedia,
+    LongPress,
+    MediaGestures,
+  ],
 })
 export class WidgetPage implements OnInit {
   private readonly _http = inject(HttpService);

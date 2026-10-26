@@ -20,3 +20,4 @@ export * from './app-settings/app-settings';
 export * from './code/code';
 export * from './text-input/text-input';
 export * from './path-input/path-input';
+export * from './media-gestures/media-gestures';

@@ -1,9 +1,9 @@
 <div
   class="cursor-pointer relative z-1"
-  matTooltip="Cache is outdated. Please refresh the page. (Ctrl + F5)"
+  matTooltip="Cache is outdated. Click to reload."
   matTooltipPosition="above"
   [matTooltipDisabled]="!cacheExpired()"
-  (click)="showReleaseNotes()"
+  (click)="onClick()"
 >
   <div
     class="flex items-center gap-2 rounded-full border border-gray-800 bg-black px-3 py-1 text-xs select-none"

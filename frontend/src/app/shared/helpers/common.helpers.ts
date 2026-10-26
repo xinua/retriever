@@ -1,4 +1,7 @@
 import { Observable } from 'rxjs';
+import clean from 'semver/functions/clean';
+import gt from 'semver/functions/gt';
+import lt from 'semver/functions/lt';
 import type { Nullable } from '../models/common.model';
 import type { DownloadModel } from '../models/download.model';
 
@@ -83,3 +86,29 @@ export function normalizeFolder(folder: string): string {
 export function folderOf(filePath: Nullable<string>): string {
   return normalizeFolder((filePath ?? '').split(/[\\/]/).slice(0, -1).join('/'));
 }
+
+/** Whether any video or audio inside `root` is playing; a paused or finished one doesn't count. */
+export function isMediaPlaying(root: ParentNode = document): boolean {
+  return Array.from(root.querySelectorAll<HTMLMediaElement>('video, audio')).some(
+    (media) => !media.paused && !media.ended,
+  );
+}
+
+/**
+ * Where an installed version stands against the latest published one:
+ * `update` when a newer one is out, `ahead` for a build newer than anything
+ * published (a dev build), `unknown` when either side is missing or isn't a
+ * version. Compared as semver, so `1.0.10` is past `1.0.9` and `1.3.1-rc1`
+ * comes before `1.3.1`.
+ */
+export function versionStatus(installed: Nullable<string>, latest: Nullable<string>): VersionStatus {
+  const a = installed ? clean(installed) : null;
+  const b = latest ? clean(latest) : null;
+
+  if (!a || !b) return 'unknown';
+  if (lt(a, b)) return 'update';
+  if (gt(a, b)) return 'ahead';
+  return 'current';
+}
+
+export type VersionStatus = 'unknown' | 'current' | 'update' | 'ahead';

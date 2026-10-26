@@ -1,8 +1,10 @@
+import { DOCUMENT } from '@angular/common';
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { APP_VERSION } from '../../constants/version.const';
+import { versionStatus } from '../../helpers/common.helpers';
 import { VersionModel } from '../../models/version.model';
 import { HttpService } from '../../services/http.service';
 import { LocalStorage } from '../../services/local-storage.service';
@@ -21,12 +23,14 @@ export class AppVersion implements OnInit {
   private readonly _dialog = inject(MatDialog);
   private readonly _notifier = inject(NotifierService);
   private readonly _localStorage = inject(LocalStorage);
+  private readonly _document = inject(DOCUMENT);
 
   readonly version = signal<string>(APP_VERSION);
   versionInfo = signal<VersionModel | null>(null);
 
   readonly isUpdateAvailable = computed(() => this.versionInfo()?.updateAvailable ?? false);
-  readonly cacheExpired = computed(() => this.versionInfo()?.current !== APP_VERSION);
+  /** The server runs a newer version than this bundle, so the browser is serving a stale cache. */
+  readonly cacheExpired = computed(() => versionStatus(APP_VERSION, this.versionInfo()?.current) === 'update');
   readonly isUserNotified = computed(() => this.getUserNotified());
 
   ngOnInit() {
@@ -54,6 +58,23 @@ export class AppVersion implements OnInit {
 
   private getUserNotified(): boolean {
     return this._localStorage.get('notifiedVersion') === this.versionInfo()?.latest;
+  }
+
+  /**
+   * A stale bundle is fixed by loading the app again: index.html is revalidated
+   * on every load, so a reload picks up the new release. Otherwise the badge
+   * opens the release notes.
+   */
+  onClick() {
+    if (this.cacheExpired()) {
+      this.reloadPage();
+      return;
+    }
+    this.showReleaseNotes();
+  }
+
+  reloadPage() {
+    this._document.location.reload();
   }
 
   showReleaseNotes() {

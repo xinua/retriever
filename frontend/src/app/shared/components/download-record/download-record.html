@@ -5,7 +5,15 @@
 @let isActive = isRunning || isQueued;
 @let hasError = isFailed && download().error;
 
-<div class="p-5 rounded-xl bg-white/3 overflow-hidden transition-height duration-500" [class.glass]="!isActive" #record>
+<div
+  class="p-5 rounded-xl bg-white/3 overflow-hidden transition-height duration-500 relative"
+  [class.glass]="!isActive && !download().hidden"
+  #record
+>
+  @if (download().hidden) {
+    <div class="absolute opacity-2 inset-0 z-0 bg-[url(/assets/images/incognito-bg.webp)] bg-contain bg-center"></div>
+  }
+
   <div class="flex flex-col gap-5">
     @if (isActive) {
       <rt-progress-info [download]="download()" (cancel)="cancel.emit(download())" />
@@ -143,11 +151,11 @@
           />
         </div>
 
-        <rt-download-poster [download]="download()" rtAppear animationName="reveal" class="mt-auto" />
+        <rt-download-poster [download]="download()" class="mt-auto" />
 
         @if (hasError) {
-          <div class="text-red-400 ml-3 border border-red-500 rounded-md px-3 py-2 lg:hidden">
-            {{ download().error }}
+          <div class="text-red-400 ml-3 border border-red-500 rounded-md px-3 py-2 lg:hidden overflow-auto max-h-full">
+            <p class="break-all">{{ download().error }}</p>
           </div>
         }
 

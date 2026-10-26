@@ -68,7 +68,7 @@ Perfect if you:
 - 🔍 **Search and filter** by status and type (audio / video / thumbnail) across your whole history
 - 🏷 **Real file info** — the actual size, quality, codec, format of every finished file, probed after download
 - 🖼 **Posters everywhere** — when a download arrives with no artwork, a frame is pulled out of the file itself
-- ▶️ **Play downloaded** — watch downloaded video by click on poster
+- ▶️ **Play downloaded** — click a poster to play the file in place
 - 🛡 **Atomic writes** — in-progress files live in a hidden temp folder and only move into place when complete, so your media scanner never sees a half-downloaded episode
 
 ### Integrations & interface
@@ -209,6 +209,7 @@ Most settings live in the UI (⚙️ in the header). These environment variables
 | `DATA_DIR`              | `/data`                    | Database, images, archive                                 |
 | `YTDLP_BIN`             | `/usr/local/bin/yt-dlp`    | The bundled binary to stage from                          |
 | `MAX_MANUAL_ITEMS`      | `500`                      | Cap on how many videos one pasted channel/playlist queues |
+| `PIN`                   | *(unset)*                  | Term that lists the hidden records — see below            |
 | `POT_BASE_URL`          | *(unset)*                  | POT provider server to use — see below. Unset = disabled  |
 | `POT_PLUGIN_DIR`        | `/app/pot-plugin`          | Where the bundled POT plugin lives                        |
 | `TELEGRAM_BOT_API_URL`  | *(unset)*                  | Bot API server to use while Settings leaves it empty      |
@@ -217,6 +218,13 @@ Most settings live in the UI (⚙️ in the header). These environment variables
 | `VERSION_CHECK_URL`     | *(the manifest on GitHub)* | Where to read the published version from                  |
 
 
+
+
+### Hidden records
+
+Some records are kept out of the Downloads list: the browser extension queues them that way when you want only the file and no card for it, and any record can be hidden from its row menu. The row stays as it is — lookups, retries, **Clear finished** and the counts behind the filter chips treat it exactly as before, it simply is not listed.
+
+`PIN` is the term that reaches them. Set it to anything you like and typing it into the Downloads search lists those records instead of searching titles, with the status and type filters still narrowing them; a record's menu then offers **Make visible** to put it back in the list. The PIN is never served to the browser, only compared against on the server, so leaving it unset — the default — means hidden records stay out of every answer and the term is nothing but an ordinary search.
 
 
 ### Update check

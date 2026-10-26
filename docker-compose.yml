@@ -14,6 +14,11 @@ services:
       # fills in from your browser the first time you open it. This is only
       # the fallback used until then, and the clock the logs are stamped in.
       TZ: Etc/UTC
+      # Typed into the Downloads search, this term lists the records that are
+      # hidden from the list instead of searching titles - see the README.
+      # Left unset, hidden records have no way into any answer.
+      # PIN: 4821
+
       # Uncomment together with the `pot` service below to route YouTube
       # extraction through a proof-of-origin token provider. Left unset, the
       # POT plugin is never loaded and yt-dlp behaves exactly as before.

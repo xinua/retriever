@@ -23,16 +23,30 @@ import { DropArea } from '../drop-area/drop-area';
 import { RtSteamCard } from '../steam-card/steam-card';
 import { NgTemplateOutlet } from '@angular/common';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { AutoHide } from '../../directives/auto-hide';
 import { LongPress } from '../../directives/long-press';
-import { ClickAction, DoubleClick } from '../../directives/click';
-import { MatIcon } from '@angular/material/icon';
+import { MediaSession } from '../../directives/media-session';
+import { ReleaseMedia } from '../../directives/release-media';
+import { AppearDirective } from '../../directives/appear.directive';
+import { MediaGestures } from '../media-gestures/media-gestures';
 
 const UNSUPPORTED_FORMATS = [NoEmbedFormats.WEBM, NoEmbedFormats.MOV, NoEmbedFormats.OPUS, NoEmbedFormats.WAV];
-const SEEK_STEP = 10;
 
 @Component({
   selector: 'rt-download-poster',
-  imports: [RtSteamCard, AudioPlayer, DropArea, NgTemplateOutlet, MatTooltipModule, DoubleClick, LongPress, MatIcon],
+  imports: [
+    RtSteamCard,
+    AudioPlayer,
+    DropArea,
+    NgTemplateOutlet,
+    MatTooltipModule,
+    AutoHide,
+    LongPress,
+    MediaSession,
+    ReleaseMedia,
+    AppearDirective,
+    MediaGestures,
+  ],
   templateUrl: './download-poster.html',
   styleUrl: './download-poster.css',
 })
@@ -45,12 +59,8 @@ export class DownloadPoster {
   download = input.required<DownloadModel>();
 
   readonly downloadStatus = DownloadStatus;
-  readonly clickAction = ClickAction;
   isUpdatingPoster = signal(false);
   activeMedia = signal<number | null>(null);
-  seekDirection = signal<string | null>(null);
-  seekTotalTime = signal<number>(0);
-  seekTimeout = signal<ReturnType<typeof setTimeout>>(null);
   hasFile = computed(() => hasFile(this.download()));
   mediaUrl = computed(() => this._httpService.streamFileUrl(this.download()?.id));
   unsupportedFormat = computed(() =>
@@ -61,24 +71,9 @@ export class DownloadPoster {
   videoPlayer = viewChild<ElementRef<HTMLVideoElement>>('previewVideo');
   audioPlayer = viewChild<AudioPlayer>(AudioPlayer);
 
-  constructor() {
-    this._destroyRef.onDestroy(() => {
-      if (this.seekTimeout()) clearTimeout(this.seekTimeout());
-    });
-  }
-
-  togglePlay(target: DownloadModel, isAbleToOpen: boolean, event?: MouseEvent | Event, action?: ClickAction) {
+  /** Opens the media of this download, or puts the poster back when it is already open. */
+  togglePlay(target: DownloadModel, isAbleToOpen: boolean, event?: MouseEvent | Event) {
     if (!isAbleToOpen) return;
-    if (this.seekDirection() && action === ClickAction.SINGLE && this.download()?.type === 'audio') return;
-    if (action === ClickAction.SINGLE && this.activeMedia() === target.id) {
-      this.audioPlayer()?.togglePlayPause();
-      return;
-    }
-
-    if (action === ClickAction.DOUBLE && this.activeMedia() == target.id && this.download()?.type === 'audio') {
-      this._seek(event as MouseEvent);
-      return;
-    }
 
     this.activeMedia.update((current) => (current === target.id ? null : target.id));
     if (this.activeMedia() === null) event?.preventDefault();
@@ -112,42 +107,6 @@ export class DownloadPoster {
           else this._notifier.notify('error', 'Failed to update thumbnail');
         },
       });
-  }
-
-  private _seek($event: MouseEvent) {
-    const direction = this._getDirection($event);
-
-    this.showSeekDirection(direction);
-    this.audioPlayer()?.seekBy(direction === 'left' ? -SEEK_STEP : SEEK_STEP);
-  }
-
-  private _getDirection(event: MouseEvent) {
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const width = rect.width;
-    const relX = x / width;
-    return relX < 0.5 ? 'left' : 'right';
-  }
-
-  private showSeekDirection(direction: string) {
-    if (!this.seekDirection() || this.seekDirection() === direction) {
-      this.seekTotalTime.update((total) => total + SEEK_STEP);
-    } else {
-      this.seekTotalTime.set(SEEK_STEP);
-    }
-
-    this.seekDirection.set(direction);
-
-    if (this.seekTimeout()) {
-      clearTimeout(this.seekTimeout());
-    }
-
-    this.seekTimeout.set(
-      setTimeout(() => {
-        this.seekDirection.set(null);
-        this.seekTotalTime.set(0);
-      }, 1000),
-    );
   }
 
   private _dialogData(): MatDialogConfig {

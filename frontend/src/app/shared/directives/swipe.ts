@@ -1,4 +1,5 @@
 import { DestroyRef, Directive, ElementRef, inject, input, output } from '@angular/core';
+import { isMediaPlaying } from '../helpers/common.helpers';
 
 export interface SwipeEvent {
   direction: 'left' | 'right';
@@ -49,6 +50,8 @@ export class SwipeDirective {
 
   onPointerDown(event: PointerEvent) {
     if (event.pointerType === 'mouse' || this._pointerId !== null || this.swipeDisabled()) return;
+    // A swipe would replace the element, cutting off the video or audio playing inside it.
+    if (isMediaPlaying(this._el)) return;
     clearTimeout(this._resetTimer);
     this._suppressClick = false;
     this._pointerId = event.pointerId;

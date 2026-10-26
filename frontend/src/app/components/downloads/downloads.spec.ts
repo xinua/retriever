@@ -297,6 +297,19 @@ describe('Downloads', () => {
       expect(onPageChange).toHaveBeenLastCalledWith({ pageIndex: 2, pageSize: 5, length: 20 });
     });
 
+    it('ignores the arrow keys while media on the page is playing', () => {
+      const onPageChange = vi.spyOn(component, 'onPageChange');
+      const audio = document.createElement('audio');
+      Object.defineProperty(audio, 'paused', { value: false });
+      el().appendChild(audio);
+
+      window.dispatchEvent(key('ArrowLeft'));
+      window.dispatchEvent(key('ArrowRight'));
+      expect(onPageChange).not.toHaveBeenCalled();
+
+      audio.remove();
+    });
+
     it('ignores the arrow keys while typing', () => {
       const onPageChange = vi.spyOn(component, 'onPageChange');
       const input = el().querySelector('input')!;
@@ -338,6 +351,31 @@ describe('Downloads', () => {
       vi.advanceTimersByTime(300);
 
       expect(http.getDownloads).toHaveBeenCalledTimes(1);
+    });
+
+    it('counts the searched rows rather than the whole table', async () => {
+      await render();
+      vi.useFakeTimers();
+      http.getDownloadsInfo.mockClear();
+
+      component.searchControl.setValue('cat');
+      vi.advanceTimersByTime(299);
+      expect(http.getDownloadsInfo).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(1);
+      expect(http.getDownloadsInfo).toHaveBeenCalledWith('cat');
+    });
+
+    it('counts the whole table again once the search is cleared', async () => {
+      await render();
+      vi.useFakeTimers();
+
+      component.searchControl.setValue('cat');
+      vi.advanceTimersByTime(300);
+      component.searchControl.setValue('');
+      vi.advanceTimersByTime(300);
+
+      expect(http.getDownloadsInfo).toHaveBeenLastCalledWith('');
     });
   });
 
@@ -531,6 +569,37 @@ describe('Downloads', () => {
       ws.batch.next([download({ id: 2, status: DownloadStatus.CANCELED })]);
 
       expect(storage.downloads().every((d) => d.status === DownloadStatus.CANCELED)).toBe(true);
+      vi.advanceTimersByTime(100);
+      expect(http.getDownloads).toHaveBeenCalledTimes(1);
+    });
+
+    it('drops a row unhidden while the hidden list is shown, and refills', () => {
+      storage.hiddenList.set(true);
+
+      ws.updated.next(download({ id: 1, status: DownloadStatus.RUNNING }));
+
+      expect(storage.downloads().map((d) => d.id)).toEqual([2]);
+      vi.advanceTimersByTime(100);
+      expect(http.getDownloads).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps visible rows off the hidden list', () => {
+      storage.hiddenList.set(true);
+
+      ws.updated.next(download({ id: 9, status: DownloadStatus.QUEUED }));
+      ws.batch.next([download({ id: 10 })]);
+      vi.advanceTimersByTime(100);
+
+      expect(storage.downloads().map((d) => d.id)).toEqual([1, 2]);
+      expect(http.getDownloads).not.toHaveBeenCalled();
+    });
+
+    it('drops batch rows that left the hidden list', () => {
+      storage.hiddenList.set(true);
+
+      ws.batch.next([download({ id: 2 }), download({ id: 10 })]);
+
+      expect(storage.downloads().map((d) => d.id)).toEqual([1]);
       vi.advanceTimersByTime(100);
       expect(http.getDownloads).toHaveBeenCalledTimes(1);
     });

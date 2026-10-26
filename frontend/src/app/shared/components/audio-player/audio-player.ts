@@ -12,13 +12,15 @@ import { MatIcon } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { ProgressBarComponent } from '../progress-bar/progress-bar.component';
 import { TimePipe } from '../../pipes/time.pipe';
+import { MediaSession } from '../../directives/media-session';
+import { ReleaseMedia } from '../../directives/release-media';
 import { AUDIO_PLAYER_SIZES } from './audio-player.const';
 import { PlayerSize } from './audio-player.model';
 
 @Component({
   selector: 'rt-audio-player',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ProgressBarComponent, MatIcon, MatButtonModule, TimePipe],
+  imports: [ProgressBarComponent, MatIcon, MatButtonModule, TimePipe, MediaSession, ReleaseMedia],
   templateUrl: './audio-player.html',
   styleUrl: './audio-player.css',
   host: {
@@ -29,6 +31,9 @@ export class AudioPlayer {
   audioUrl = input<string>();
   duration = input<number, number>(0, { transform: (value) => Math.round(value) || 0 });
   playerSize = input<PlayerSize>('md');
+  posterUrl = input<string>();
+  trackTitle = input<string>();
+  artist = input<string>();
   gotError = output<ErrorEvent>();
 
   readonly nativePlayer = viewChild.required<ElementRef<HTMLAudioElement>>('nativePlayer');
@@ -61,13 +66,16 @@ export class AudioPlayer {
     return this.nativePlayer().nativeElement;
   }
 
-  togglePlayPause() {
+  /** Returns true when the toggle started playback, so callers can reflect the new state without waiting for the event. */
+  togglePlayPause(): boolean {
     const audio = this.audio;
     if (audio.paused) {
       audio.play().catch(() => this.isPlaying.set(false));
-    } else {
-      audio.pause();
+      return true;
     }
+
+    audio.pause();
+    return false;
   }
 
   toggleMute() {

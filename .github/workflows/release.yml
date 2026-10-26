@@ -16,11 +16,15 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # Lint and unit tests used to run inside the image build, which meant they ran
-  # once per target platform with the arm64 pass under QEMU. They are a plain
-  # native job now, and publish waits on them.
-  test:
+  # Lint, formatting and unit tests are not repeated here: tags only reach
+  # GitHub through the Gitea release gate (.gitea/workflows/release.yml),
+  # which has already run them.
+  publish:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Check out
@@ -51,54 +55,6 @@ jobs:
             fi
           done
           exit $failed
-
-      # pnpm comes from pnpm's own action rather than corepack: setup-node's
-      # cache step runs `pnpm store path` and the corepack shim can pollute
-      # that output, which fails the job with "Path Validation Error".
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          package_json_file: frontend/package.json
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
-
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: pnpm install --frozen-lockfile
-
-      - name: Lint and test
-        working-directory: frontend
-        run: pnpm run verify
-
-      # verify runs prettier --write, so unformatted sources pass it silently;
-      # any file it (or anything else) changed means the commit wasn't clean.
-      - name: Check nothing changed
-        run: |
-          if [ -n "$(git status --porcelain)" ]; then
-            git status --short
-            git --no-pager diff
-            echo "::error::Files changed during verify - run 'pnpm run verify' in frontend and commit the result"
-            exit 1
-          fi
-
-  publish:
-    needs: test
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Check out
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
 
       # The runner is amd64, so the arm64 leg of the build runs under emulation.
       - name: Set up QEMU

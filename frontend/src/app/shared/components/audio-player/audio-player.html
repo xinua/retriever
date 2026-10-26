@@ -1,5 +1,10 @@
 <audio
   #nativePlayer
+  rtMediaSession
+  rtReleaseMedia
+  [rtMediaTitle]="trackTitle()"
+  [rtMediaArtist]="artist()"
+  [rtMediaArtwork]="posterUrl()"
   class="hidden"
   [src]="audioUrl()"
   [muted]="isMuted()"

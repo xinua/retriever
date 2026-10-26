@@ -20,6 +20,7 @@ export class StorageService {
   showForm = signal<boolean>(false);
   nextCheck = signal<Nullable<NextCheckModel>>(null);
   downloads = signal<DownloadModel[]>([]);
+  hiddenList = signal<boolean>(false);
   downloadInfo = signal<Nullable<DownloadInfoModel>>(null);
   uiConfig = signal<UiConfig>(this._localStorage.get('uiConfig'));
   filters = signal<FilterModel>(DefaultFilters);

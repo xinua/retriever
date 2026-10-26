@@ -65,6 +65,22 @@ describe('AudioPlayer', () => {
     expect(component.currentTime()).toBe(120);
   });
 
+  it('reports the state each toggle switched to', () => {
+    let paused = true;
+    Object.defineProperty(audio, 'paused', { get: () => paused, configurable: true });
+    const play = vi.fn().mockResolvedValue(undefined);
+    const pause = vi.fn(() => void (paused = true));
+    Object.defineProperty(audio, 'play', { value: play, configurable: true });
+    Object.defineProperty(audio, 'pause', { value: pause, configurable: true });
+
+    expect(component.togglePlayPause()).toBe(true);
+    expect(play).toHaveBeenCalled();
+
+    paused = false;
+    expect(component.togglePlayPause()).toBe(false);
+    expect(pause).toHaveBeenCalled();
+  });
+
   it('mirrors play/pause state from the media element', () => {
     audio.dispatchEvent(new Event('play'));
     expect(component.isPlaying()).toBe(true);

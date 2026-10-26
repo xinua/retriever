@@ -18,11 +18,16 @@ import { hasFile } from '../../helpers/common.helpers';
 import { DownloadModel, DownloadStatus } from '../../models/download.model';
 import { HttpService } from '../../services/http.service';
 import { WsService } from '../../services/ws.service';
+import { MediaSession } from '../../directives/media-session';
+import { ReleaseMedia } from '../../directives/release-media';
 import { AudioPlayer } from '../audio-player/audio-player';
+import { AutoHide } from '../../directives/auto-hide';
+import { LongPress } from '../../directives/long-press';
+import { MediaGestures } from '../media-gestures/media-gestures';
 
 @Component({
   selector: 'rt-player',
-  imports: [AudioPlayer],
+  imports: [AudioPlayer, MediaSession, ReleaseMedia, AutoHide, LongPress, MediaGestures],
   templateUrl: './player.html',
   styleUrl: './player.css',
 })

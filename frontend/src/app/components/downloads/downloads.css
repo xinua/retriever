@@ -16,3 +16,7 @@
     z-index: 0;
   }
 }
+
+.masked {
+  -webkit-text-security: disc;
+}

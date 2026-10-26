@@ -17,6 +17,7 @@
           "builder": "@angular/build:application",
           "options": {
             "polyfills": [],
+            "allowedCommonJsDependencies": ["semver"],
             "browser": "src/main.ts",
             "outputPath": {
               "base": "./dist",
@@ -35,6 +36,7 @@
           "configurations": {
             "production": {
               "optimization": true,
+              "outputHashing": "all",
               "budgets": [
                 {
                   "type": "initial",

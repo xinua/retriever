@@ -82,6 +82,7 @@
               rtYtdlpValidator
               label="Downloads folder"
               placeholder="/"
+              subscriptSizing="dynamic"
               hint="Default folder for new downloads. Leave empty to use the root folder."
               [showStatus]="true"
             />
@@ -149,7 +150,44 @@
               </mat-hint>
             }
 
-            <ng-container *ngTemplateOutlet="saveButton"></ng-container>
+            <div class="flex w-full justify-between mt-4">
+              <div class="flex flex-wrap gap-2">
+                @let cleanup = cleanupData();
+                <button
+                  [matButton]="cleanup ? 'filled' : 'outlined'"
+                  matTooltip="Check for unused avatars and posters"
+                  class="w-37 text-center border-(--rt-accent)!"
+                  [matTooltipDisabled]="!!cleanup"
+                  [disabled]="cleanup?.total === 0 || isCleaning()"
+                  (click)="cleanupImages()"
+                >
+                  @if (!cleanup) {
+                    Cleanup
+                  } @else if (cleanup.total > 0) {
+                    Remove
+                  } @else {
+                    You're all clean!
+                  }
+                </button>
+
+                @if (cleanup?.total > 0) {
+                  <mat-hint
+                    class="bg-(--rt-accent)/20 py-2 px-4 rounded-md text-xs!"
+                    animate.enter="fadeIn"
+                    animate.leave="fadeOut"
+                  >
+                    {{ cleanup.total }} unused image{{ cleanup.total > 1 ? 's' : '' }} ({{
+                      cleanup.totalSizeKB * 1000 | size
+                    }}) can be removed
+                  </mat-hint>
+                }
+              </div>
+
+              <button mat-flat-button color="primary" (click)="saveSettings()" [disabled]="!form.valid || form.pending">
+                <mat-icon class="text-base">save</mat-icon>
+                Save
+              </button>
+            </div>
           </div>
         </mat-step>
 
@@ -440,8 +478,9 @@
           @let isChrome = browser() === browserType.Chrome;
           @let isFirefox = browser() === browserType.Firefox;
           @let isExtConnected = !!extensionVersion();
-          @let isExtUpToDate = latestExtensionVersion() && latestExtensionVersion() === extensionVersion();
-          @let isExtUpdateAvailable = latestExtensionVersion() && latestExtensionVersion() !== extensionVersion();
+          @let isExtUpToDate = extensionStatus() === 'current';
+          @let isExtUpdateAvailable = extensionStatus() === 'update';
+          @let isExtDevBuild = extensionStatus() === 'ahead';
           <ng-template matStepLabel>Browser extension</ng-template>
 
           <div class="rounded-xl border border-gray-800 p-4">
@@ -460,6 +499,9 @@
                 }
                 @if (isExtUpToDate) {
                   <span class="text-green-500"> (up to date)</span>
+                }
+                @if (isExtDevBuild) {
+                  <span class="text-gray-500"> (dev build, latest release v{{ latestExtensionVersion() }})</span>
                 }
               </span>
             </div>
@@ -501,7 +543,7 @@
             @if (!isExtConnected || isExtUpdateAvailable) {
               @let label =
                 isExtUpdateAvailable
-                  ? 'Donwload latest version'
+                  ? 'Download latest version'
                   : isFirefox
                     ? 'Install extension'
                     : 'Download extension';

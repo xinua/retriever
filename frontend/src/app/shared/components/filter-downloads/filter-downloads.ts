@@ -49,7 +49,7 @@ export class FilterDownloads implements OnInit {
     if (!this.hasActiveFilters()) return;
     this.animateShake.set(true);
     this.filters.set(DefaultFilters);
-    this.startFiltering.emit(this.filters());
+    this._trigger$.next(this.filters());
     setTimeout(() => this.animateShake.set(false), 300);
   }
 

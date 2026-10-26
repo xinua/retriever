@@ -3,7 +3,7 @@
 <section class="lg:px-8 mt-10 rounded-lg fade-in" rtBg>
   <mat-card class="bg-gray-900/60 border border-gray-800 shadow-none relative">
     <mat-card-header class="flex flex-col lg:flex-row lg:items-center! justify-between! overflow-hidden relative pb-4!">
-      <mat-card-title>Downloads</mat-card-title>
+      <mat-card-title class="select-none">Downloads</mat-card-title>
 
       <div class="flex items-center gap-3 justify-end lg:justify-start absolute top-2 right-3 lg:static">
         <div class="search relative min-w-10 hidden lg:block">
@@ -16,6 +16,7 @@
                 autoFocus
                 [formControl]="searchControl"
                 (focusout)="!searchControl.value ? showSearch.set(false) : null"
+                [class.masked]="hiddenPopulated()"
                 #searchField
               />
             </mat-form-field>

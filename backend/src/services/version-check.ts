@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
+import semver from "semver";
 
 import { db } from "../db/index.js";
 import { versionCheck } from "../db/schema.js";
@@ -152,28 +153,15 @@ function readCurrentVersion(): string | null {
 const CURRENT_VERSION = readCurrentVersion();
 
 /**
- * Numeric-part comparison, tolerating a leading "v" and ignoring any
- * pre-release suffix: "1.2.0-rc1" counts as 1.2.0. Returns true when `latest`
- * is ahead of `current`.
+ * Semver comparison, tolerating a leading "v": "1.0.10" is ahead of "1.0.9"
+ * and "1.3.1" of "1.3.1-rc1". Returns true when `latest` is ahead of
+ * `current`; a missing or unreadable version is never an update.
  */
 export function isNewer(latest: string | null, current: string | null): boolean {
-  if (!latest || !current) return false;
+  const a = latest ? semver.clean(latest) : null;
+  const b = current ? semver.clean(current) : null;
 
-  const parts = (v: string) =>
-    v.trim().replace(/^v/i, "").split(/[-+]/, 1)[0].split(".").map(Number);
-
-  const a = parts(latest);
-  const b = parts(current);
-
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    const x = a[i] ?? 0;
-    const y = b[i] ?? 0;
-
-    if (Number.isNaN(x) || Number.isNaN(y)) return false;
-    if (x !== y) return x > y;
-  }
-
-  return false;
+  return !!a && !!b && semver.gt(a, b);
 }
 
 async function getRow() {

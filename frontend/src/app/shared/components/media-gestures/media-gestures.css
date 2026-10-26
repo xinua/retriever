@@ -1,0 +1,4 @@
+/* The layer positions itself against the poster, so the host must not take part in the layout. */
+:host {
+  display: contents;
+}

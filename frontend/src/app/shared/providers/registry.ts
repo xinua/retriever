@@ -1,4 +1,5 @@
 export const iconRegistry: string[] = [
+  'retriever-incognito',
   'retriever',
   'retriever-red',
   'av1',

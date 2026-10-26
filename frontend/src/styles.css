@@ -18,6 +18,17 @@ input[type='number'] {
   appearance: textfield;
 }
 
+/*
+ * Firefox: Material draws a font icon with `content: attr(fontIcon)`, and
+ * Firefox never re-reads a mixed-case attr() when the attribute changes, so
+ * an icon bound to state (play/pause, mute) keeps its first glyph. The
+ * lowercase name is the same HTML attribute and does update. The `html`
+ * prefix outranks Material's rule, which is injected after this file.
+ */
+html .mat-icon.mat-ligature-font[fonticon]::before {
+  content: attr(fonticon);
+}
+
 html {
   --mat-dialog-container-shape: 0;
 }

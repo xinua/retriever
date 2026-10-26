@@ -1,7 +1,8 @@
 <div [matMenuTriggerFor]="filterMenu">
   <button
     mat-icon-button
-    [class]="hasActiveFilters() ? 'text-(--rt-accent)!' : 'text-white!'"
+    class="transition-colors duration-300"
+    [class]="hasActiveFilters() ? 'text-(--rt-accent)!' : 'delay-300 text-white!'"
     [class.animate-shake]="animateShake()"
     (rtLongPress)="resetFilters()"
     aria-label="Download filters"

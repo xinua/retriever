@@ -16,7 +16,7 @@
         <img
           [src]="subscription()?.lastVideoThumbnailPath"
           [alt]="subscription()?.lastVideoTitle"
-          class="aspect-video object-cover"
+          class="aspect-video object-cover w-screen"
           [class.cursor-pointer]="canPlay()"
           (click)="togglePlay($event)"
         />
@@ -28,14 +28,19 @@
         } @else {
           <video
             #videoPlayer
+            rtMediaSession
+            rtReleaseMedia
+            [rtMediaTitle]="subscription()?.lastVideoTitle"
+            [rtMediaArtist]="subscription()?.name"
+            [rtMediaArtwork]="subscription()?.lastVideoThumbnailPath"
             [src]="videoUrl()"
-            (click)="togglePlay($event)"
+            (rtLongPress)="togglePlay($event)"
             (error)="handleError()"
             controls
             autoplay
             preload="metadata"
             type="video/mp4"
-            class="aspect-video object-cover cursor-pointer relative z-4"
+            class="aspect-video object-cover relative z-4 w-screen h-screen"
           ></video>
         }
       }
@@ -87,15 +92,20 @@
 </ng-template>
 
 <ng-template #audioPlayerTemplate>
-  <div class="w-full h-full cursor-pointer absolute top-0 left-0 z-10" (click)="togglePlay($event)">
+  <div class="w-full h-full absolute top-0 left-0 z-10">
     <div #audioContainer class="absolute bottom-0 left-0 w-full rise z-11 cursor-auto">
       <rt-audio-player
+        #previewAudio
+        [posterUrl]="subscription()?.lastVideoThumbnailPath"
+        [trackTitle]="subscription()?.lastVideoTitle"
+        [artist]="subscription()?.name"
         playerSize="lg"
         [audioUrl]="videoUrl()"
         [duration]="download().duration"
-        (click)="$event.stopPropagation()"
         (gotError)="handleError()"
       />
     </div>
+
+    <rt-media-gestures playerSize="md" [player]="previewAudio" (closed)="togglePlay()" />
   </div>
 </ng-template>

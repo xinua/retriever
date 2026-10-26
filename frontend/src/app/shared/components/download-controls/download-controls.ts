@@ -211,6 +211,18 @@ export class DownloadControls {
     }
   }
 
+  toggleVisibility() {
+    // Read before the request: on unhide the server broadcasts the updated row
+    // before it answers, so by `next` the input may already say `hidden: false`.
+    const wasHidden = this.download().hidden;
+    this._http.toggleVisibility(this.download().id).subscribe({
+      next: () => {
+        const message = wasHidden ? 'Record is now visible.' : 'Record is now hidden.';
+        this._notifier.notify('success', message);
+      },
+    });
+  }
+
   private _openConfirmationDialog<T>(
     dialogComponent: ComponentType<unknown>,
     dialogData: MatDialogConfig,

@@ -1,0 +1,68 @@
+<!-- Covers the poster and stays under the player bar, so the bar keeps its own clicks. -->
+<div
+  class="absolute inset-0 z-1 select-none cursor-pointer"
+  (rtClick)="handleClick($event)"
+  (rtLongPress)="closed.emit()"
+>
+  @if (seekDirection()) {
+    @let leftClass = 'justify-start';
+    @let rightClass = 'justify-end';
+
+    <div
+      class="absolute top-1/2 -translate-y-1/2 w-full flex items-center"
+      [class]="seekDirection() === 'left' ? leftClass : rightClass"
+      [style.padding-inline.px]="size().seekInset"
+      animate.leave="fadeOut"
+    >
+      <div class="flex items-center relative" [style.margin-bottom.px]="size().barOffset">
+        <h1
+          class="text-black text-md bg-white/50 px-3 py-1 rounded-md backdrop-blur-xs relative z-1"
+          [class.order-1]="seekDirection() === 'left'"
+        >
+          <!-- Keyed on the value so the span is recreated (and the animation replays) on every change. -->
+          @for (key of [seekDirection() + seekTotalTime()]; track key) {
+            <span class="inline-block animate-scale">
+              {{ seekDirection() === 'left' ? '-' : '+' }}
+              {{ seekTotalTime() }}s
+            </span>
+          }
+        </h1>
+
+        @if (seekTotalTime() > seekStep) {
+          @for (key of [seekDirection() + seekTotalTime()]; track key) {
+            <mat-icon
+              [fontIcon]="seekDirection() === 'left' ? 'arrow_back_ios' : 'arrow_forward_ios'"
+              class="animate-follow-{{ seekDirection() }} absolute left-1/2 -translate-x-1/2"
+            />
+          }
+        }
+
+        <mat-icon
+          [fontIcon]="seekDirection() === 'left' ? 'arrow_back_ios' : 'arrow_forward_ios'"
+          class="absolute left-1/2 -translate-x-1/2 animate-fly-{{ seekDirection() }}"
+        />
+      </div>
+    </div>
+  }
+
+  <!-- Flashes the state playback just switched to. It never takes pointer events, so the next tap still lands. -->
+  @if (playPauseFlash(); as flash) {
+    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <!-- Keyed on the tap so the icon is recreated (and the animation replays) on every toggle. -->
+      @for (key of [flash.key]; track key) {
+        <div
+          class="animate-pop-fade flex items-center justify-center rounded-full bg-black/80"
+          [style.padding.px]="size().flashPadding"
+          [style.margin-bottom.px]="size().barOffset"
+        >
+          <mat-icon
+            [fontIcon]="flash.icon"
+            [style.font-size.px]="size().flashIcon"
+            [style.width.px]="size().flashIcon"
+            [style.height.px]="size().flashIcon"
+          />
+        </div>
+      }
+    </div>
+  }
+</div>
